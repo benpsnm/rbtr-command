@@ -1,0 +1,7 @@
+{
+  "name": "rbtr-command-centre-v14",
+  "version": "14.0.0",
+  "private": true,
+  "description": "RBTR Command Centre V14 — JARVIS edition",
+  "engines": { "node": ">=18" }
+}

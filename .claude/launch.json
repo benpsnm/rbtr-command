@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "v14",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/bengreenwood/Desktop/rbtr-command/v14/public && python3 -m http.server $PORT"],
+      "port": 4173,
+      "autoPort": true
+    }
+  ]
+}

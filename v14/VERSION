@@ -1,0 +1,36 @@
+v3.1-cc-partial-overnight
+Tagged: 2026-04-22 (Phase 2.5 partial — WS-C fills + WS-D voice logging)
+
+Overnight delivered:
+- Migration 28: ek_cash_log (LEGAL_SENSITIVE), house_jobs, nate_checkins, bills, jarvis_settings
+- daily_briefs.voice_id_used + voice_name_resolved columns
+- briefing-data.js: four-entity cash (personal/psnm/rbtr/ek), real build_bible_sections queries, resurrection_log queries, house_jobs count, nate_checkin interval-configurable via jarvis_settings
+- supabase-proxy.js: {action:'briefing_audit'} returns source-of-truth map for 37 fields (x-rbtr-auth gated)
+- morning-brief.js: pre-render voice logging, post-render voice_name resolution via ElevenLabs /v1/voices/:id (cached)
+- Monochrome: 12 body.mono override rules verified active
+
+Deferred to next session (Ben unblock needed):
+- WS-A all (Mailgun SMS verification, Anthropic tier upgrade, 205-row triage)
+- WS-B.9/B.10/B.11 (wake word, barge-in, Whisper voice-in) — new scope, needs OPENAI_API_KEY
+- WS-C.2 sponsor hot signals — sponsor_signals table empty
+- WS-C.4 audience — needs manual Ben entry
+- WS-D.4 navigation polish (quick access + cmd+K) — fresh session
+
+Deployment: https://rbtr-jarvis.vercel.app (dpl_* see Vercel dashboard for latest)
+
+Phase 1 — schema reconciliation: complete
+Phase 2 — morning brief + evening check-in: code-complete (observation pending)
+ROCKO Max — auto-routing, 8 tools, memory, voice I/O, proactive briefing: complete
+
+Env vars in Vercel (Production + Development):
+- ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_MODEL_DEFAULT, ANTHROPIC_MODEL_HEAVY
+- SUPABASE_URL, SUPABASE_SERVICE_ROLE, SUPABASE_ANON_KEY
+- ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID (Hannah, M7ya1YbaeFaPXljg9BpK)
+- TELEGRAM_BOT_TOKEN (@Rbtr_rocko_bot)
+- TWILIO_* (Ben's old WhatsApp creds, dormant; SMS fallback needs TWILIO_SMS_FROM if wanted)
+- BEN_PHONE, BRIEF_TIMEZONE, BRIEF_HOUR, RBTR_AUTH_TOKEN, CRON_SECRET (unset)
+
+Migrations landed:
+- 24_phase1_reconciliation.sql (29 target tables, 16 orphans flagged, RLS pass)
+- 25_rocko_max.sql (rocko_memories, jarvis_conversations columns)
+- 26_jarvis_conv_backfill.sql (nullable legacy cols)

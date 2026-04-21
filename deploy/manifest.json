@@ -1,0 +1,20 @@
+{
+  "name": "RBTR Command Centre",
+  "short_name": "RBTR",
+  "description": "Rock Bottom to Roaming — Operations Command Centre",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e8621a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%231a1a2e'/%3E%3Cpolygon points='256,80 160,280 210,280 150,430 362,230 295,230 370,80' fill='%23e8621a'/%3E%3Ctext x='256' y='490' font-family='Arial Black' font-weight='900' font-size='42' fill='%23ffffff' text-anchor='middle'%3ERBTR%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en-GB"
+}

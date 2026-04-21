@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Env + secrets (Rule 3 — never commit)
+.env
+.env.*
+*.env
+*.key
+*.pem
+RBTR_AUTH_TOKEN.txt
+hannah-test.mp3
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel + Supabase local
+.vercel/
+.supabase/
+prod.env
+*prod.env*
+
+# Temp / scratch
+/tmp/
+*.tmp
+.cache/
