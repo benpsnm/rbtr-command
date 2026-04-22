@@ -1,44 +1,368 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PSNM · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
-</head><body>
+<style>
+  /* Portal-local overrides for ported legacy section — use tokens, no colour leaks */
+  #sec-psnm-warm .g4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-3);
+  }
+  #sec-psnm-warm .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+  #sec-psnm-warm .ct {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    letter-spacing: var(--track-ultra);
+    text-transform: uppercase;
+    margin-bottom: var(--space-2);
+  }
+  #sec-psnm-warm .cv {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    line-height: var(--leading-tight);
+    margin-bottom: var(--space-1);
+  }
+  #sec-psnm-warm .cs {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  #sec-psnm-warm .sdiv {
+    margin: var(--space-5) 0 var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  #sec-psnm-warm .sdiv h3 {
+    margin: 0;
+    font-size: var(--text-xs);
+    letter-spacing: var(--track-ultra);
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    font-weight: 600;
+  }
+  #sec-psnm-warm .sl { color: var(--text-tertiary); font-size: var(--text-sm); }
+  #sec-psnm-warm .ph { margin-bottom: var(--space-4); }
+  #sec-psnm-warm .ph-titles .pt {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    letter-spacing: var(--track-tight);
+    margin-bottom: var(--space-1);
+  }
+  #sec-psnm-warm .ph-titles .ps {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  #sec-psnm-warm .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--space-4);
+  }
+  #sec-psnm-warm .tab {
+    padding: var(--space-3) var(--space-4);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-fast);
+  }
+  #sec-psnm-warm .tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--border-strong);
+  }
+  #sec-psnm-warm .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  #sec-psnm-warm .btn:hover { border-color: var(--border-strong); }
+  #sec-psnm-warm .btn.pri {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+  }
+  #sec-psnm-warm .btn.sm {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+  }
+  #sec-psnm-warm input,
+  #sec-psnm-warm textarea,
+  #sec-psnm-warm select {
+    width: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+    font-family: var(--font-body);
+  }
+  #sec-psnm-warm textarea { min-height: 140px; resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); }
+</style>
+</head>
+<body>
 <div id="portal-root"></div>
-<script>
-window.PORTAL_CONFIG = {
-  key: 'psnm', title: 'PSNM', emoji: '🏭',
-  tagline: 'Pallet operations. Atlas engine.',
-  sidebarGroups: [
-    { heading: 'OVERVIEW', items: [
-      { label: 'Dashboard', hash: 'psnm' },
-    ]},
-    { heading: 'ATLAS', items: [
-      { label: "Today's Actions", hash: 'atlas' },
-      { label: 'Pipeline', hash: 'atlas' },
-      { label: 'Performance', hash: 'atlas' },
-      { label: 'Templates', hash: 'atlas' },
-      { label: 'Offer Config', hash: 'atlas' },
-    ]},
-    { heading: 'OPERATIONS', items: [
-      { label: 'Enquiries', hash: 'psnm-enquiries' },
-      { label: 'Customers', hash: 'psnm-customers' },
-      { label: 'Quotes', hash: 'psnm-quotes' },
-      { label: 'Occupancy', hash: 'psnm-occupancy' },
-      { label: 'Invoices', hash: 'psnm-invoices' },
-    ]},
-    { heading: 'OUTREACH', items: [
-      { label: 'Targets', hash: 'psnm-outreach-targets' },
-      { label: 'Touches', hash: 'psnm-outreach-touches' },
-      { label: 'Call Scripts', hash: 'atlas' },
-    ]},
-  ],
-  liveStatFetcher: async () => {
-    const r = await fetch('/api/briefing-data'); const j = await r.json();
-    const p = j.data?.psnm_pallets_current;
-    return (p ?? '—') + '/827 pallets';
-  },
-};
-</script>
+
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
-</body></html>
+<script src="/js/portal-framework.js"></script>
+
+<!-- PSNM portal config -->
+<script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
+// ── Dashboard render ────────────────────────────────────────────────────────
+async function renderPsnmDashboard() {
+  // Hero stats
+  const wrap = el('div', {});
+  const stats = el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
+  });
+  stats.appendChild(statCard({ emoji: '📦', label: 'Pallets signed', value: '—', sub: '/827 to break-even' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'PSNM cash', value: '—', sub: 'business account' }));
+  stats.appendChild(statCard({ emoji: '🔥', label: 'Hot leads', value: '—', sub: 'from warm list' }));
+  stats.appendChild(statCard({ emoji: '📞', label: 'Calls today', value: '—', sub: 'Atlas queue' }));
+  wrap.appendChild(stats);
+
+  // Load live
+  try {
+    const r = await fetch('/api/briefing-data');
+    const j = await r.json();
+    const d = j.data || {};
+    const pallets = d.psnm_pallets_current;
+    const cash = d.cash_psnm?.balance_gbp;
+    const gap = d.psnm_pallets_to_breakeven;
+    const labels = stats.querySelectorAll('.ds-stat .value');
+    if (labels[0]) labels[0].textContent = pallets != null ? pallets : '—';
+    if (labels[1]) labels[1].textContent = cash != null ? '£' + Number(cash).toLocaleString() : '—';
+    // hot + calls pulled later via supabase-proxy
+  } catch(e) {}
+
+  // Recent enquiries
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Recent enquiries'));
+  const listWrap = el('div', { style: { display: 'grid', gap: 'var(--space-2)' } });
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'psnm_enquiries', op: 'select' })
+    });
+    const rows = r.ok ? await r.json() : [];
+    if (Array.isArray(rows) && rows.length) {
+      rows.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+      rows.slice(0, 10).forEach(row => {
+        listWrap.appendChild(card({
+          children: el('div', { className: 'row between' },
+            el('div', {},
+              el('div', { style: { fontWeight: '600' } }, row.company || '(unnamed)'),
+              el('div', { className: 'ds-caption' },
+                [row.contact_name, row.phone, row.pallets ? row.pallets + ' pallets' : null].filter(Boolean).join(' · ')),
+            ),
+            el('span', { className: 'ds-badge ' + (row.temperature || '') },
+              (row.temperature || 'unknown').toUpperCase()),
+          )
+        }));
+      });
+    } else {
+      listWrap.appendChild(emptyState({ icon: '📬', title: 'No enquiries yet', body: 'Paste a WhichWarehouse brief in Warm Leads to bulk-import.' }));
+    }
+  } catch(e) {
+    listWrap.appendChild(emptyState({ icon: '⚠', title: 'Couldn\'t load', body: String(e.message || e) }));
+  }
+  wrap.appendChild(listWrap);
+  return wrap;
+}
+
+// ── Warm leads render ───────────────────────────────────────────────────────
+// Clones the proven legacy #sec-psnm-warm markup and loads the PSNM_WARM module.
+// Module is self-contained: reads/writes its own DOM nodes by ID.
+async function renderWarmLeads() {
+  // Load PSNM_WARM module on demand
+  if (!window.PSNM_WARM) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/js/psnm-warm.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Inject full warm-leads HTML (copied verbatim from legacy)
+  const wrap = el('div', { id: 'psnm-warm-host' });
+  wrap.innerHTML = `
+<section class="section" id="sec-psnm-warm">
+  <div class="ph">
+    <div class="ph-titles">
+      <div class="pt">🔥 PSNM WARM LEADS</div>
+      <div class="ps">Warm first — every lead Ben's ever spoken to, ranked by temperature + engagement</div>
+    </div>
+  </div>
+  <div class="g4" style="margin-bottom:18px">
+    <div class="card"><div class="ct">🔥 HOT</div><div class="cv" id="pw-count-hot">—</div><div class="cs">replied / recently quoted</div></div>
+    <div class="card"><div class="ct">🌡 WARM</div><div class="cv" id="pw-count-warm">—</div><div class="cs">enquiry / recent contact</div></div>
+    <div class="card"><div class="ct">❄ COLD</div><div class="cv" id="pw-count-cold">—</div><div class="cs">seeded outreach list</div></div>
+    <div class="card"><div class="ct">QUOTES PENDING</div><div class="cv" id="pw-count-quotes">—</div><div class="cs">sent, no reply yet</div></div>
+  </div>
+  <div class="sdiv"><h3>IMPORT — PASTE &amp; EXTRACT</h3></div>
+  <div class="tab-bar" id="pw-import-tabs">
+    <div class="tab active" data-t="ww" onclick="PSNM_WARM.tab('ww')">WhichWarehouse Brief</div>
+    <div class="tab" data-t="quotes" onclick="PSNM_WARM.tab('quotes')">Past Quote Emails</div>
+    <div class="tab" data-t="manual" onclick="PSNM_WARM.tab('manual')">Manual Lead</div>
+  </div>
+  <div class="card" style="margin-bottom:18px" id="pw-import-panel">
+    <div class="sl">Loading panel…</div>
+  </div>
+  <div id="pw-preview" style="display:none;margin-bottom:18px"></div>
+  <div class="sdiv"><h3>RANKED LIST — WARM FIRST</h3></div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="btn sm pri" onclick="PSNM_WARM.load()">↻ Refresh</button>
+    <button class="btn sm pri" onclick="PSNM_WARM.filter('all')" data-filter="all">All</button>
+    <button class="btn sm" onclick="PSNM_WARM.filter('hot')" data-filter="hot">🔥 Hot</button>
+    <button class="btn sm" onclick="PSNM_WARM.filter('warm')" data-filter="warm">🌡 Warm</button>
+    <button class="btn sm" onclick="PSNM_WARM.filter('cold')" data-filter="cold">❄ Cold</button>
+    <button class="btn sm" onclick="PSNM_WARM.filter('dead')" data-filter="dead">☠ Dead</button>
+  </div>
+  <div id="pw-list" style="display:flex;flex-direction:column;gap:10px">
+    <div class="card"><div class="sl">Click ↻ Refresh to load, or paste a brief above and extract.</div></div>
+  </div>
+</section>`;
+
+  // Trigger module init after DOM injection
+  setTimeout(() => {
+    try {
+      window.PSNM_WARM.tab('ww');
+      window.PSNM_WARM.load();
+    } catch(e) { console.warn('[psnm-warm] init', e); }
+  }, 50);
+
+  return wrap;
+}
+
+// ── Iframe escape helper (reuses framework's iframeHash pattern) ────────────
+
+// ── Portal config ───────────────────────────────────────────────────────────
+const PSNM_PORTAL = {
+  id: 'psnm',
+  name: 'PSNM',
+  emoji: '🏭',
+  tagline: 'Pallet operations. Atlas engine. Warm leads first.',
+  access: ['ben'],
+  liveStatFetcher: async () => {
+    try {
+      const r = await fetch('/api/briefing-data');
+      const j = await r.json();
+      return (j.data?.psnm_pallets_current ?? '—') + '/827 pallets';
+    } catch { return '—'; }
+  },
+  sections: [
+    { id: 'dashboard',    group: 'OVERVIEW',   label: 'Dashboard',      emoji: '📊', render: renderPsnmDashboard, default: true },
+    { id: 'warm-leads',   group: 'ATLAS',      label: 'Warm Leads',     emoji: '🔥', badge: { label: 'NEW', variant: 'new' }, render: renderWarmLeads },
+    { id: 'atlas-today',  group: 'ATLAS',      label: "Today's Actions", emoji: '📞', iframeHash: '#sec-atlas' },
+    { id: 'pipeline',     group: 'ATLAS',      label: 'Pipeline',       emoji: '📈', render: () => emptyState({ icon: '📈', title: 'Pipeline Kanban coming', body: 'Next-pass: Kanban view of psnm_enquiries by status with drag-to-move.' }) },
+    { id: 'performance',  group: 'ATLAS',      label: 'Performance',    emoji: '🏆', render: () => emptyState({ icon: '🏆', title: 'Performance charts coming', body: 'Touches / contact rate / conversion rate over 7+30 days.' }) },
+    { id: 'templates',    group: 'ATLAS',      label: 'Templates',      emoji: '📝', render: () => emptyState({ icon: '📝', title: 'Templates library coming', body: 'Saved outbound templates — pre-fill warm-lead emails.' }) },
+    { id: 'offer-config', group: 'ATLAS',      label: 'Offer Config',   emoji: '💰', render: renderOfferConfig },
+    { id: 'enquiries',    group: 'OPERATIONS', label: 'Enquiries',      emoji: '📬', iframeHash: '#sec-psnm' },
+    { id: 'customers',    group: 'OPERATIONS', label: 'Customers',      emoji: '👥', render: () => renderList('psnm_customers', { empty: 'No customers yet. First signed contract creates one.' }) },
+    { id: 'quotes',       group: 'OPERATIONS', label: 'Quotes',         emoji: '📄', render: () => renderList('psnm_quotes',    { empty: 'No quotes sent yet. Send via Warm Leads or Enquiries.' }) },
+    { id: 'occupancy',    group: 'OPERATIONS', label: 'Occupancy',      emoji: '📦', iframeHash: '#sec-psnm' },
+    { id: 'invoices',     group: 'OPERATIONS', label: 'Invoices',       emoji: '💷', render: () => renderList('psnm_invoices', { empty: 'No invoices yet.' }) },
+    { id: 'targets',      group: 'OUTREACH',   label: 'Targets',        emoji: '🎯', render: () => renderList('psnm_outreach_targets', { empty: 'No targets yet.' }) },
+    { id: 'touches',      group: 'OUTREACH',   label: 'Touches',        emoji: '📡', render: () => renderList('psnm_outreach_touches',  { empty: 'No touches logged yet.' }) },
+    { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', iframeHash: '#sec-atlas' },
+  ],
+};
+
+// ── Generic table render helper ─────────────────────────────────────────────
+async function renderList(table, { empty } = {}) {
+  const wrap = el('div', {});
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, table.replace(/_/g, ' ')));
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table, op: 'select' })
+    });
+    if (!r.ok) { wrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed', body: 'HTTP ' + r.status })); return wrap; }
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) {
+      wrap.appendChild(emptyState({ icon: '·', title: 'Empty', body: empty || 'No rows yet.' }));
+      return wrap;
+    }
+    // Render a compact table view
+    const keys = Object.keys(rows[0]).filter(k => !['id','created_at','updated_at'].includes(k)).slice(0, 6);
+    const table_el = el('div', { style: { overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' } });
+    const tbl = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' } });
+    const thead = el('thead', {},
+      el('tr', {}, ...keys.map(k => el('th', { style: { textAlign:'left', padding: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' } }, k)))
+    );
+    const tbody = el('tbody', {},
+      ...rows.slice(0, 50).map(r => el('tr', {},
+        ...keys.map(k => el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } },
+          r[k] == null ? '—' : (typeof r[k] === 'object' ? JSON.stringify(r[k]).slice(0, 60) : String(r[k]).slice(0, 80))
+        ))
+      ))
+    );
+    tbl.appendChild(thead); tbl.appendChild(tbody);
+    table_el.appendChild(tbl);
+    wrap.appendChild(table_el);
+    wrap.appendChild(el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-3)' } }, rows.length + ' rows'));
+  } catch(e) {
+    wrap.appendChild(emptyState({ icon: '⚠', title: 'Error', body: String(e.message || e) }));
+  }
+  return wrap;
+}
+
+// ── Offer config render ─────────────────────────────────────────────────────
+async function renderOfferConfig() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Grand Slam Offer'));
+  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-5)' } },
+    'Read-only. Edit by pasting an updated config row in the SQL editor for now.'));
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'psnm_offer_config', op: 'select' })
+    });
+    const rows = await r.json();
+    const active = (rows || []).find(r => r.active) || (rows || [])[0];
+    if (!active) { wrap.appendChild(emptyState({ icon: '💰', title: 'No offer config yet', body: 'Seed data expected from migration 27. Check Supabase.' })); return wrap; }
+    const offer = active.offer_json || {};
+    const row = (k, v) => el('div', { className: 'row', style: { borderBottom: '1px solid var(--border-subtle)', padding: 'var(--space-3) 0' } },
+      el('div', { style: { width: '180px', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase' } }, k),
+      el('div', { className: 'grow' }, v || '—'),
+    );
+    wrap.appendChild(card({ children: el('div', {},
+      row('HEADLINE', offer.headline),
+      row('DREAM OUTCOME', offer.dream_outcome),
+      row('RISK REVERSAL', offer.risk_reversal),
+      row('TIME / EFFORT', offer.time_effort),
+      row('VERSION', 'v' + (active.version || 1)),
+    )}));
+  } catch(e) {
+    wrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed', body: String(e.message || e) }));
+  }
+  return wrap;
+}
+
+// ── Mount ───────────────────────────────────────────────────────────────────
+window.RBTR_Portal.mount(PSNM_PORTAL);
+</script>
+</body>
+</html>

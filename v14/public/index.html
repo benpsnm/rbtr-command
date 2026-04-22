@@ -339,6 +339,12 @@ label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-fam
 </style>
 </head>
 <body class="mono">
+<!-- Phase 1.5 · Legacy reference banner -->
+<div id="legacy-banner" style="position:sticky;top:0;z-index:2500;background:#141414;border-bottom:1px solid #363636;padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:13px;color:#a3a3a3;">
+  <span>📎 Legacy Command Centre — most sections now live in the new portals.</span>
+  <a href="/landing.html" style="margin-left:auto;color:#fff;text-decoration:underline;text-underline-offset:3px;">Go to Landing →</a>
+  <button onclick="document.getElementById('legacy-banner').style.display='none'" style="background:transparent;border:1px solid #363636;color:#a3a3a3;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
+</div>
 <!-- MOBILE HEADER -->
 <div id="mobile-header" style="display:none;position:fixed;top:0;left:0;right:0;z-index:2000;background:#000;border-bottom:1px solid #1a1a1a;padding:10px 16px;align-items:center;gap:12px;">
   <button onclick="toggleMobileMenu()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px;">☰</button>

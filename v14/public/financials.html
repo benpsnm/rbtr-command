@@ -1,80 +1,48 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FINANCIALS · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
-<style>
-  .f-entities { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 20px 0; }
-  .f-card { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 20px; }
-  .f-card .k { font-size: 10px; letter-spacing: 3px; color: #8a8a8a; text-transform: uppercase; margin-bottom: 4px; }
-  .f-card .v { font-family: Ultra, Impact, sans-serif; font-size: 28px; line-height: 1; margin: 6px 0; }
-  .f-card .t { font-size: 11px; color: #8a8a8a; margin-top: 4px; }
-  .f-card .row { display: flex; gap: 6px; margin-top: 10px; }
-  .f-card input { flex: 1; background: #050505; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; color: #f5f5f5; padding: 6px 10px; font-size: 13px; min-width: 60px; }
-  .f-card button { background: #f5f5f5; color: #000; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-weight: 600; }
-  .f-tx { margin-top: 30px; }
-  .f-tx table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .f-tx th, .f-tx td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-  .f-tx th { color: #8a8a8a; font-weight: 400; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; }
-  .f-tx .income { color: #7dd87d; }
-  .f-tx .expense { color: #ff8a50; }
-  .f-upload { border: 1px dashed rgba(255,255,255,0.2); padding: 24px; border-radius: 10px; text-align: center; margin: 20px 0; }
-  .f-stub { opacity: 0.6; font-size: 12px; padding: 12px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; margin-top: 20px; }
-</style>
-</head><body data-portal="financials">
+</head>
+<body>
 <div id="portal-root"></div>
 
-<script>
-window.PORTAL_CONFIG = {
-  key: 'financials', title: 'FINANCIALS', emoji: '💷',
-  tagline: 'Four separate entities. Never commingled.',
-  sidebarGroups: [
-    { heading: 'DASHBOARD', items: [
-      { label: 'Overview', path: '/financials.html' },
-    ]},
-    { heading: 'PER ENTITY', items: [
-      { label: 'PSNM',         path: '/financials.html#psnm' },
-      { label: 'Ben Personal', path: '/financials.html#ben_personal' },
-      { label: 'RBTR',         path: '/financials.html#rbtr' },
-      { label: 'EK',           path: '/financials.html#ek' },
-      { label: 'House',        path: '/financials.html#house' },
-    ]},
-    { heading: 'LEDGER', items: [
-      { label: 'All Transactions', path: '/financials.html#all' },
-      { label: 'Cash Logs',        path: '/financials.html#logs' },
-      { label: 'Upload Statement', path: '/financials.html#upload' },
-    ]},
-    { heading: 'FORECASTING', items: [
-      { label: 'Runway',        path: '/financials.html#runway' },
-      { label: 'Burn Rate',     path: '/financials.html#burn' },
-      { label: 'Pipeline Value', path: '/financials.html#pipeline' },
-    ]},
-  ],
-  liveStatFetcher: async () => '5 entities',
-};
-</script>
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
+<script src="/js/portal-framework.js"></script>
 
-<!-- Custom financials UI injected into #p-tiles after portal-shell renders -->
 <script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
 const ENTITIES = [
-  { key: 'psnm',         label: 'PSNM',         log: 'psnm_cash_log' },
-  { key: 'personal',     label: 'BEN PERSONAL', log: 'personal_cash_log' },
-  { key: 'rbtr',         label: 'RBTR',         log: 'rbtr_fund_log' },
-  { key: 'ek',           label: 'EK',           log: 'ek_cash_log' },
-  { key: 'house',        label: 'HOUSE',        log: 'house_cash_log' },
+  { key: 'psnm',     label: 'PSNM',         log: 'psnm_cash_log',     classification: 'internal' },
+  { key: 'personal', label: 'Ben Personal', log: 'personal_cash_log', classification: 'internal' },
+  { key: 'rbtr',     label: 'RBTR',         log: 'rbtr_fund_log',     classification: 'internal' },
+  { key: 'ek',       label: 'EK',           log: 'ek_cash_log',       classification: 'legal_sensitive' },
+  { key: 'house',    label: 'House',        log: 'house_cash_log',    classification: 'internal' },
 ];
 
-function fmt(n) {
-  if (n == null) return '—';
+// Sarah doesn't see EK (legal_sensitive)
+function visibleEntities() {
+  const u = window.RBTR_USER;
+  const isBen = u?.profile?.role === 'ben';
+  return ENTITIES.filter(e => isBen || e.classification !== 'legal_sensitive');
+}
+
+function fmtGbp(n) {
+  if (n == null || n === '') return '—';
   return '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-GB') : '—'; }
 
-async function fetchLatestBalance(tableName) {
+async function latestBalance(tableName) {
   try {
     const r = await fetch('/api/supabase-proxy', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ table: tableName, op: 'select' })
     });
     if (!r.ok) return null;
@@ -85,161 +53,212 @@ async function fetchLatestBalance(tableName) {
 }
 
 async function logBalance(entityKey, value, note) {
-  // Use /api/atlas action=log_cash where available (psnm/personal/rbtr/ek)
-  // and fall back to direct insert for house
   if (['psnm','personal','rbtr','ek'].includes(entityKey)) {
     const r = await fetch('/api/atlas?action=log_cash', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ entity: entityKey, balance_gbp: Number(value), note })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entity: entityKey, balance_gbp: Number(value), note: note || null })
     });
     return r.ok;
   }
-  // House → direct insert to house_cash_log
+  // House → direct proxy insert
   const r = await fetch('/api/supabase-proxy', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      table: 'house_cash_log', op: 'insert',
-      row: { balance_gbp: Number(value), source: 'manual', note: note || null }
-    })
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ table: 'house_cash_log', op: 'insert',
+      row: { balance_gbp: Number(value), source: 'manual', note: note || null }})
   });
   return r.ok;
 }
 
-async function renderFinancialsDashboard() {
-  const root = document.getElementById('p-tiles');
-  if (!root) { setTimeout(renderFinancialsDashboard, 200); return; }
+// ── Dashboard ──────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'text-muted' },
+    'Four (or five) separate entities. Never commingled. Each has its own cash log.'));
 
-  // Override the tile grid with 5 entity cards
-  root.className = 'f-entities';
-  root.innerHTML = ENTITIES.map(e => `
-    <div class="f-card" id="f-${e.key}">
-      <div class="k">${e.label}</div>
-      <div class="v" data-v="${e.key}">—</div>
-      <div class="t" data-t="${e.key}">never logged</div>
-      <div class="row">
-        <input type="number" step="0.01" placeholder="£ new balance" data-input="${e.key}">
-        <button data-btn="${e.key}">Log</button>
-      </div>
-    </div>
-  `).join('');
+  const grid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-4)' } });
+  const ents = visibleEntities();
+  const latest = await Promise.all(ents.map(e => latestBalance(e.log)));
 
-  // Fetch latest for each
-  const data = await Promise.all(ENTITIES.map(e => fetchLatestBalance(e.log)));
-  ENTITIES.forEach((e, i) => {
-    const latest = data[i];
-    const vEl = root.querySelector(`[data-v="${e.key}"]`);
-    const tEl = root.querySelector(`[data-t="${e.key}"]`);
-    if (latest && vEl) vEl.textContent = fmt(latest.balance_gbp);
-    if (latest && tEl) tEl.textContent = 'last: ' + fmtDate(latest.logged_at) + (latest.note ? ' · ' + latest.note : '');
-  });
-
-  // Wire log buttons
-  ENTITIES.forEach(e => {
-    const btn = root.querySelector(`[data-btn="${e.key}"]`);
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const inp = root.querySelector(`[data-input="${e.key}"]`);
-      if (!inp || !inp.value) return;
+  ents.forEach((e, i) => {
+    const l = latest[i];
+    const inp = el('input', { type: 'number', step: '0.01', className: 'ds-input', placeholder: '£ new balance', style: { flex: '1', minWidth: '80px' } });
+    const btn = button({ variant: 'primary', size: 'sm', label: 'Log', onClick: async () => {
+      if (!inp.value) return;
       btn.disabled = true; btn.textContent = '…';
       const ok = await logBalance(e.key, inp.value);
       btn.disabled = false; btn.textContent = 'Log';
-      if (ok) { inp.value = ''; renderFinancialsDashboard(); }
-      else alert('Log failed — check console');
-    });
+      if (ok) { inp.value = ''; C.toast({ type:'success', message: e.label + ' logged' }); location.hash = '#' + location.hash.replace(/^#/, '') || '#dashboard'; location.reload(); }
+      else C.toast({ type:'error', message: 'Log failed' });
+    }});
+    const c = card({ children: el('div', {},
+      el('div', { className: 'ds-caption' }, e.label + (e.classification === 'legal_sensitive' ? ' · LEGAL' : '')),
+      el('div', { className: 'mono', style: { fontSize: 'var(--text-2xl)', margin: 'var(--space-2) 0 var(--space-1)' } }, l ? fmtGbp(l.balance_gbp) : '—'),
+      el('div', { className: 'ds-caption' }, l ? 'last: ' + fmtDate(l.logged_at) + (l.note ? ' · ' + l.note : '') : 'never logged'),
+      el('div', { className: 'row', style: { marginTop: 'var(--space-3)' } }, inp, btn),
+    )});
+    grid.appendChild(c);
   });
+  wrap.appendChild(grid);
 
   // Recent transactions
-  const txBlock = document.createElement('div');
-  txBlock.className = 'f-tx';
-  txBlock.innerHTML = `
-    <h2 style="font-family:Ultra,Impact,sans-serif;font-size:20px;letter-spacing:3px;margin:30px 0 10px">RECENT TRANSACTIONS</h2>
-    <div id="f-tx-inner">Loading…</div>
-  `;
-  root.parentElement.appendChild(txBlock);
-  const txR = await fetch('/api/supabase-proxy', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ table: 'financial_transactions', op: 'select' })
-  });
-  const inner = document.getElementById('f-tx-inner');
-  if (txR.ok) {
-    const rows = await txR.json();
-    if (Array.isArray(rows) && rows.length) {
-      rows.sort((a,b) => new Date(b.transaction_date) - new Date(a.transaction_date));
-      inner.innerHTML = `<table>
-        <thead><tr><th>Date</th><th>Entity</th><th>Type</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
-        <tbody>${rows.slice(0,20).map(r => `
-          <tr>
-            <td>${fmtDate(r.transaction_date)}</td>
-            <td>${r.entity}</td>
-            <td>${r.type}</td>
-            <td>${(r.description || '').slice(0,60)}</td>
-            <td class="${r.type}" style="text-align:right">${r.type === 'expense' ? '−' : '+'}${fmt(Math.abs(r.amount_gbp))}</td>
-          </tr>`).join('')}</tbody>
-      </table>`;
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Recent transactions'));
+  const txHost = el('div', {});
+  wrap.appendChild(txHost);
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'financial_transactions', op: 'select' })
+    });
+    const rows = r.ok ? await r.json() : [];
+    if (!Array.isArray(rows) || !rows.length) {
+      txHost.appendChild(emptyState({ icon: '📄', title: 'No transactions yet', body: 'Upload a CSV or add manually from an entity page.' }));
     } else {
-      inner.innerHTML = '<p style="color:#8a8a8a">No transactions logged yet. Upload a CSV or add manually.</p>';
+      rows.sort((a,b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+      const tbl = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' } });
+      tbl.appendChild(el('thead', {}, el('tr', {},
+        ...['Date','Entity','Type','Description','Amount'].map(h => el('th', {
+          style: { textAlign:'left', padding: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }
+        }, h))
+      )));
+      const tbody = el('tbody', {});
+      rows.slice(0, 30).forEach(row => {
+        tbody.appendChild(el('tr', {},
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, fmtDate(row.transaction_date)),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, row.entity || '—'),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, row.type || '—'),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, (row.description || '').slice(0, 60)),
+          el('td', { className: 'mono', style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', textAlign: 'right' } },
+            (row.type === 'expense' ? '−' : '+') + fmtGbp(Math.abs(row.amount_gbp))),
+        ));
+      });
+      tbl.appendChild(tbody);
+      txHost.appendChild(tbl);
     }
-  } else {
-    inner.innerHTML = '<p style="color:#ff8a50">Failed to load transactions.</p>';
-  }
+  } catch(e) { txHost.appendChild(emptyState({ icon: '⚠', title: 'Load failed', body: String(e.message || e) })); }
 
-  // CSV upload stub
-  const upload = document.createElement('div');
-  upload.className = 'f-upload';
-  upload.innerHTML = `
-    <h3 style="margin:0 0 8px">Upload bank statement CSV</h3>
-    <p style="color:#8a8a8a;font-size:12px;margin:0 0 12px">Monzo / Starling / Barclays / HSBC common formats supported.</p>
-    <input type="file" accept=".csv" id="f-csv" />
-    <button id="f-csv-go" style="margin-left:8px">Parse</button>
-    <div id="f-csv-status" style="margin-top:8px;font-size:12px;color:#8a8a8a"></div>
-  `;
-  root.parentElement.appendChild(upload);
-  document.getElementById('f-csv-go').addEventListener('click', async () => {
-    const file = document.getElementById('f-csv').files[0];
-    const status = document.getElementById('f-csv-status');
+  // Open banking stub
+  wrap.appendChild(card({
+    className: 'stub',
+    children: el('div', {},
+      el('div', { className: 'ds-caption' }, 'OPEN BANKING — STUB'),
+      el('p', { className: 'text-muted', style: { marginTop: 'var(--space-2)' } },
+        'TrueLayer / Plaid integration deferred. Manual + CSV only for now. See OVERNIGHT_BLOCKERS.md §6.'),
+    )
+  }));
+
+  return wrap;
+}
+
+// ── Per-entity cash log detail ─────────────────────────────────────────────
+function renderEntity(entityKey) {
+  return async () => {
+    const wrap = el('div', {});
+    const e = ENTITIES.find(x => x.key === entityKey);
+    if (!e) return emptyState({ icon: '?', title: 'Unknown entity' });
+    if (e.classification === 'legal_sensitive' && window.RBTR_USER?.profile?.role !== 'ben') {
+      return emptyState({ icon: '🔒', title: '403 · LEGAL_SENSITIVE', body: 'This entity is Ben-only.' });
+    }
+    wrap.appendChild(el('h2', { className: 'ds-h2' }, e.label + ' cash log'));
+    const tableWrap = el('div', {});
+    wrap.appendChild(tableWrap);
+
+    try {
+      const r = await fetch('/api/supabase-proxy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table: e.log, op: 'select' })
+      });
+      const rows = r.ok ? await r.json() : [];
+      if (!Array.isArray(rows) || !rows.length) {
+        tableWrap.appendChild(emptyState({ icon: '💷', title: 'No entries yet', body: 'Log a balance from the Dashboard page.' }));
+        return wrap;
+      }
+      rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
+      const tbl = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' } });
+      tbl.appendChild(el('thead', {}, el('tr', {},
+        ...['Logged','Balance','Source','Note'].map(h => el('th', {
+          style: { textAlign:'left', padding: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }
+        }, h))
+      )));
+      const tbody = el('tbody', {});
+      rows.forEach(row => {
+        tbody.appendChild(el('tr', {},
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, new Date(row.logged_at).toLocaleString('en-GB')),
+          el('td', { className: 'mono', style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, fmtGbp(row.balance_gbp)),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, row.source || '—'),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, row.note || ''),
+        ));
+      });
+      tbl.appendChild(tbody);
+      tableWrap.appendChild(tbl);
+    } catch(err) { tableWrap.appendChild(emptyState({ icon: '⚠', title: 'Error', body: String(err.message || err) })); }
+    return wrap;
+  };
+}
+
+// ── Upload statement stub ──────────────────────────────────────────────────
+function renderUpload() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Upload bank statement'));
+  wrap.appendChild(el('p', { className: 'text-muted' }, 'Monzo / Starling / Barclays / HSBC CSV export formats supported. Parser runs in your browser.'));
+
+  const fileInput = el('input', { type: 'file', accept: '.csv', className: 'ds-input', style: { marginTop: 'var(--space-4)' } });
+  const status = el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-3)' } });
+  const parseBtn = button({ variant: 'primary', label: 'Parse', onClick: async () => {
+    const file = fileInput.files[0];
     if (!file) { status.textContent = 'Pick a CSV first.'; return; }
-    status.textContent = 'Parsing…';
     const text = await file.text();
-    const parsed = parseMonzoLikeCsv(text);
-    if (!parsed.length) { status.textContent = 'Could not parse. Drop the file in this chat and I will wire a custom parser.'; return; }
-    status.textContent = `Parsed ${parsed.length} rows. Ready to insert (CSV bulk-insert path not yet wired — commit to TODO).`;
-    // TODO: POST batch to /api/supabase-proxy financial_transactions insert
-  });
-
-  // Bank connection stub
-  const bankStub = document.createElement('div');
-  bankStub.className = 'f-stub';
-  bankStub.innerHTML = `
-    <strong>Open Banking — STUB</strong><br>
-    TrueLayer / Plaid integration deferred. For now use Manual or CSV above.<br>
-    Blocker: Ben to sign up for a TrueLayer developer account, then Claude Code wires OAuth.
-    See OVERNIGHT_BLOCKERS.md.
-  `;
-  root.parentElement.appendChild(bankStub);
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) { status.textContent = 'Empty file.'; return; }
+    const header = lines[0].toLowerCase().split(',');
+    const dateIdx = header.findIndex(h => /date/.test(h));
+    const amtIdx = header.findIndex(h => /amount/.test(h));
+    const descIdx = header.findIndex(h => /description|name|merchant/.test(h));
+    if (dateIdx < 0 || amtIdx < 0) { status.textContent = 'Could not detect Date + Amount columns.'; return; }
+    const parsed = lines.slice(1).map(l => {
+      const cols = l.split(',');
+      return {
+        transaction_date: cols[dateIdx],
+        amount_gbp: Number(cols[amtIdx]),
+        description: descIdx >= 0 ? cols[descIdx] : '',
+        type: Number(cols[amtIdx]) > 0 ? 'income' : 'expense',
+        source: 'csv',
+      };
+    }).filter(r => !isNaN(r.amount_gbp));
+    status.textContent = 'Parsed ' + parsed.length + ' rows. Bulk-insert path: TODO (next pass). For now, add manually via entity pages.';
+  }});
+  wrap.appendChild(fileInput);
+  wrap.appendChild(el('div', { className: 'row', style: { marginTop: 'var(--space-3)' } }, parseBtn));
+  wrap.appendChild(status);
+  return wrap;
 }
 
-function parseMonzoLikeCsv(text) {
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const header = lines[0].toLowerCase();
-  const dateIdx = header.split(',').findIndex(h => /date/.test(h));
-  const amtIdx  = header.split(',').findIndex(h => /amount/.test(h));
-  const descIdx = header.split(',').findIndex(h => /description|name|merchant/.test(h));
-  if (dateIdx < 0 || amtIdx < 0) return [];
-  return lines.slice(1).map(line => {
-    const cols = line.split(',');
-    return {
-      transaction_date: cols[dateIdx],
-      amount_gbp: Number(cols[amtIdx]),
-      description: descIdx >= 0 ? cols[descIdx] : '',
-      type: Number(cols[amtIdx]) > 0 ? 'income' : 'expense',
-      source: 'csv',
-    };
-  }).filter(r => !isNaN(r.amount_gbp));
-}
+// ── Portal config ──────────────────────────────────────────────────────────
+const FINANCIALS_PORTAL = {
+  id: 'financials',
+  name: 'FINANCIALS',
+  emoji: '💷',
+  tagline: 'Separate entities. Never commingled.',
+  access: ['ben', 'sarah'],
+  liveStatFetcher: async () => {
+    const count = visibleEntities().length;
+    return count + ' entities';
+  },
+  sections: [
+    { id: 'dashboard',     group: 'OVERVIEW',    label: 'Overview',        emoji: '📊', render: renderDashboard, default: true },
+    { id: 'psnm',          group: 'PER ENTITY',  label: 'PSNM',            emoji: '🏭', render: renderEntity('psnm') },
+    { id: 'ben-personal',  group: 'PER ENTITY',  label: 'Ben Personal',    emoji: '💵', render: renderEntity('personal') },
+    { id: 'rbtr',          group: 'PER ENTITY',  label: 'RBTR',            emoji: '🚛', render: renderEntity('rbtr') },
+    { id: 'ek',            group: 'PER ENTITY',  label: 'EK',              emoji: '🔩', render: renderEntity('ek') },
+    { id: 'house',         group: 'PER ENTITY',  label: 'House',           emoji: '🏠', render: renderEntity('house') },
+    { id: 'all-tx',        group: 'LEDGER',      label: 'All Transactions',emoji: '📜', render: async () => renderDashboard() }, // same data, can specialise later
+    { id: 'upload',        group: 'LEDGER',      label: 'Upload Statement',emoji: '📤', render: renderUpload },
+    { id: 'runway',        group: 'FORECASTING', label: 'Runway',          emoji: '⏳', render: () => emptyState({ icon: '⏳', title: 'Runway projections coming', body: 'Cash on hand ÷ 30-day burn rate per entity. Next pass.' }) },
+    { id: 'burn',          group: 'FORECASTING', label: 'Burn Rate',       emoji: '🔥', render: () => emptyState({ icon: '🔥', title: 'Burn rate coming', body: 'Per-entity monthly burn from financial_transactions.' }) },
+    { id: 'pipeline',      group: 'FORECASTING', label: 'Pipeline Value',  emoji: '📈', render: () => emptyState({ icon: '📈', title: 'Pipeline value coming', body: 'Expected income from quoted-but-unsigned PSNM leads × probability.' }) },
+  ],
+};
 
-document.addEventListener('rbtr-auth-ready', () => {
-  setTimeout(renderFinancialsDashboard, 100);
-});
+window.RBTR_Portal.mount(FINANCIALS_PORTAL);
 </script>
-</body></html>
+</body>
+</html>

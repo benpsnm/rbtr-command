@@ -1,66 +1,104 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RBTR · Command</title>
 <link rel="stylesheet" href="/css/portal.css">
-</head><body>
+</head>
+<body>
 <div id="portal-root"></div>
-<script>
-window.PORTAL_CONFIG = {
-  key: 'rbtr', title: 'RBTR', emoji: '🚛',
-  tagline: 'Expedition, build, sponsors, content. 1 July 2027.',
-  sidebarGroups: [
-    { heading: 'EXPEDITION', items: [
-      { label: 'Route', hash: 'route' },
-      { label: 'Route Full', hash: 'route-full' },
-      { label: 'Live Map', hash: 'livemap' },
-      { label: 'Itinerary', hash: 'itinerary' },
-      { label: 'Visas', hash: 'visas' },
-      { label: 'Vaccinations', hash: 'vaccinations' },
-      { label: 'Pre-Departure', hash: 'pre-departure' },
-      { label: 'Documents', hash: 'documents' },
-    ]},
-    { heading: 'BUILD', items: [
-      { label: 'Arocs Build', hash: 'arocs' },
-      { label: 'Build Bible', hash: 'build-bible' },
-      { label: 'Gear', hash: 'gear' },
-      { label: 'Skills', hash: 'skills' },
-      { label: 'Gates', hash: 'gates' },
-    ]},
-    { heading: 'CONTENT', items: [
-      { label: 'First Video', hash: 'firstvideo' },
-      { label: 'Channel', hash: 'channel' },
-      { label: 'Customer Emails', hash: 'customer-emails' },
-      { label: 'Social Scheduler', hash: 'scheduler' },
-      { label: 'B-Roll', hash: 'broll' },
-      { label: 'Media Plan', hash: 'media-plan' },
-      { label: 'Media Vault', hash: 'media-vault' },
-      { label: 'Editing', hash: 'editing' },
-      { label: 'Podcasts', hash: 'podcast' },
-      { label: 'Guests', hash: 'guests' },
-      { label: 'Resurrection', hash: 'resurrection' },
-      { label: 'Content Override', hash: 'content-override' },
-    ]},
-    { heading: 'COMMERCIAL', items: [
-      { label: 'Sponsors', hash: 'sponsors' },
-      { label: 'Proposals', hash: 'proposals' },
-      { label: 'Merch', hash: 'merch' },
-      { label: 'Subscribers', hash: 'subscribers' },
-      { label: 'Audience', hash: 'audience' },
-    ]},
-    { heading: 'LEGAL', items: [
-      { label: 'Co-Lab Debt', hash: 'colab-debt' },
-    ]},
-    { heading: 'OTHER', items: [
-      { label: 'Countdown', hash: 'countdown' },
-      { label: 'Go Live', hash: 'golive' },
-    ]},
-  ],
-  liveStatFetcher: async () => {
-    const r = await fetch('/api/briefing-data'); const j = await r.json();
-    return (j.data?.days_to_departure ?? '—') + 'd to depart';
-  },
-};
-</script>
+
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
-</body></html>
+<script src="/js/portal-framework.js"></script>
+
+<script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
+async function renderRbtrDashboard() {
+  const wrap = el('div', {});
+  const stats = el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
+  });
+  stats.appendChild(statCard({ emoji: '🚛', label: 'Days to departure', value: '—', sub: '1 July 2027' }));
+  stats.appendChild(statCard({ emoji: '💪', label: 'Built Dad', value: '—', sub: 'day of 56' }));
+  stats.appendChild(statCard({ emoji: '📈', label: 'Audience total', value: '—', sub: 'YT + IG + TikTok' }));
+  stats.appendChild(statCard({ emoji: '🔨', label: 'Build sections', value: '—', sub: 'in progress' }));
+  wrap.appendChild(stats);
+  try {
+    const r = await fetch('/api/briefing-data');
+    const j = await r.json();
+    const d = j.data || {};
+    const vals = stats.querySelectorAll('.ds-stat .value');
+    if (vals[0]) vals[0].textContent = d.days_to_departure ?? '—';
+    if (vals[1]) vals[1].textContent = d.built_dad_day ?? '—';
+    if (vals[2]) vals[2].textContent = d.audience_total ?? '—';
+    if (vals[3]) vals[3].textContent = Array.isArray(d.build_sections_in_progress) ? d.build_sections_in_progress.length : '—';
+  } catch(e) {}
+
+  wrap.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption' }, 'MISSION'),
+    el('p', { style: { margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } },
+      "Mercedes Arocs 6x6. 45 countries, 5 years. Departing Rotherham 1 July 2027. " +
+      "Destination Burleigh Heads, QLD. Three shipping legs: Central Asia → Delhi, Chennai → Mombasa, Cape Town → Singapore."),
+  )}));
+
+  return wrap;
+}
+
+const RBTR_PORTAL = {
+  id: 'rbtr',
+  name: 'RBTR',
+  emoji: '🚛',
+  tagline: 'Expedition · Build · Content · Audience',
+  access: ['ben'],
+  liveStatFetcher: async () => {
+    try {
+      const r = await fetch('/api/briefing-data');
+      const j = await r.json();
+      return (j.data?.days_to_departure ?? '—') + 'd to depart';
+    } catch { return '—'; }
+  },
+  sections: [
+    { id: 'dashboard',         group: 'OVERVIEW',    label: 'Dashboard',      emoji: '📊', render: renderRbtrDashboard, default: true },
+    { id: 'route',             group: 'EXPEDITION',  label: 'Route',          emoji: '🗺', iframeHash: '#sec-route' },
+    { id: 'route-full',        group: 'EXPEDITION',  label: 'Route Full',     emoji: '🗺', iframeHash: '#sec-route-full' },
+    { id: 'livemap',           group: 'EXPEDITION',  label: 'Live Map',       emoji: '📍', iframeHash: '#sec-livemap' },
+    { id: 'itinerary',         group: 'EXPEDITION',  label: 'Itinerary',      emoji: '📅', iframeHash: '#sec-itinerary' },
+    { id: 'visas',             group: 'EXPEDITION',  label: 'Visas',          emoji: '🛂', iframeHash: '#sec-visas' },
+    { id: 'vaccines',          group: 'EXPEDITION',  label: 'Vaccines',       emoji: '💉', iframeHash: '#sec-vaccines' },
+    { id: 'pre-departure',     group: 'EXPEDITION',  label: 'Pre-Departure',  emoji: '✈️', iframeHash: '#sec-predeparture' },
+    { id: 'documents',         group: 'EXPEDITION',  label: 'Documents',      emoji: '📁', iframeHash: '#sec-documents' },
+    { id: 'countdown',         group: 'EXPEDITION',  label: 'Countdown',      emoji: '⏳', iframeHash: '#sec-countdown' },
+    { id: 'build',             group: 'BUILD',       label: 'Build',          emoji: '🔧', iframeHash: '#sec-build' },
+    { id: 'gear',              group: 'BUILD',       label: 'Gear',           emoji: '📦', iframeHash: '#sec-gear' },
+    { id: 'skills',            group: 'BUILD',       label: 'Skills',         emoji: '🛠', iframeHash: '#sec-skills' },
+    { id: 'gates',             group: 'BUILD',       label: 'Three Gates',    emoji: '🚪', iframeHash: '#sec-gates' },
+    { id: 'first-video',       group: 'CONTENT',     label: 'First Video',    emoji: '🎬', iframeHash: '#sec-firstvideo' },
+    { id: 'channel',           group: 'CONTENT',     label: 'Channel Transition', emoji: '📺', iframeHash: '#sec-channel' },
+    { id: 'customer-emails',   group: 'CONTENT',     label: 'Customer Emails',emoji: '✉️', iframeHash: '#sec-custemer-emails' },
+    { id: 'scheduler',         group: 'CONTENT',     label: 'Social Scheduler',emoji: '📲', iframeHash: '#sec-scheduler' },
+    { id: 'broll',             group: 'CONTENT',     label: 'B-Roll',         emoji: '🎞', iframeHash: '#sec-broll' },
+    { id: 'media-plan',        group: 'CONTENT',     label: 'Media Plan',     emoji: '🎨', iframeHash: '#sec-mediaplan' },
+    { id: 'media-vault',       group: 'CONTENT',     label: 'Media Vault',    emoji: '🎭', iframeHash: '#sec-media' },
+    { id: 'editing',           group: 'CONTENT',     label: 'Editing',        emoji: '✂️', iframeHash: '#sec-editing' },
+    { id: 'podcast',           group: 'CONTENT',     label: 'Podcast',        emoji: '🎙', iframeHash: '#sec-podcast' },
+    { id: 'guests',            group: 'CONTENT',     label: 'Guests',         emoji: '🎤', iframeHash: '#sec-guests' },
+    { id: 'resurrection',      group: 'CONTENT',     label: 'Resurrection',   emoji: '📢', iframeHash: '#sec-resurrection' },
+    { id: 'content-override',  group: 'CONTENT',     label: 'Content Override',emoji: '🛡', iframeHash: '#sec-contentoverride' },
+    { id: 'sponsors',          group: 'COMMERCIAL',  label: 'Sponsors',       emoji: '🤝', iframeHash: '#sec-sponsors' },
+    { id: 'proposals',         group: 'COMMERCIAL',  label: 'Proposals',      emoji: '📄', iframeHash: '#sec-proposals' },
+    { id: 'merch',             group: 'COMMERCIAL',  label: 'Merch',          emoji: '👕', iframeHash: '#sec-merch' },
+    { id: 'subscribers',       group: 'COMMERCIAL',  label: 'Subscribers',    emoji: '📧', iframeHash: '#sec-subscribers' },
+    { id: 'audience',          group: 'COMMERCIAL',  label: 'Audience',       emoji: '📊', iframeHash: '#sec-audience' },
+    { id: 'colab-debt',        group: 'LEGAL',       label: 'Colab Debt',     emoji: '⚖️', iframeHash: '#sec-colab' },
+  ],
+};
+
+window.RBTR_Portal.mount(RBTR_PORTAL);
+</script>
+</body>
+</html>
