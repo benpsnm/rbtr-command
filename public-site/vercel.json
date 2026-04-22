@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/quote", "destination": "/quote.html", "permanent": false }
+  ]
+}
