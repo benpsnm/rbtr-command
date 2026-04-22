@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+</head><body>
+<div id="portal-root"></div>
+<script>
+window.PORTAL_CONFIG = {
+  key: 'sarah', title: 'SARAH', emoji: '💜',
+  tagline: 'Her space.',
+  sidebarGroups: [
+    { heading: 'WELLNESS', items: [
+      { label: 'Hub', hash: 'sarah-hub' },
+      { label: 'Pilates', hash: 'pilates' },
+      { label: 'Fitness', hash: 'sarah-fitness' },
+    ]},
+    { heading: 'CONTENT', items: [
+      { label: 'Channel', hash: 'sarah-channel' },
+      { label: 'Goals', hash: 'sarah-goals' },
+      { label: 'Reflections', hash: 'sarah-reflections' },
+    ]},
+    { heading: 'SHARED', items: [
+      { label: 'Relationship', hash: 'relationship' },
+      { label: 'House', path: '/house.html' },
+    ]},
+  ],
+  liveStatFetcher: async () => 'welcome',
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+</body></html>

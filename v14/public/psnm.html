@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+</head><body>
+<div id="portal-root"></div>
+<script>
+window.PORTAL_CONFIG = {
+  key: 'psnm', title: 'PSNM', emoji: '🏭',
+  tagline: 'Pallet operations. Atlas engine.',
+  sidebarGroups: [
+    { heading: 'OVERVIEW', items: [
+      { label: 'Dashboard', hash: 'psnm' },
+    ]},
+    { heading: 'ATLAS', items: [
+      { label: "Today's Actions", hash: 'atlas' },
+      { label: 'Pipeline', hash: 'atlas' },
+      { label: 'Performance', hash: 'atlas' },
+      { label: 'Templates', hash: 'atlas' },
+      { label: 'Offer Config', hash: 'atlas' },
+    ]},
+    { heading: 'OPERATIONS', items: [
+      { label: 'Enquiries', hash: 'psnm-enquiries' },
+      { label: 'Customers', hash: 'psnm-customers' },
+      { label: 'Quotes', hash: 'psnm-quotes' },
+      { label: 'Occupancy', hash: 'psnm-occupancy' },
+      { label: 'Invoices', hash: 'psnm-invoices' },
+    ]},
+    { heading: 'OUTREACH', items: [
+      { label: 'Targets', hash: 'psnm-outreach-targets' },
+      { label: 'Touches', hash: 'psnm-outreach-touches' },
+      { label: 'Call Scripts', hash: 'atlas' },
+    ]},
+  ],
+  liveStatFetcher: async () => {
+    const r = await fetch('/api/briefing-data'); const j = await r.json();
+    const p = j.data?.psnm_pallets_current;
+    return (p ?? '—') + '/827 pallets';
+  },
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+</body></html>
