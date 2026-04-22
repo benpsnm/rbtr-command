@@ -1,16 +1,15 @@
-v3.2-jarvis-draft
-Tagged: 2026-04-22 (Phase 2.6 overnight on phase-2-6-jarvis branch)
+v3.3-jarvis-and-warm-leads-live
+Tagged: 2026-04-22
+Deployed: https://rbtr-jarvis.vercel.app
 
-Preview URL: https://v14-2cate4t2y-beniproautobodies-8729s-projects.vercel.app
-(not production; legacy / at rbtr-jarvis.vercel.app untouched)
+Delivered in v3.3 (Phase 2.6 + Phase 2.7 merged):
+- Auth: migration 29, user_profiles, login page, auth-guard, 403
+- Landing: /landing.html with 7 portals + ROCKO orb + strips
+- Portals: /rbtr /psnm /ben /sarah /house /eternal /financials shells
+- Financials: migration 30, 5-entity cash dashboard, CSV parser
+- Customer self-quote: /public-site/ (Stripe stubbed, not yet deployed)
+- WMS: /wms.html password-gated
+- Warm leads: migration 31, /api/extract-leads Opus 4.7 endpoint,
+  #sec-psnm-warm ingest UI with preview + import + ranked list
 
-Delivered:
-- WS1 Auth: mig 29, login, guard, 403
-- WS4 Financials: mig 30, 5-entity portal
-- WS2 Landing: 7 portals + orb + strips
-- WS3 Portal shells: 6 portals via shared portal-shell.js
-- WS5 Customer quote: /public-site/ (Stripe stubbed, NOT deployed)
-- WS6 WMS: /wms.html password-gated
-
-See OVERNIGHT_REPORT.md for full status.
-See OVERNIGHT_BLOCKERS.md for 12 blockers with unblock steps.
+Ben verified sign-in at 2026-04-22 12:xx.
