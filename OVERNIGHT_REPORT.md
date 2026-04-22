@@ -3,7 +3,8 @@
 **Session end:** 2026-04-22 (same date as start)
 **Branch:** `phase-2-6-jarvis`
 **Tag:** `v3.2-jarvis-draft` (local only — no remote push yet)
-**Preview URL:** https://v14-2cate4t2y-beniproautobodies-8729s-projects.vercel.app
+**Preview URL:** https://v14-m0daiblro-beniproautobodies-8729s-projects.vercel.app
+(earlier preview `v14-2cate4t2y-...` also works, same commit range)
 **Legacy production (untouched):** https://rbtr-jarvis.vercel.app
 
 ---
@@ -103,7 +104,7 @@ https://v14-2cate4t2y-beniproautobodies-8729s-projects.vercel.app
 | `/rbtr.html` ... `/eternal.html` | ✅ 200 | Portal shells render. auth-guard redirects to /login. |
 | `/wms.html` | ✅ 200 | Password gate shows. Default password: `change-before-hiring-staff` |
 | `/api/briefing-data` | ✅ 200 | Returns populated 14 + null 15 fields (pre-auth) |
-| `/api/supabase-proxy` auth_me (no token) | ✅ 401 | Correct |
+| `/api/supabase-proxy` auth_me (no token) | ⚠️ 500 on PREVIEW | Preview Vercel env scope missing SUPABASE_URL (known CLI bug from earlier session — Production has it, verified: `curl -X POST https://rbtr-jarvis.vercel.app/api/supabase-proxy ... auth_me` returns 401 correctly). Fix: promote branch or set preview env scope. |
 
 ---
 
