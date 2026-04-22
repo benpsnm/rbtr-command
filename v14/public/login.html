@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in — RBTR Command</title>
+<style>
+  :root { --bg:#000; --fg:#f5f5f5; --muted:#8a8a8a; --accent:#fff; --card:#0a0a0a; --border:rgba(255,255,255,0.12); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 380px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 32px 28px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+  .brand {
+    font-family: "Ultra", "Impact", sans-serif; font-size: 22px;
+    letter-spacing: 3px; margin: 0 0 6px; text-align: center;
+  }
+  .sub { color: var(--muted); font-size: 11px; text-align: center; letter-spacing: 3px; margin-bottom: 28px; text-transform: uppercase; }
+  label { display: block; font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin: 14px 0 6px; }
+  input {
+    width: 100%; background: #050505; color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 14px; font-size: 15px; font-family: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    margin-top: 20px; width: 100%;
+    background: var(--fg); color: #000; border: none; border-radius: 6px;
+    padding: 14px; font-size: 15px; font-weight: 600; letter-spacing: 1px;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn:hover:not(:disabled) { background: var(--accent); }
+  .err { margin-top: 14px; padding: 10px 12px; background: rgba(255,69,0,0.08); border: 1px solid rgba(255,69,0,0.28); border-radius: 6px; font-size: 13px; color: #ff8a50; display: none; }
+  .err.on { display: block; }
+  .welcome { display: none; text-align: center; padding: 20px 0; }
+  .welcome.on { display: block; }
+  .welcome h2 { margin: 0 0 8px; font-weight: 400; }
+  .welcome p { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  a { color: var(--muted); text-decoration: none; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
+  a:hover { color: var(--fg); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="brand">ROCK BOTTOM TO ROAMING</h1>
+    <div class="sub">COMMAND CENTRE</div>
+
+    <div id="login-form">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" autofocus>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password">
+      <button id="signin" class="btn">Sign in</button>
+      <div id="err" class="err"></div>
+    </div>
+
+    <div id="welcome" class="welcome">
+      <h2 id="hello">Welcome back</h2>
+      <p>Redirecting…</p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const errEl = document.getElementById('err');
+    const welcome = document.getElementById('welcome');
+    const helloEl = document.getElementById('hello');
+    const btn = document.getElementById('signin');
+
+    function showErr(msg) { errEl.textContent = msg; errEl.classList.add('on'); }
+    function clearErr() { errEl.classList.remove('on'); errEl.textContent = ''; }
+
+    function storeSession(data) {
+      try {
+        localStorage.setItem('rbtr_auth', JSON.stringify({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_at: data.expires_at,
+          user: data.user,
+          profile: data.profile,
+          stored_at: Date.now(),
+        }));
+      } catch(e) {}
+    }
+
+    async function signIn() {
+      clearErr();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) { showErr('Email and password required.'); return; }
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = 'Signing in…';
+      try {
+        const r = await fetch('/api/supabase-proxy', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ action: 'auth_login', email, password })
+        });
+        const j = await r.json();
+        if (!r.ok) { showErr(j.error || 'Login failed'); btn.disabled = false; btn.textContent = prevLabel; return; }
+        storeSession(j);
+        form.style.display = 'none';
+        welcome.classList.add('on');
+        helloEl.textContent = 'Welcome back, ' + (j.profile?.display_name || j.user?.email || 'you') + '.';
+        // Redirect based on where they came from or default landing
+        const redirect = new URLSearchParams(location.search).get('r') || '/';
+        setTimeout(() => { location.href = redirect; }, 1200);
+      } catch (e) {
+        showErr('Network error: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+      }
+    }
+
+    btn.addEventListener('click', signIn);
+    document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('password').focus(); }});
+    document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); signIn(); }});
+
+    // If already signed in, bounce straight to landing
+    (async () => {
+      try {
+        const raw = localStorage.getItem('rbtr_auth');
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (!s?.access_token) return;
+        const r = await fetch('/api/supabase-proxy', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json', Authorization: 'Bearer ' + s.access_token},
+          body: JSON.stringify({ action: 'auth_me' })
+        });
+        if (r.ok) location.href = new URLSearchParams(location.search).get('r') || '/';
+      } catch(e) {}
+    })();
+  </script>
+</body>
+</html>
