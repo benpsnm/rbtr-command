@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RBTR · Command</title>
+<style>
+  :root {
+    --bg: #000;
+    --fg: #f5f5f5;
+    --muted: #8a8a8a;
+    --card: #0a0a0a;
+    --border: rgba(255,255,255,0.12);
+    --border-hover: rgba(255,255,255,0.5);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; min-height: 100vh; }
+  a { color: var(--fg); text-decoration: none; }
+
+  .top {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; gap: 16px; padding: 12px 20px; align-items: center;
+    background: rgba(0,0,0,0.65); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    font-family: "Barlow Condensed", sans-serif; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+  }
+  .top > .weather, .top > .date, .top > .survival, .top > .user { white-space: nowrap; }
+  .top .weather { color: var(--muted); }
+  .top .date { flex: 1; text-align: center; color: var(--fg); }
+  .survival {
+    padding: 4px 10px; border-radius: 3px; border: 1px solid var(--border);
+    color: var(--fg); font-weight: 600;
+  }
+  .survival.critical { border-color: #ffffff; animation: pulse 2s infinite; }
+  .survival.urgent   { border-color: rgba(255,255,255,0.6); }
+  .survival.active   { border-color: rgba(255,255,255,0.3); }
+  .survival.green    { border-color: rgba(255,255,255,0.15); color: var(--muted); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .top .user { cursor: pointer; color: var(--muted); }
+  .top .user:hover { color: var(--fg); }
+
+  main {
+    padding: 80px 24px 180px;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+  }
+  .stage { width: 100%; max-width: 1200px; position: relative; }
+
+  /* ORB */
+  .orb-wrap {
+    display: grid; place-items: center;
+    margin: 40px auto;
+    position: relative;
+  }
+  .orb {
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #3a3a3a 0%, #0a0a0a 70%);
+    box-shadow: 0 0 80px rgba(255,255,255,0.08), inset 0 0 40px rgba(0,0,0,0.8);
+    position: relative;
+    animation: breathe 3s ease-in-out infinite;
+    cursor: pointer;
+    transition: transform 0.3s;
+  }
+  .orb::before {
+    content: ""; position: absolute; inset: 12%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.25) 0%, transparent 60%);
+    border-radius: 50%;
+  }
+  .orb::after {
+    content: ""; position: absolute; inset: 35%;
+    background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 40%, transparent 80%);
+    border-radius: 50%;
+  }
+  .orb:hover { transform: scale(1.02); }
+  .orb.listening { animation: ring 1.5s ease-out infinite; }
+  @keyframes breathe {
+    0%,100% { transform: scale(0.98); }
+    50%     { transform: scale(1.02); }
+  }
+  @keyframes ring {
+    0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.4), 0 0 80px rgba(255,255,255,0.12); }
+    100% { box-shadow: 0 0 0 60px rgba(255,255,255,0), 0 0 80px rgba(255,255,255,0.12); }
+  }
+  .orb-label {
+    margin-top: 14px; font-family: "Barlow Condensed", sans-serif;
+    color: var(--muted); font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* PORTAL GRID */
+  .portals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .portal-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; height: 200px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+  }
+  .portal-card:hover {
+    border-color: var(--border-hover);
+    transform: scale(1.03);
+    box-shadow: 0 0 40px rgba(255,255,255,0.06);
+  }
+  .portal-card .emoji { font-size: 42px; line-height: 1; }
+  .portal-card .name  { font-family: "Ultra", Impact, sans-serif; font-size: 20px; letter-spacing: 2px; text-transform: uppercase; }
+  .portal-card .stat  { font-family: "Barlow Condensed", sans-serif; font-size: 13px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; }
+
+  /* BOTTOM STRIP — priorities */
+  .bottom {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 15;
+    background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+  }
+  .priorities { display: flex; gap: 12px; overflow-x: auto; }
+  .prio-card {
+    flex: 0 0 auto; min-width: 260px; padding: 10px 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .prio-card .rank { font-family: "Ultra", Impact, sans-serif; color: var(--fg); margin-right: 8px; }
+  .prio-card .why  { color: var(--muted); font-size: 11px; }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    .portals { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .portal-card { height: 150px; padding: 16px; }
+    .portal-card .emoji { font-size: 32px; }
+    .portal-card .name { font-size: 16px; }
+    .orb { width: 200px; height: 200px; }
+    .top { font-size: 10px; padding: 8px 12px; gap: 8px; }
+    .prio-card { min-width: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="weather" id="w-weather">— —°</span>
+  <span class="date" id="w-date">—</span>
+  <span class="survival" id="w-survival">—</span>
+  <span class="user" id="w-user" title="Log out">👤</span>
+</div>
+
+<main>
+<div class="stage">
+
+  <div class="portals" id="portals-top"></div>
+
+  <div class="orb-wrap">
+    <div class="orb" id="orb" title="Click / say 'Hey ROCKO'"></div>
+    <div class="orb-label">ROCKO · click to talk</div>
+  </div>
+
+  <div class="portals" id="portals-bot"></div>
+
+</div>
+</main>
+
+<div class="bottom">
+  <div class="priorities" id="priorities">
+    <div class="prio-card"><span class="rank">—</span> Loading priorities…</div>
+  </div>
+</div>
+
+<script src="/js/auth-guard.js"></script>
+<script>
+// ── Portal list ──────────────────────────────────────────────────────────
+const PORTALS = [
+  { key: 'rbtr',       emoji: '🚛',  name: 'RBTR',       path: '/rbtr.html' },
+  { key: 'psnm',       emoji: '🏭',  name: 'PSNM',       path: '/psnm.html' },
+  { key: 'ben',        emoji: '💪',  name: 'BEN',        path: '/ben.html' },
+  { key: 'sarah',      emoji: '💜',  name: 'SARAH',      path: '/sarah.html' },
+  { key: 'house',      emoji: '🏠',  name: 'HOUSE',      path: '/house.html' },
+  { key: 'eternal',    emoji: '🔩',  name: 'ETERNAL',    path: '/eternal.html' },
+  { key: 'financials', emoji: '💷',  name: 'FINANCIALS', path: '/financials.html' },
+];
+
+function renderPortals(accessList) {
+  const visible = PORTALS.filter(p => accessList.includes(p.key) ||
+    (p.key === 'financials' && accessList.includes('financials_limited')));
+  const top = visible.slice(0, Math.ceil(visible.length / 2));
+  const bot = visible.slice(Math.ceil(visible.length / 2));
+  const html = arr => arr.map(p => `
+    <a href="${p.path}" class="portal-card" data-key="${p.key}">
+      <div class="emoji">${p.emoji}</div>
+      <div class="name">${p.name}</div>
+      <div class="stat" data-stat="${p.key}">—</div>
+    </a>`).join('');
+  document.getElementById('portals-top').innerHTML = html(top);
+  document.getElementById('portals-bot').innerHTML = html(bot);
+}
+
+// ── Live stats + priorities ──────────────────────────────────────────────
+async function refresh() {
+  try {
+    const r = await fetch('/api/briefing-data');
+    if (!r.ok) return;
+    const j = await r.json();
+    const d = j.data || {};
+
+    // Top strip
+    const w = d.weather_today;
+    if (w && w.now_temp != null) {
+      document.getElementById('w-weather').textContent = Math.round(w.now_temp) + '° · ' + (w.rain_probability != null ? w.rain_probability + '% rain' : 'clear');
+    }
+    const dt = new Date();
+    const weekday = dt.toLocaleDateString('en-GB', { weekday: 'long' });
+    const dateStr = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+    const days = d.days_to_departure;
+    document.getElementById('w-date').textContent = `${weekday} ${dateStr} · ${days} days to depart`;
+
+    // Survival — based on PSNM cash + days to rent
+    const cashPsnm = d.cash_psnm?.balance_gbp;
+    const daysToRent = 17;
+    let survival = 'active', label = 'ACTIVE';
+    if (cashPsnm == null) { survival = 'urgent'; label = 'UNKNOWN'; }
+    else if (cashPsnm < 3000 && daysToRent < 10) { survival = 'critical'; label = 'CRITICAL'; }
+    else if (cashPsnm < 3000) { survival = 'urgent'; label = 'URGENT'; }
+    else if (cashPsnm > 5000) { survival = 'green'; label = 'GREEN'; }
+    const sEl = document.getElementById('w-survival');
+    sEl.className = 'survival ' + survival;
+    sEl.textContent = label + ' · £' + (cashPsnm ?? '—');
+
+    // Portal stats
+    const setStat = (key, val) => document.querySelectorAll(`[data-stat="${key}"]`).forEach(el => el.textContent = val);
+    setStat('rbtr', days + 'd to depart');
+    const pallets = d.psnm_pallets_current;
+    setStat('psnm', (pallets ?? '—') + '/827 pallets');
+    setStat('ben', '£' + (d.cash_personal?.balance_gbp ?? '—') + ' · day ' + (d.built_dad_day ?? '—'));
+    setStat('sarah', 'Sarah portal');
+    setStat('house', (d.house_jobs_remaining ?? '—') + ' jobs');
+    setStat('eternal', 'consultancy');
+    setStat('financials', '4 entities');
+
+    // Priorities (bottom strip) — top-3 heuristic: PSNM survival, closest structural gate, today's top call
+    const prios = [];
+    if (cashPsnm != null && cashPsnm < 3000) {
+      prios.push({ rank: '1', label: 'PSNM rent gap: £' + (3000 - cashPsnm), why: 'Due 8 May. Atlas pipeline only path.', href: '/psnm.html' });
+    }
+    if (d.debt_line_consultation_booked === false) {
+      prios.push({ rank: '2', label: 'Book Debt Line consultation', why: 'Gates rebrand. One phone call closes.', href: '/ben.html' });
+    }
+    if (Array.isArray(d.psnm_urgent_enquiries) && d.psnm_urgent_enquiries.length) {
+      prios.push({ rank: '3', label: 'Urgent PSNM enquiry: ' + d.psnm_urgent_enquiries[0].company, why: 'Flagged urgent. Reply today.', href: '/psnm.html' });
+    }
+    if (!prios.length) prios.push({ rank: '—', label: 'Nothing flagging.', why: 'Open a portal or speak to ROCKO.', href: '/ben.html' });
+    document.getElementById('priorities').innerHTML = prios.map(p =>
+      `<a class="prio-card" href="${p.href}"><span class="rank">${p.rank}.</span>${p.label}<div class="why">${p.why}</div></a>`
+    ).join('');
+  } catch(e) { console.warn('refresh failed', e); }
+}
+
+// ── Wire auth-ready → render portals for this user's access ──────────────
+document.addEventListener('rbtr-auth-ready', e => {
+  const user = e.detail;
+  const access = user.profile?.portal_access || [];
+  renderPortals(access);
+  refresh();
+  setInterval(refresh, 60000);
+});
+
+// ── Orb click → open ROCKO chat (fallback to legacy index for now) ───────
+document.getElementById('orb').addEventListener('click', () => {
+  location.href = '/';  // legacy Command Centre has ROCKO chat
+});
+
+// ── Logout ───────────────────────────────────────────────────────────────
+document.getElementById('w-user').addEventListener('click', () => {
+  if (window.RBTR_logout) window.RBTR_logout();
+});
+</script>
+</body>
+</html>
