@@ -18,6 +18,12 @@ const ALLOWED_TABLES = new Set([
   'jarvis_tool_registry',
   'jarvis_signals',
   'jarvis_conversations',
+  // Phase 2.7 warm-lead ingestion (INTERNAL classification, RLS service_role only)
+  'psnm_enquiries',
+  'psnm_quotes',
+  'psnm_outreach_touches',
+  'psnm_outreach_targets',
+  'psnm_customers',
 ]);
 
 exports.handler = async (event) => {
