@@ -168,6 +168,10 @@ module.exports = async function handler(req, res) {
   if (body.action === 'auth_me') {
     const token = (req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) { res.status(401).json({ error: 'no token' }); return; }
+    if (!SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      res.status(500).json({ error: 'Supabase env not configured for auth' });
+      return;
+    }
     const ANON = process.env.SUPABASE_ANON_KEY;
     try {
       const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
