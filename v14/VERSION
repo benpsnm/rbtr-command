@@ -1,15 +1,15 @@
-v3.3-jarvis-and-warm-leads-live
-Tagged: 2026-04-22
+v3.4-portal-interiors-complete
+Tagged: 2026-04-22 (same day as v3.3)
 Deployed: https://rbtr-jarvis.vercel.app
 
-Delivered in v3.3 (Phase 2.6 + Phase 2.7 merged):
-- Auth: migration 29, user_profiles, login page, auth-guard, 403
-- Landing: /landing.html with 7 portals + ROCKO orb + strips
-- Portals: /rbtr /psnm /ben /sarah /house /eternal /financials shells
-- Financials: migration 30, 5-entity cash dashboard, CSV parser
-- Customer self-quote: /public-site/ (Stripe stubbed, not yet deployed)
-- WMS: /wms.html password-gated
-- Warm leads: migration 31, /api/extract-leads Opus 4.7 endpoint,
-  #sec-psnm-warm ingest UI with preview + import + ranked list
+Phase 1.5 — proper portal interiors (supersedes Phase 2.6 shells).
 
-Ben verified sign-in at 2026-04-22 12:xx.
+Delivered:
+- Design system: /css/design-system.css (tokens), /js/components.js (10 components)
+- Portal framework: /js/portal-framework.js + /js/state.js
+- 7 native portals (PSNM, BEN, FINANCIALS fully, RBTR/HOUSE/SARAH/ETERNAL scaffolded)
+- Floating ROCKO orb on every portal + right-side chat panel
+- Legacy /index.html banner pointing to /landing.html
+- Iframe escape hatch for legacy-global-dependent sections
+
+Ben: test at https://rbtr-jarvis.vercel.app/login.html?r=/landing.html
