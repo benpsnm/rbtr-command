@@ -1,28 +1,76 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ETERNAL · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
-</head><body>
+</head>
+<body>
 <div id="portal-root"></div>
-<script>
-window.PORTAL_CONFIG = {
-  key: 'eternal', title: 'ETERNAL KUSTOMS', emoji: '🔩',
-  tagline: 'Consultancy to Sam Moore.',
-  sidebarGroups: [
-    { heading: 'CONSULTANCY', items: [
-      { label: "Ben's Role", hash: 'eternal' },
-      { label: 'Retainer + Hours', hash: 'eternal-retainer' },
-      { label: 'Invoice Log', hash: 'eternal-invoices' },
-    ]},
-    { heading: 'ETERNAL', items: [
-      { label: 'Overview', hash: 'eternal' },
-      { label: 'Shareholders', hash: 'eternal-shareholders' },
-      { label: 'Coffee Brothers', hash: 'coffee' },
-    ]},
-  ],
-  liveStatFetcher: async () => 'consultancy',
-};
-</script>
+
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
-</body></html>
+<script src="/js/portal-framework.js"></script>
+
+<script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
+async function renderEternalDashboard() {
+  const wrap = el('div', {});
+  const stats = el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
+  });
+  stats.appendChild(statCard({ emoji: '💷', label: 'Monthly retainer', value: '£1,000', sub: 'from May 2026' }));
+  stats.appendChild(statCard({ emoji: '⏱', label: 'Hourly rate', value: '£40', sub: 'beyond retainer' }));
+  stats.appendChild(statCard({ emoji: '🔩', label: 'EK cash', value: '—', sub: 'LEGAL_SENSITIVE' }));
+  wrap.appendChild(stats);
+
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'ek_cash_log', op: 'select' })
+    });
+    if (r.ok) {
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length) {
+        rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
+        const vals = stats.querySelectorAll('.ds-stat .value');
+        if (vals[2]) vals[2].textContent = '£' + Number(rows[0].balance_gbp).toLocaleString('en-GB', { minimumFractionDigits: 2 });
+      }
+    }
+  } catch(e) {}
+
+  wrap.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption' }, 'CONSULTANCY TO SAM MOORE'),
+    el('p', { style: { margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } },
+      "Ben is external consultant for Eternal Kustoms Ltd (Sam Moore's company). £1,000/mo retainer from May 2026 + £40/hr beyond retainer. " +
+      "Ben does not hold equity. EK P&L is Sam's — Ben's consultancy fee is personal income only."),
+  )}));
+
+  return wrap;
+}
+
+const ETERNAL_PORTAL = {
+  id: 'eternal',
+  name: 'ETERNAL KUSTOMS',
+  emoji: '🔩',
+  tagline: 'Consultancy · Retainer + Hours',
+  access: ['ben'],
+  liveStatFetcher: async () => 'consultancy',
+  sections: [
+    { id: 'dashboard',   group: 'OVERVIEW',   label: 'Dashboard',     emoji: '📊', render: renderEternalDashboard, default: true },
+    { id: 'role',        group: 'CONSULTANCY',label: "Ben's Role",    emoji: '👨‍🔧', iframeHash: '#sec-eternal' },
+    { id: 'hours',       group: 'CONSULTANCY',label: 'Hours Log',     emoji: '⏱', render: () => emptyState({ icon: '⏱', title: 'Hours log coming', body: 'Ben logs consultancy hours weekly. Writes to a new ek_hours_log table (next migration).' }) },
+    { id: 'invoices',    group: 'CONSULTANCY',label: 'Invoices',      emoji: '💷', render: () => emptyState({ icon: '💷', title: 'Invoice log coming', body: 'Retainer + hours monthly invoice to Sam. Writes to ek_invoice_log (next migration).' }) },
+    { id: 'overview',    group: 'ETERNAL',    label: 'Overview',      emoji: '🔧', iframeHash: '#sec-eternal' },
+    { id: 'coffee',      group: 'ETERNAL',    label: 'Coffee Brothers',emoji: '☕', iframeHash: '#sec-coffee' },
+  ],
+};
+
+window.RBTR_Portal.mount(ETERNAL_PORTAL);
+</script>
+</body>
+</html>

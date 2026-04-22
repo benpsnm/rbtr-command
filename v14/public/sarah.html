@@ -1,32 +1,83 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SARAH · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
-</head><body>
+</head>
+<body>
 <div id="portal-root"></div>
-<script>
-window.PORTAL_CONFIG = {
-  key: 'sarah', title: 'SARAH', emoji: '💜',
-  tagline: 'Her space.',
-  sidebarGroups: [
-    { heading: 'WELLNESS', items: [
-      { label: 'Hub', hash: 'sarah-hub' },
-      { label: 'Pilates', hash: 'pilates' },
-      { label: 'Fitness', hash: 'sarah-fitness' },
-    ]},
-    { heading: 'CONTENT', items: [
-      { label: 'Channel', hash: 'sarah-channel' },
-      { label: 'Goals', hash: 'sarah-goals' },
-      { label: 'Reflections', hash: 'sarah-reflections' },
-    ]},
-    { heading: 'SHARED', items: [
-      { label: 'Relationship', hash: 'relationship' },
-      { label: 'House', path: '/house.html' },
-    ]},
-  ],
-  liveStatFetcher: async () => 'welcome',
-};
-</script>
+
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
-</body></html>
+<script src="/js/portal-framework.js"></script>
+
+<script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
+async function renderSarahDashboard() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-5)' } },
+    'Your space. Wellness, Pilates, your channel, your reflections.'));
+
+  // Sarah-specific goals + reflections
+  const goalsCard = card({ children: el('div', {},
+    el('div', { className: 'ds-caption' }, 'YOUR GOALS'),
+    el('div', { id: 'sarah-goals', style: { marginTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' } }, 'Loading…'),
+  )});
+  wrap.appendChild(goalsCard);
+
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'sarah_goals', op: 'select' })
+    });
+    const rows = r.ok ? await r.json() : [];
+    const host = goalsCard.querySelector('#sarah-goals');
+    host.innerHTML = '';
+    const open = (rows || []).filter(g => g.status === 'open');
+    if (!open.length) host.appendChild(emptyState({ icon: '🎯', title: 'No open goals yet', body: 'Add one via the SQL editor for now; goal-adding UI coming next pass.' }));
+    else open.forEach(g => {
+      const row = el('div', { style: { padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-subtle)' } },
+        el('span', { className: 'ds-badge', style: { marginRight: 'var(--space-2)' } }, (g.scope || '—').toUpperCase()),
+        g.title,
+      );
+      host.appendChild(row);
+    });
+  } catch(e) {
+    goalsCard.querySelector('#sarah-goals').textContent = 'Load failed: ' + (e.message || e);
+  }
+
+  return wrap;
+}
+
+const SARAH_PORTAL = {
+  id: 'sarah',
+  name: 'SARAH',
+  emoji: '💜',
+  tagline: 'Wellness · Channel · Partnership',
+  access: ['ben', 'sarah'],
+  liveStatFetcher: async () => 'your space',
+  sections: [
+    { id: 'dashboard',   group: 'OVERVIEW', label: 'Dashboard',     emoji: '📊', render: renderSarahDashboard, default: true },
+    { id: 'hub',         group: 'WELLNESS', label: 'Hub',           emoji: '🧘', iframeHash: '#sec-sarah' },
+    { id: 'pilates',     group: 'WELLNESS', label: 'Pilates',       emoji: '🧘', iframeHash: '#sec-sarah' },
+    { id: 'fitness',     group: 'WELLNESS', label: 'Fitness',       emoji: '💪', iframeHash: '#sec-sarah' },
+    { id: 'channel',     group: 'CONTENT',  label: 'Her Channel',   emoji: '📺', iframeHash: '#sec-sarah' },
+    { id: 'goals',       group: 'CONTENT',  label: 'Her Goals',     emoji: '🎯', iframeHash: '#sec-sarah' },
+    { id: 'reflections', group: 'CONTENT',  label: 'Her Reflections', emoji: '✍️', iframeHash: '#sec-sarah' },
+    { id: 'relationship',group: 'SHARED',   label: 'Relationship',  emoji: '💑', iframeHash: '#sec-relationship' },
+    { id: 'house-link',  group: 'SHARED',   label: 'House (view) →', emoji: '🏠', render: () => {
+      location.href = '/house.html';
+      return C.emptyState({ icon: '🏠', title: 'Redirecting to House portal…' });
+    }},
+  ],
+};
+
+window.RBTR_Portal.mount(SARAH_PORTAL);
+</script>
+</body>
+</html>
