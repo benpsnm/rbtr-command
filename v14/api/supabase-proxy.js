@@ -101,6 +101,14 @@ const BRIEFING_AUDIT_MAP = {
   weather_today:              { table: '(external) open-meteo.com', query: "current + daily for Rotherham" },
 };
 
+// Service-role headers for direct PostgREST reads/writes.
+// Used by auth actions to fetch user_profiles after login.
+function sbHeaders() {
+  const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
+  if (SUPABASE_KEY && SUPABASE_KEY.startsWith('eyJ')) h['Authorization'] = `Bearer ${SUPABASE_KEY}`;
+  return h;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
