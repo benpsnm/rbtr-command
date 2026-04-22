@@ -1,53 +1,253 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BEN · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
-</head><body>
+</head>
+<body>
 <div id="portal-root"></div>
-<script>
-window.PORTAL_CONFIG = {
-  key: 'ben', title: 'BEN', emoji: '💪',
-  tagline: 'Wellness, finance, legal, tasks.',
-  sidebarGroups: [
-    { heading: 'WELLNESS', items: [
-      { label: 'Daily Routine', hash: 'routine' },
-      { label: 'Training', hash: 'training' },
-      { label: 'Nutrition', hash: 'nutrition' },
-      { label: 'Mindset', hash: 'mindset' },
-      { label: 'Sleep', hash: 'sleep' },
-      { label: 'Best Self', hash: 'bestself' },
-      { label: 'Dojo', hash: 'dojo' },
-    ]},
-    { heading: 'GOALS', items: [
-      { label: 'Today', hash: 'today' },
-      { label: 'Wins', hash: 'wins' },
-      { label: 'Three Gates', hash: 'gates' },
-    ]},
-    { heading: 'FINANCE', items: [
-      { label: 'Money Meeting', hash: 'money-meeting' },
-      { label: 'Financial Plan', hash: 'financial-plan' },
-      { label: 'Budget', hash: 'budget' },
-      { label: 'Personal Cash', path: '/financials.html' },
-    ]},
-    { heading: 'LEGAL', items: [
-      { label: 'Legal Structure', hash: 'legalstructure' },
-      { label: 'Amine Framework', hash: 'amine' },
-    ]},
-    { heading: 'ADMIN', items: [
-      { label: 'Planner', hash: 'planner' },
-      { label: 'Calendar', hash: 'calendar' },
-      { label: 'Tasks', hash: 'tasks' },
-      { label: 'Notes', hash: 'notes' },
-      { label: 'CRM', hash: 'crm' },
-      { label: 'Tool Registry', hash: 'tools' },
-    ]},
-  ],
-  liveStatFetcher: async () => {
-    const r = await fetch('/api/briefing-data'); const j = await r.json();
-    return '£' + (j.data?.cash_personal?.balance_gbp ?? '—') + ' · day ' + (j.data?.built_dad_day ?? '—');
-  },
-};
-</script>
+
+<script src="/js/components.js"></script>
+<script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
-<script src="/js/portal-shell.js"></script>
-</body></html>
+<script src="/js/portal-framework.js"></script>
+
+<script>
+const C = window.RBTR_Components;
+const { el, card, statCard, button, emptyState } = C;
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+async function renderBenDashboard() {
+  const wrap = el('div', {});
+
+  const stats = el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
+  });
+  const cardPersonalCash = statCard({ emoji: '💷', label: 'Personal cash', value: '—', sub: 'last logged balance' });
+  const cardBuiltDad     = statCard({ emoji: '💪', label: 'Built Dad day', value: '—', sub: 'of 56' });
+  const cardMoodGap      = statCard({ emoji: '🧠', label: 'Mood gap', value: '—', sub: 'days since last reflection' });
+  const cardBills        = statCard({ emoji: '📅', label: 'Bills due', value: '—', sub: 'next 7 days' });
+  stats.appendChild(cardPersonalCash);
+  stats.appendChild(cardBuiltDad);
+  stats.appendChild(cardMoodGap);
+  stats.appendChild(cardBills);
+  wrap.appendChild(stats);
+
+  try {
+    const r = await fetch('/api/briefing-data');
+    const j = await r.json();
+    const d = j.data || {};
+    const vals = stats.querySelectorAll('.ds-stat .value');
+    if (vals[0]) vals[0].textContent = d.cash_personal?.balance_gbp != null ? '£' + Number(d.cash_personal.balance_gbp).toLocaleString() : '—';
+    if (vals[1]) vals[1].textContent = d.built_dad_day != null ? d.built_dad_day : '—';
+    if (vals[2]) vals[2].textContent = d.mood_log_gap_days != null ? d.mood_log_gap_days : '—';
+    if (vals[3]) {
+      const bills = d.bills_due_this_week;
+      vals[3].textContent = Array.isArray(bills) ? bills.length : (bills == null ? '—' : '0');
+    }
+  } catch(e) {}
+
+  // Today's open goals
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, "Today's open goals"));
+  const goalsWrap = el('div', { style: { display: 'grid', gap: 'var(--space-2)' } });
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'jarvis_goals', op: 'select' })
+    });
+    const rows = r.ok ? await r.json() : [];
+    const open = (rows || []).filter(g => g.status === 'open' && g.scope === 'day').slice(0, 10);
+    if (!open.length) goalsWrap.appendChild(emptyState({ icon: '🎯', title: 'No open goals', body: 'Open Today Goals in the sidebar to add some.' }));
+    else open.forEach(g => goalsWrap.appendChild(card({ children: el('div', {}, g.title || '(no title)') })));
+  } catch(e) {}
+  wrap.appendChild(goalsWrap);
+
+  // Three gates
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Three gates'));
+  wrap.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-2)' } }, 'Personal liquidity path'),
+    el('div', {}, '• Van finish + buyer payment'),
+    el('div', {}, '• T6.1 + trailer sale (→ RBTR build fund)'),
+    el('div', {}, '• Coffee Brothers bike return (closes Gate 2)'),
+  )}));
+
+  return wrap;
+}
+
+// ── Evening reflection render (native, writes to evening_reflections) ──────
+async function renderEveningReflection() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Evening reflection'));
+  wrap.appendChild(el('p', { className: 'text-muted' }, 'Two taps and two lines — that\'s the whole point.'));
+
+  const mood = { v: null };
+  const moodRow = el('div', { className: 'row', style: { gap: 'var(--space-2)', margin: 'var(--space-4) 0' } });
+  [1,2,3,4,5].forEach(n => {
+    const b = button({
+      variant: 'secondary', size: 'sm',
+      label: '①②③④⑤'.split('')[n-1],
+      onClick: () => {
+        mood.v = n;
+        moodRow.querySelectorAll('.ds-btn').forEach((el, i) => {
+          el.classList.toggle('primary', i === n - 1);
+          el.classList.toggle('secondary', i !== n - 1);
+        });
+      }
+    });
+    moodRow.appendChild(b);
+  });
+  wrap.appendChild(el('label', { className: 'ds-label' }, 'Mood today'));
+  wrap.appendChild(moodRow);
+
+  const oneLine = el('input', { className: 'ds-input', placeholder: 'One line about today', maxlength: 80 });
+  const tomorrow = el('input', { className: 'ds-input', placeholder: "Tomorrow's priority", maxlength: 80 });
+  wrap.appendChild(el('label', { className: 'ds-label' }, 'One line today'));
+  wrap.appendChild(oneLine);
+  wrap.appendChild(el('label', { className: 'ds-label', style: { marginTop: 'var(--space-3)' } }, "Tomorrow's priority"));
+  wrap.appendChild(tomorrow);
+
+  const status = el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-3)' } });
+  const save = button({
+    variant: 'primary', label: 'Log',
+    onClick: async () => {
+      if (mood.v == null) { status.textContent = 'Pick a mood.'; return; }
+      if (!oneLine.value.trim()) { status.textContent = 'Write one line.'; return; }
+      try {
+        const payload = {
+          reflection_date: new Date().toISOString().slice(0, 10),
+          mood_score: mood.v,
+          one_line: oneLine.value.trim(),
+          one_line_reflection: oneLine.value.trim(),
+          tomorrow_priority: tomorrow.value.trim() || null,
+        };
+        // upsert via delete then insert
+        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table: 'evening_reflections', op: 'delete', match: { reflection_date: payload.reflection_date } }) });
+        const r = await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table: 'evening_reflections', op: 'insert', row: payload }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        C.toast({ type: 'success', message: 'Logged. See you at 6am.' });
+        status.textContent = '';
+        oneLine.value = ''; tomorrow.value = ''; mood.v = null;
+        moodRow.querySelectorAll('.ds-btn').forEach(el => { el.classList.remove('primary'); el.classList.add('secondary'); });
+      } catch(e) { status.textContent = 'Save failed: ' + (e.message || e); }
+    }
+  });
+  wrap.appendChild(el('div', { className: 'row', style: { marginTop: 'var(--space-4)', justifyContent: 'flex-end' } }, save));
+  wrap.appendChild(status);
+  return wrap;
+}
+
+// ── Personal cash log render (native) ──────────────────────────────────────
+async function renderPersonalCashLog() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Personal cash log'));
+  wrap.appendChild(el('p', { className: 'text-muted' }, 'Your personal balance over time. Never commingled with PSNM / RBTR / EK.'));
+
+  // Quick log
+  const inp = el('input', { type: 'number', step: '0.01', className: 'ds-input', placeholder: '£ new balance', style: { maxWidth: '200px' } });
+  const note = el('input', { className: 'ds-input', placeholder: 'Optional note', style: { maxWidth: '280px' } });
+  const logBtn = button({ variant: 'primary', label: 'Log', onClick: async () => {
+    if (!inp.value) return;
+    const r = await fetch('/api/atlas?action=log_cash', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entity: 'personal', balance_gbp: Number(inp.value), note: note.value || null })
+    });
+    if (r.ok) { inp.value = ''; note.value = ''; C.toast({ type:'success', message: 'Personal cash logged' }); refresh(); }
+    else C.toast({ type: 'error', message: 'Log failed' });
+  }});
+  wrap.appendChild(el('div', { className: 'row', style: { marginBottom: 'var(--space-5)' } }, inp, note, logBtn));
+
+  // Table
+  const tableWrap = el('div', {});
+  wrap.appendChild(tableWrap);
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/supabase-proxy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table: 'personal_cash_log', op: 'select' })
+      });
+      const rows = r.ok ? await r.json() : [];
+      tableWrap.innerHTML = '';
+      if (!Array.isArray(rows) || !rows.length) {
+        tableWrap.appendChild(emptyState({ icon: '💷', title: 'No entries yet', body: 'Log your current balance above.' }));
+        return;
+      }
+      rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
+      const tbl = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' } });
+      tbl.appendChild(el('thead', {}, el('tr', {},
+        ...['Date', 'Balance', 'Source', 'Note'].map(h => el('th', { style: { textAlign:'left', padding: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' } }, h))
+      )));
+      const tbody = el('tbody', {});
+      rows.slice(0, 30).forEach(r => {
+        tbody.appendChild(el('tr', {},
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, new Date(r.logged_at).toLocaleDateString('en-GB') + ' ' + new Date(r.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', fontFamily: 'var(--font-mono)' } }, '£' + Number(r.balance_gbp).toLocaleString('en-GB', { minimumFractionDigits: 2 })),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, r.source || 'manual'),
+          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, r.note || ''),
+        ));
+      });
+      tbl.appendChild(tbody);
+      tableWrap.appendChild(tbl);
+    } catch(e) { tableWrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed' })); }
+  }
+  refresh();
+  return wrap;
+}
+
+const BEN_PORTAL = {
+  id: 'ben',
+  name: 'BEN',
+  emoji: '💪',
+  tagline: 'Wellness · Finance · Legal · Ops',
+  access: ['ben'],
+  liveStatFetcher: async () => {
+    try {
+      const r = await fetch('/api/briefing-data'); const j = await r.json();
+      const cash = j.data?.cash_personal?.balance_gbp;
+      const day = j.data?.built_dad_day;
+      return '£' + (cash ?? '—') + ' · day ' + (day ?? '—');
+    } catch { return '—'; }
+  },
+  sections: [
+    { id: 'dashboard',      group: 'OVERVIEW',  label: 'Dashboard',     emoji: '📊', render: renderBenDashboard, default: true },
+    // Wellness — all legacy iframes (sec-routine, sec-training, etc all depend on legacy globals)
+    { id: 'routine',        group: 'WELLNESS',  label: 'Daily Routine', emoji: '💪', iframeHash: '#sec-routine' },
+    { id: 'training',       group: 'WELLNESS',  label: 'Training',      emoji: '🏋️', iframeHash: '#sec-training' },
+    { id: 'nutrition',      group: 'WELLNESS',  label: 'Nutrition',     emoji: '🥗', iframeHash: '#sec-nutrition' },
+    { id: 'mindset',        group: 'WELLNESS',  label: 'Mindset',       emoji: '🧠', iframeHash: '#sec-mindset' },
+    { id: 'sleep',          group: 'WELLNESS',  label: 'Sleep',         emoji: '😴', iframeHash: '#sec-sleep' },
+    { id: 'bestself',       group: 'WELLNESS',  label: 'Best Self',     emoji: '✨', iframeHash: '#sec-bestself' },
+    { id: 'dojo',           group: 'WELLNESS',  label: 'Learning Dojo', emoji: '🥋', iframeHash: '#sec-dojo' },
+    // Goals
+    { id: 'goals',          group: 'GOALS',     label: 'Today Goals',   emoji: '🎯', iframeHash: '#sec-goals' },
+    { id: 'wins',           group: 'GOALS',     label: 'Wins',          emoji: '🏆', iframeHash: '#sec-wins' },
+    { id: 'gates',          group: 'GOALS',     label: 'Three Gates',   emoji: '🚪', iframeHash: '#sec-gates' },
+    // Reflection — native
+    { id: 'reflection',     group: 'GOALS',     label: 'Evening Reflection', emoji: '🌙', render: renderEveningReflection },
+    // Finance — personal cash native, rest iframe
+    { id: 'personal-cash',  group: 'FINANCE',   label: 'Personal Cash', emoji: '💵', render: renderPersonalCashLog },
+    { id: 'moneymeeting',   group: 'FINANCE',   label: 'Money Meeting', emoji: '💰', iframeHash: '#sec-moneymeeting' },
+    { id: 'financial-plan', group: 'FINANCE',   label: 'Financial Plan', emoji: '📈', iframeHash: '#sec-financial-plan' },
+    { id: 'budget',         group: 'FINANCE',   label: 'Budget',        emoji: '📊', iframeHash: '#sec-budget' },
+    { id: 'cashflow',       group: 'FINANCE',   label: 'Cash Flow',     emoji: '💸', iframeHash: '#sec-finance' },
+    // Legal
+    { id: 'legal',          group: 'LEGAL',     label: 'Legal Structure', emoji: '⚖️', iframeHash: '#sec-legalstructure' },
+    { id: 'amine',          group: 'LEGAL',     label: 'Amine Framework', emoji: '🧩', iframeHash: '#sec-aminedecisions' },
+    // Admin
+    { id: 'planner',        group: 'ADMIN',     label: 'Planner',       emoji: '📅', iframeHash: '#sec-planner' },
+    { id: 'calendar',       group: 'ADMIN',     label: 'Calendar',      emoji: '🗓', iframeHash: '#sec-calendar' },
+    { id: 'tasks',          group: 'ADMIN',     label: 'Tasks',         emoji: '✅', iframeHash: '#sec-tasks' },
+    { id: 'notes',          group: 'ADMIN',     label: 'Notes',         emoji: '📝', iframeHash: '#sec-notes' },
+    { id: 'crm',            group: 'ADMIN',     label: 'CRM',           emoji: '👥', iframeHash: '#sec-crm' },
+    { id: 'registry',       group: 'ADMIN',     label: 'Tool Registry', emoji: '🛠', iframeHash: '#sec-registry' },
+  ],
+};
+
+window.RBTR_Portal.mount(BEN_PORTAL);
+</script>
+</body>
+</html>
