@@ -38,6 +38,9 @@ const ALLOWED_TABLES = new Set([
   'psnm_cash_log','personal_cash_log','rbtr_fund_log','personal_priorities',
   // ── CC partial overnight (migration 28) ──
   'house_jobs','nate_checkins','bills','jarvis_settings',
+  // ── Phase 2.6 (migrations 29 + 30) ──
+  'user_profiles','sarah_goals','sarah_reflections',
+  'financial_transactions','bank_connections','house_cash_log',
 ]);
 
 // Classification-aware blocks. AUTH never goes through the browser proxy.
@@ -130,6 +133,60 @@ module.exports = async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+  // Phase 2.6 WS1 · auth actions (login / logout / me)
+  // Proxies Supabase GoTrue endpoints with the anon key. Returns session
+  // tokens which the client stores and passes back as Authorization header.
+  if (body.action === 'auth_login') {
+    const ANON = process.env.SUPABASE_ANON_KEY;
+    if (!ANON) { res.status(500).json({ error: 'SUPABASE_ANON_KEY not set' }); return; }
+    const { email, password } = body;
+    if (!email || !password) { res.status(400).json({ error: 'email + password required' }); return; }
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { apikey: ANON, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const j = await r.json();
+      if (!r.ok) { res.status(r.status).json({ error: j.error_description || j.msg || 'login failed' }); return; }
+      // Fetch user profile for role + portal_access
+      const profileR = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${j.user?.id}&select=role,portal_access,display_name,avatar_url`, {
+        headers: sbHeaders(),
+      });
+      const profile = profileR.ok ? (await profileR.json())[0] : null;
+      res.status(200).json({
+        access_token: j.access_token,
+        refresh_token: j.refresh_token,
+        expires_at: j.expires_at,
+        user: { id: j.user?.id, email: j.user?.email },
+        profile,
+      });
+      return;
+    } catch (e) { res.status(500).json({ error: e.message }); return; }
+  }
+  if (body.action === 'auth_me') {
+    const token = (req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) { res.status(401).json({ error: 'no token' }); return; }
+    const ANON = process.env.SUPABASE_ANON_KEY;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: ANON, Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) { res.status(r.status).json({ error: 'invalid token' }); return; }
+      const user = await r.json();
+      const profileR = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${user.id}&select=role,portal_access,display_name,avatar_url`, { headers: sbHeaders() });
+      const profile = profileR.ok ? (await profileR.json())[0] : null;
+      res.status(200).json({ user: { id: user.id, email: user.email }, profile });
+      return;
+    } catch (e) { res.status(500).json({ error: e.message }); return; }
+  }
+  if (body.action === 'auth_logout') {
+    // Server-side logout just signals the client to drop the token.
+    // Supabase token revocation would require the refresh_token; optional.
+    res.status(200).json({ ok: true });
+    return;
+  }
 
   // WS-C.8 · /api/supabase-proxy {action:'briefing_audit'} — dev-mode introspection
   // of every field in /api/briefing-data, its source table + query. Gated by
