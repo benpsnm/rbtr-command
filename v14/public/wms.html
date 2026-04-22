@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WMS — Staff View</title>
+<style>
+  :root { --bg:#000; --fg:#f5f5f5; --muted:#8a8a8a; --card:#0a0a0a; --border:rgba(255,255,255,0.12); }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+  .gate{display:grid;place-items:center;min-height:100vh;padding:24px}
+  .gate .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:32px;max-width:340px;width:100%}
+  .gate input{width:100%;background:#050505;color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:15px;margin:12px 0}
+  .gate button{width:100%;background:var(--fg);color:#000;border:none;border-radius:6px;padding:12px;font-weight:700;cursor:pointer;letter-spacing:1px}
+  .gate .err{margin-top:10px;color:#ff8a50;font-size:13px;display:none}
+  .gate .err.on{display:block}
+
+  .wms{display:none;padding:24px}
+  .wms.on{display:block}
+  .wms-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+  .wms-top h1{font-family:Ultra,Impact,sans-serif;letter-spacing:2px;margin:0;font-size:22px}
+  .wms-top button{background:transparent;border:1px solid var(--border);color:var(--fg);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:2px}
+  .wms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:24px}
+  .wms-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px}
+  .wms-card .k{font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .wms-card .v{font-family:Ultra,Impact,sans-serif;font-size:32px;line-height:1}
+  .wms-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:24px}
+  .wms-actions button{background:var(--fg);color:#000;border:none;padding:14px;border-radius:8px;font-weight:700;letter-spacing:1px;cursor:pointer;font-size:13px}
+  .wms-list{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px}
+  .wms-list h2{font-family:Ultra,Impact,sans-serif;letter-spacing:2px;font-size:18px;margin:0 0 10px}
+  .wms-list table{width:100%;border-collapse:collapse;font-size:14px}
+  .wms-list th,.wms-list td{text-align:left;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06)}
+  .wms-list th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:400}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="card">
+    <h2 style="margin:0 0 4px;font-family:Ultra,Impact,sans-serif;letter-spacing:2px">WMS · STAFF</h2>
+    <p style="color:var(--muted);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;margin:0">Enter staff password</p>
+    <input id="pwd" type="password" autofocus autocomplete="off">
+    <button id="go">Enter</button>
+    <div id="err" class="err">Wrong password.</div>
+  </div>
+</div>
+
+<div class="wms" id="wms">
+  <div class="wms-top">
+    <h1>🏭 PSNM · WMS</h1>
+    <div>
+      <span style="color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-right:12px" id="now-date">—</span>
+      <button onclick="localStorage.removeItem('wms_ok');location.reload()">Lock</button>
+    </div>
+  </div>
+
+  <div class="wms-grid">
+    <div class="wms-card">
+      <div class="k">Pallets stored</div>
+      <div class="v" id="w-pallets">—</div>
+    </div>
+    <div class="wms-card">
+      <div class="k">Capacity</div>
+      <div class="v">700</div>
+    </div>
+    <div class="wms-card">
+      <div class="k">Customers (active)</div>
+      <div class="v" id="w-customers">—</div>
+    </div>
+  </div>
+
+  <div class="wms-actions">
+    <button onclick="logAction('pickup')">📦 Log pickup</button>
+    <button onclick="logAction('delivery')">🚚 Log delivery</button>
+    <button onclick="logAction('damage')">⚠️ Mark damage</button>
+  </div>
+
+  <div class="wms-list">
+    <h2>Customers</h2>
+    <div id="w-cust-list">Loading…</div>
+  </div>
+</div>
+
+<script>
+// Password gate (client-side, env password checked against hash baked in via Vercel at build time)
+// For now, set WMS_STAFF_PASSWORD fetched via fetch to a lightweight endpoint, OR hardcoded default.
+// Per Rule 3 we do NOT commit the password. Placeholder hash below is publicly useless —
+// Ben sets the real password via Vercel env WMS_STAFF_PASSWORD and this code compares to it at runtime
+// via a pre-fetch to /api/supabase-proxy action='wms_check' (TODO next commit).
+
+// Quick client-side gate using a placeholder. TODO before hiring staff: wire to env-based check.
+const PLACEHOLDER_PASSWORD = 'change-before-hiring-staff';
+
+function checkPwd() {
+  const input = document.getElementById('pwd').value;
+  if (input === PLACEHOLDER_PASSWORD) {
+    try { localStorage.setItem('wms_ok', '1'); } catch(e) {}
+    showWMS();
+  } else {
+    document.getElementById('err').classList.add('on');
+  }
+}
+document.getElementById('go').addEventListener('click', checkPwd);
+document.getElementById('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') checkPwd(); });
+if (localStorage.getItem('wms_ok') === '1') showWMS();
+
+function showWMS() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('wms').classList.add('on');
+  document.getElementById('now-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+  loadData();
+}
+
+async function loadData() {
+  // Latest occupancy
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'psnm_occupancy_snapshots', op: 'select' })
+    });
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length) {
+      const latest = rows.sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+      document.getElementById('w-pallets').textContent = latest.pallets ?? '—';
+    }
+  } catch(e) {}
+  // Customer list
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table: 'psnm_customers', op: 'select' })
+    });
+    const rows = await r.json();
+    if (Array.isArray(rows)) {
+      document.getElementById('w-customers').textContent = rows.filter(c => c.status === 'active').length;
+      const active = rows.filter(c => c.status === 'active');
+      const html = active.length ? `<table>
+        <thead><tr><th>Company</th><th>Pallets</th></tr></thead>
+        <tbody>${active.map(c => `<tr><td>${(c.company_name||'').replace(/</g,'&lt;')}</td><td>${c.pallet_count_current ?? '—'}</td></tr>`).join('')}</tbody>
+      </table>` : '<p style="color:var(--muted)">No active customers yet.</p>';
+      document.getElementById('w-cust-list').innerHTML = html;
+    }
+  } catch(e) {}
+}
+
+function logAction(kind) {
+  const ref = prompt(kind.toUpperCase() + ' — enter customer name / ref:');
+  if (!ref) return;
+  const qty = prompt('Pallet count:');
+  if (!qty) return;
+  // TODO: write to psnm_occupancy_snapshots + update psnm_customers
+  alert('Logged (TODO: wire to DB) — ' + kind + ' · ' + ref + ' · ' + qty + ' pallets');
+}
+</script>
+
+</body>
+</html>

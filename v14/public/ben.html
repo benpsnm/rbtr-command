@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+</head><body>
+<div id="portal-root"></div>
+<script>
+window.PORTAL_CONFIG = {
+  key: 'ben', title: 'BEN', emoji: '💪',
+  tagline: 'Wellness, finance, legal, tasks.',
+  sidebarGroups: [
+    { heading: 'WELLNESS', items: [
+      { label: 'Daily Routine', hash: 'routine' },
+      { label: 'Training', hash: 'training' },
+      { label: 'Nutrition', hash: 'nutrition' },
+      { label: 'Mindset', hash: 'mindset' },
+      { label: 'Sleep', hash: 'sleep' },
+      { label: 'Best Self', hash: 'bestself' },
+      { label: 'Dojo', hash: 'dojo' },
+    ]},
+    { heading: 'GOALS', items: [
+      { label: 'Today', hash: 'today' },
+      { label: 'Wins', hash: 'wins' },
+      { label: 'Three Gates', hash: 'gates' },
+    ]},
+    { heading: 'FINANCE', items: [
+      { label: 'Money Meeting', hash: 'money-meeting' },
+      { label: 'Financial Plan', hash: 'financial-plan' },
+      { label: 'Budget', hash: 'budget' },
+      { label: 'Personal Cash', path: '/financials.html' },
+    ]},
+    { heading: 'LEGAL', items: [
+      { label: 'Legal Structure', hash: 'legalstructure' },
+      { label: 'Amine Framework', hash: 'amine' },
+    ]},
+    { heading: 'ADMIN', items: [
+      { label: 'Planner', hash: 'planner' },
+      { label: 'Calendar', hash: 'calendar' },
+      { label: 'Tasks', hash: 'tasks' },
+      { label: 'Notes', hash: 'notes' },
+      { label: 'CRM', hash: 'crm' },
+      { label: 'Tool Registry', hash: 'tools' },
+    ]},
+  ],
+  liveStatFetcher: async () => {
+    const r = await fetch('/api/briefing-data'); const j = await r.json();
+    return '£' + (j.data?.cash_personal?.balance_gbp ?? '—') + ' · day ' + (j.data?.built_dad_day ?? '—');
+  },
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+</body></html>

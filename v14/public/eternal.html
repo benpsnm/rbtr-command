@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+</head><body>
+<div id="portal-root"></div>
+<script>
+window.PORTAL_CONFIG = {
+  key: 'eternal', title: 'ETERNAL KUSTOMS', emoji: '🔩',
+  tagline: 'Consultancy to Sam Moore.',
+  sidebarGroups: [
+    { heading: 'CONSULTANCY', items: [
+      { label: "Ben's Role", hash: 'eternal' },
+      { label: 'Retainer + Hours', hash: 'eternal-retainer' },
+      { label: 'Invoice Log', hash: 'eternal-invoices' },
+    ]},
+    { heading: 'ETERNAL', items: [
+      { label: 'Overview', hash: 'eternal' },
+      { label: 'Shareholders', hash: 'eternal-shareholders' },
+      { label: 'Coffee Brothers', hash: 'coffee' },
+    ]},
+  ],
+  liveStatFetcher: async () => 'consultancy',
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+</body></html>

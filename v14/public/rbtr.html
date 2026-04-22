@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+</head><body>
+<div id="portal-root"></div>
+<script>
+window.PORTAL_CONFIG = {
+  key: 'rbtr', title: 'RBTR', emoji: '🚛',
+  tagline: 'Expedition, build, sponsors, content. 1 July 2027.',
+  sidebarGroups: [
+    { heading: 'EXPEDITION', items: [
+      { label: 'Route', hash: 'route' },
+      { label: 'Route Full', hash: 'route-full' },
+      { label: 'Live Map', hash: 'livemap' },
+      { label: 'Itinerary', hash: 'itinerary' },
+      { label: 'Visas', hash: 'visas' },
+      { label: 'Vaccinations', hash: 'vaccinations' },
+      { label: 'Pre-Departure', hash: 'pre-departure' },
+      { label: 'Documents', hash: 'documents' },
+    ]},
+    { heading: 'BUILD', items: [
+      { label: 'Arocs Build', hash: 'arocs' },
+      { label: 'Build Bible', hash: 'build-bible' },
+      { label: 'Gear', hash: 'gear' },
+      { label: 'Skills', hash: 'skills' },
+      { label: 'Gates', hash: 'gates' },
+    ]},
+    { heading: 'CONTENT', items: [
+      { label: 'First Video', hash: 'firstvideo' },
+      { label: 'Channel', hash: 'channel' },
+      { label: 'Customer Emails', hash: 'customer-emails' },
+      { label: 'Social Scheduler', hash: 'scheduler' },
+      { label: 'B-Roll', hash: 'broll' },
+      { label: 'Media Plan', hash: 'media-plan' },
+      { label: 'Media Vault', hash: 'media-vault' },
+      { label: 'Editing', hash: 'editing' },
+      { label: 'Podcasts', hash: 'podcast' },
+      { label: 'Guests', hash: 'guests' },
+      { label: 'Resurrection', hash: 'resurrection' },
+      { label: 'Content Override', hash: 'content-override' },
+    ]},
+    { heading: 'COMMERCIAL', items: [
+      { label: 'Sponsors', hash: 'sponsors' },
+      { label: 'Proposals', hash: 'proposals' },
+      { label: 'Merch', hash: 'merch' },
+      { label: 'Subscribers', hash: 'subscribers' },
+      { label: 'Audience', hash: 'audience' },
+    ]},
+    { heading: 'LEGAL', items: [
+      { label: 'Co-Lab Debt', hash: 'colab-debt' },
+    ]},
+    { heading: 'OTHER', items: [
+      { label: 'Countdown', hash: 'countdown' },
+      { label: 'Go Live', hash: 'golive' },
+    ]},
+  ],
+  liveStatFetcher: async () => {
+    const r = await fetch('/api/briefing-data'); const j = await r.json();
+    return (j.data?.days_to_departure ?? '—') + 'd to depart';
+  },
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+</body></html>

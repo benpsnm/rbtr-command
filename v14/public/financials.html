@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/css/portal.css">
+<style>
+  .f-entities { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 20px 0; }
+  .f-card { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 20px; }
+  .f-card .k { font-size: 10px; letter-spacing: 3px; color: #8a8a8a; text-transform: uppercase; margin-bottom: 4px; }
+  .f-card .v { font-family: Ultra, Impact, sans-serif; font-size: 28px; line-height: 1; margin: 6px 0; }
+  .f-card .t { font-size: 11px; color: #8a8a8a; margin-top: 4px; }
+  .f-card .row { display: flex; gap: 6px; margin-top: 10px; }
+  .f-card input { flex: 1; background: #050505; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; color: #f5f5f5; padding: 6px 10px; font-size: 13px; min-width: 60px; }
+  .f-card button { background: #f5f5f5; color: #000; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .f-tx { margin-top: 30px; }
+  .f-tx table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .f-tx th, .f-tx td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .f-tx th { color: #8a8a8a; font-weight: 400; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; }
+  .f-tx .income { color: #7dd87d; }
+  .f-tx .expense { color: #ff8a50; }
+  .f-upload { border: 1px dashed rgba(255,255,255,0.2); padding: 24px; border-radius: 10px; text-align: center; margin: 20px 0; }
+  .f-stub { opacity: 0.6; font-size: 12px; padding: 12px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; margin-top: 20px; }
+</style>
+</head><body data-portal="financials">
+<div id="portal-root"></div>
+
+<script>
+window.PORTAL_CONFIG = {
+  key: 'financials', title: 'FINANCIALS', emoji: '💷',
+  tagline: 'Four separate entities. Never commingled.',
+  sidebarGroups: [
+    { heading: 'DASHBOARD', items: [
+      { label: 'Overview', path: '/financials.html' },
+    ]},
+    { heading: 'PER ENTITY', items: [
+      { label: 'PSNM',         path: '/financials.html#psnm' },
+      { label: 'Ben Personal', path: '/financials.html#ben_personal' },
+      { label: 'RBTR',         path: '/financials.html#rbtr' },
+      { label: 'EK',           path: '/financials.html#ek' },
+      { label: 'House',        path: '/financials.html#house' },
+    ]},
+    { heading: 'LEDGER', items: [
+      { label: 'All Transactions', path: '/financials.html#all' },
+      { label: 'Cash Logs',        path: '/financials.html#logs' },
+      { label: 'Upload Statement', path: '/financials.html#upload' },
+    ]},
+    { heading: 'FORECASTING', items: [
+      { label: 'Runway',        path: '/financials.html#runway' },
+      { label: 'Burn Rate',     path: '/financials.html#burn' },
+      { label: 'Pipeline Value', path: '/financials.html#pipeline' },
+    ]},
+  ],
+  liveStatFetcher: async () => '5 entities',
+};
+</script>
+<script src="/js/auth-guard.js"></script>
+<script src="/js/portal-shell.js"></script>
+
+<!-- Custom financials UI injected into #p-tiles after portal-shell renders -->
+<script>
+const ENTITIES = [
+  { key: 'psnm',         label: 'PSNM',         log: 'psnm_cash_log' },
+  { key: 'personal',     label: 'BEN PERSONAL', log: 'personal_cash_log' },
+  { key: 'rbtr',         label: 'RBTR',         log: 'rbtr_fund_log' },
+  { key: 'ek',           label: 'EK',           log: 'ek_cash_log' },
+  { key: 'house',        label: 'HOUSE',        log: 'house_cash_log' },
+];
+
+function fmt(n) {
+  if (n == null) return '—';
+  return '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-GB') : '—'; }
+
+async function fetchLatestBalance(tableName) {
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ table: tableName, op: 'select' })
+    });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at))[0];
+  } catch { return null; }
+}
+
+async function logBalance(entityKey, value, note) {
+  // Use /api/atlas action=log_cash where available (psnm/personal/rbtr/ek)
+  // and fall back to direct insert for house
+  if (['psnm','personal','rbtr','ek'].includes(entityKey)) {
+    const r = await fetch('/api/atlas?action=log_cash', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ entity: entityKey, balance_gbp: Number(value), note })
+    });
+    return r.ok;
+  }
+  // House → direct insert to house_cash_log
+  const r = await fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      table: 'house_cash_log', op: 'insert',
+      row: { balance_gbp: Number(value), source: 'manual', note: note || null }
+    })
+  });
+  return r.ok;
+}
+
+async function renderFinancialsDashboard() {
+  const root = document.getElementById('p-tiles');
+  if (!root) { setTimeout(renderFinancialsDashboard, 200); return; }
+
+  // Override the tile grid with 5 entity cards
+  root.className = 'f-entities';
+  root.innerHTML = ENTITIES.map(e => `
+    <div class="f-card" id="f-${e.key}">
+      <div class="k">${e.label}</div>
+      <div class="v" data-v="${e.key}">—</div>
+      <div class="t" data-t="${e.key}">never logged</div>
+      <div class="row">
+        <input type="number" step="0.01" placeholder="£ new balance" data-input="${e.key}">
+        <button data-btn="${e.key}">Log</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Fetch latest for each
+  const data = await Promise.all(ENTITIES.map(e => fetchLatestBalance(e.log)));
+  ENTITIES.forEach((e, i) => {
+    const latest = data[i];
+    const vEl = root.querySelector(`[data-v="${e.key}"]`);
+    const tEl = root.querySelector(`[data-t="${e.key}"]`);
+    if (latest && vEl) vEl.textContent = fmt(latest.balance_gbp);
+    if (latest && tEl) tEl.textContent = 'last: ' + fmtDate(latest.logged_at) + (latest.note ? ' · ' + latest.note : '');
+  });
+
+  // Wire log buttons
+  ENTITIES.forEach(e => {
+    const btn = root.querySelector(`[data-btn="${e.key}"]`);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const inp = root.querySelector(`[data-input="${e.key}"]`);
+      if (!inp || !inp.value) return;
+      btn.disabled = true; btn.textContent = '…';
+      const ok = await logBalance(e.key, inp.value);
+      btn.disabled = false; btn.textContent = 'Log';
+      if (ok) { inp.value = ''; renderFinancialsDashboard(); }
+      else alert('Log failed — check console');
+    });
+  });
+
+  // Recent transactions
+  const txBlock = document.createElement('div');
+  txBlock.className = 'f-tx';
+  txBlock.innerHTML = `
+    <h2 style="font-family:Ultra,Impact,sans-serif;font-size:20px;letter-spacing:3px;margin:30px 0 10px">RECENT TRANSACTIONS</h2>
+    <div id="f-tx-inner">Loading…</div>
+  `;
+  root.parentElement.appendChild(txBlock);
+  const txR = await fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ table: 'financial_transactions', op: 'select' })
+  });
+  const inner = document.getElementById('f-tx-inner');
+  if (txR.ok) {
+    const rows = await txR.json();
+    if (Array.isArray(rows) && rows.length) {
+      rows.sort((a,b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+      inner.innerHTML = `<table>
+        <thead><tr><th>Date</th><th>Entity</th><th>Type</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>${rows.slice(0,20).map(r => `
+          <tr>
+            <td>${fmtDate(r.transaction_date)}</td>
+            <td>${r.entity}</td>
+            <td>${r.type}</td>
+            <td>${(r.description || '').slice(0,60)}</td>
+            <td class="${r.type}" style="text-align:right">${r.type === 'expense' ? '−' : '+'}${fmt(Math.abs(r.amount_gbp))}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+    } else {
+      inner.innerHTML = '<p style="color:#8a8a8a">No transactions logged yet. Upload a CSV or add manually.</p>';
+    }
+  } else {
+    inner.innerHTML = '<p style="color:#ff8a50">Failed to load transactions.</p>';
+  }
+
+  // CSV upload stub
+  const upload = document.createElement('div');
+  upload.className = 'f-upload';
+  upload.innerHTML = `
+    <h3 style="margin:0 0 8px">Upload bank statement CSV</h3>
+    <p style="color:#8a8a8a;font-size:12px;margin:0 0 12px">Monzo / Starling / Barclays / HSBC common formats supported.</p>
+    <input type="file" accept=".csv" id="f-csv" />
+    <button id="f-csv-go" style="margin-left:8px">Parse</button>
+    <div id="f-csv-status" style="margin-top:8px;font-size:12px;color:#8a8a8a"></div>
+  `;
+  root.parentElement.appendChild(upload);
+  document.getElementById('f-csv-go').addEventListener('click', async () => {
+    const file = document.getElementById('f-csv').files[0];
+    const status = document.getElementById('f-csv-status');
+    if (!file) { status.textContent = 'Pick a CSV first.'; return; }
+    status.textContent = 'Parsing…';
+    const text = await file.text();
+    const parsed = parseMonzoLikeCsv(text);
+    if (!parsed.length) { status.textContent = 'Could not parse. Drop the file in this chat and I will wire a custom parser.'; return; }
+    status.textContent = `Parsed ${parsed.length} rows. Ready to insert (CSV bulk-insert path not yet wired — commit to TODO).`;
+    // TODO: POST batch to /api/supabase-proxy financial_transactions insert
+  });
+
+  // Bank connection stub
+  const bankStub = document.createElement('div');
+  bankStub.className = 'f-stub';
+  bankStub.innerHTML = `
+    <strong>Open Banking — STUB</strong><br>
+    TrueLayer / Plaid integration deferred. For now use Manual or CSV above.<br>
+    Blocker: Ben to sign up for a TrueLayer developer account, then Claude Code wires OAuth.
+    See OVERNIGHT_BLOCKERS.md.
+  `;
+  root.parentElement.appendChild(bankStub);
+}
+
+function parseMonzoLikeCsv(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const header = lines[0].toLowerCase();
+  const dateIdx = header.split(',').findIndex(h => /date/.test(h));
+  const amtIdx  = header.split(',').findIndex(h => /amount/.test(h));
+  const descIdx = header.split(',').findIndex(h => /description|name|merchant/.test(h));
+  if (dateIdx < 0 || amtIdx < 0) return [];
+  return lines.slice(1).map(line => {
+    const cols = line.split(',');
+    return {
+      transaction_date: cols[dateIdx],
+      amount_gbp: Number(cols[amtIdx]),
+      description: descIdx >= 0 ? cols[descIdx] : '',
+      type: Number(cols[amtIdx]) > 0 ? 'income' : 'expense',
+      source: 'csv',
+    };
+  }).filter(r => !isNaN(r.amount_gbp));
+}
+
+document.addEventListener('rbtr-auth-ready', () => {
+  setTimeout(renderFinancialsDashboard, 100);
+});
+</script>
+</body></html>

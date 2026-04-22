@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get a quote · Pallet Storage Near Me</title>
+<style>
+  :root { --bg:#000; --fg:#f5f5f5; --muted:#8a8a8a; --card:#0a0a0a; --border:rgba(255,255,255,0.12); --accent:#fff; }
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+  main{max-width:680px;margin:0 auto;padding:40px 24px 120px}
+  .steps{display:flex;gap:8px;margin-bottom:30px}
+  .step{flex:1;height:4px;border-radius:2px;background:#222}
+  .step.active{background:var(--fg)}
+  h1{font-family:Ultra,Impact,sans-serif;font-size:28px;letter-spacing:2px;margin:0 0 10px}
+  p.sub{color:var(--muted);margin:0 0 24px;font-size:14px}
+  label{display:block;font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin:16px 0 6px}
+  input,select,textarea{width:100%;background:#050505;color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:15px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--fg)}
+  .slider-wrap{display:flex;gap:14px;align-items:center}
+  .slider-wrap input[type=range]{flex:1}
+  .slider-wrap .count{font-family:Ultra,Impact,sans-serif;font-size:28px;min-width:80px;text-align:right}
+  .price{margin:20px 0;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;text-align:center}
+  .price .big{font-family:Ultra,Impact,sans-serif;font-size:44px;letter-spacing:1px}
+  .price .sml{color:var(--muted);font-size:13px;margin-top:4px}
+  .btn{background:var(--fg);color:#000;border:none;border-radius:6px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:1px}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  .btn.secondary{background:transparent;color:var(--fg);border:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;gap:10px;margin-top:28px}
+  .offer{margin:20px 0;padding:18px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;font-size:14px}
+  .offer strong{display:block;font-family:Ultra,Impact,sans-serif;font-size:18px;letter-spacing:1px;margin-bottom:6px}
+  .ticker{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:13px}
+  .err{margin-top:10px;padding:8px 10px;background:rgba(255,138,80,0.08);border:1px solid rgba(255,138,80,0.28);border-radius:6px;color:#ff8a50;font-size:13px;display:none}
+  .err.on{display:block}
+  .stripe-stub{margin:20px 0;padding:16px;border:1px dashed rgba(255,255,255,0.25);border-radius:8px;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<div class="steps" id="steps">
+  <div class="step active"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+  <div class="step"></div>
+</div>
+
+<!-- STEP 1 · pallets -->
+<section data-step="1">
+  <h1>Step 1 · How many pallets?</h1>
+  <p class="sub">Slide to your expected volume. You can adjust any time during month 1.</p>
+  <div class="slider-wrap">
+    <input id="pallets" type="range" min="1" max="500" step="1" value="50">
+    <div class="count"><span id="pallets-v">50</span></div>
+  </div>
+  <div class="price">
+    <div class="big" id="rate-v">£3.50</div>
+    <div class="sml">per pallet per week at this volume</div>
+  </div>
+  <div class="nav">
+    <span></span>
+    <button class="btn" onclick="goto(2)">Next → duration</button>
+  </div>
+</section>
+
+<!-- STEP 2 · duration -->
+<section data-step="2" style="display:none">
+  <h1>Step 2 · How long?</h1>
+  <p class="sub">First month is free. Monthly rolling after. 14-day notice to cancel.</p>
+  <label for="duration">Commitment</label>
+  <select id="duration">
+    <option value="1">1 month (risk-free)</option>
+    <option value="3">3 months</option>
+    <option value="6">6 months</option>
+    <option value="12">12 months</option>
+    <option value="ongoing" selected>Ongoing rolling</option>
+  </select>
+  <div class="price">
+    <div class="big" id="total-v">£—</div>
+    <div class="sml" id="total-sub">total after free month, monthly rolling</div>
+  </div>
+  <div class="nav">
+    <button class="btn secondary" onclick="goto(1)">← Back</button>
+    <button class="btn" onclick="goto(3)">Next → details</button>
+  </div>
+</section>
+
+<!-- STEP 3 · company details -->
+<section data-step="3" style="display:none">
+  <h1>Step 3 · Your details</h1>
+  <p class="sub">We pick up from you within 48 hours of your start date.</p>
+  <label>Company name</label><input id="f-company" required>
+  <label>Contact name</label><input id="f-contact" required>
+  <label>Email</label><input id="f-email" type="email" required>
+  <label>Phone</label><input id="f-phone" type="tel" required>
+  <label>Goods type (briefly)</label><input id="f-goods" placeholder="e.g. pallets of packaged FMCG">
+  <label>Start date</label><input id="f-start" type="date">
+  <label>Promo code (optional)</label><input id="f-promo">
+  <div class="nav">
+    <button class="btn secondary" onclick="goto(2)">← Back</button>
+    <button class="btn" onclick="goto(4)">Next → confirm</button>
+  </div>
+</section>
+
+<!-- STEP 4 · confirm -->
+<section data-step="4" style="display:none">
+  <h1>Step 4 · Reserve your pallets</h1>
+  <p class="sub">Review and confirm. You won't be charged this month — first month is free.</p>
+  <div id="summary" style="margin:20px 0;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:10px"></div>
+  <div class="offer">
+    <strong>OUR PROMISE</strong>
+    First month free · No deposit · Cancel any time with 14 days notice · Pallets collected within 48 hours
+  </div>
+  <div class="stripe-stub">
+    💳 Payment card capture — Stripe integration pending.<br>
+    Your card will be authorised (not charged) for month 2 once Ben completes onboarding verification.<br>
+    No payment is taken today. We'll email you to confirm before any charge.
+  </div>
+  <label>
+    <input type="checkbox" id="tc" style="width:auto;margin-right:8px">
+    I agree to the <a href="/quote/terms" target="_blank" style="color:var(--fg)">Terms &amp; Conditions</a> (draft)
+  </label>
+  <div class="err" id="err"></div>
+  <div class="nav">
+    <button class="btn secondary" onclick="goto(3)">← Back</button>
+    <button class="btn" id="submit" onclick="submitBooking()">Reserve my pallets</button>
+  </div>
+</section>
+
+<!-- SUCCESS -->
+<section data-step="5" style="display:none">
+  <h1>🎉 Booked</h1>
+  <p class="sub">We'll be in touch within 24 hours to confirm pickup. Ben reads every enquiry personally.</p>
+  <p>Reference: <strong id="ref">—</strong></p>
+  <p style="color:var(--muted);font-size:13px">A confirmation email will arrive shortly. Any questions, call 07506 255033.</p>
+</section>
+</main>
+
+<script>
+function goto(n) {
+  document.querySelectorAll('[data-step]').forEach(s => s.style.display = 'none');
+  const el = document.querySelector('[data-step="'+n+'"]');
+  if (el) el.style.display = 'block';
+  document.querySelectorAll('#steps .step').forEach((s, i) => s.classList.toggle('active', i < n));
+  if (n === 4) renderSummary();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function rateForPallets(p) {
+  if (p >= 200) return 3.00;
+  if (p >= 50)  return 3.50;
+  return 4.00;
+}
+
+function recalc() {
+  const p = Number(document.getElementById('pallets').value);
+  document.getElementById('pallets-v').textContent = p;
+  const rate = rateForPallets(p);
+  document.getElementById('rate-v').textContent = '£' + rate.toFixed(2);
+  const weekly = p * rate;
+  const monthly = weekly * 4.33;
+  document.getElementById('total-v').textContent = '£' + monthly.toFixed(0) + '/mo';
+  document.getElementById('total-sub').textContent = 'after free month · £' + weekly.toFixed(0) + '/wk · ' + p + ' pallets × £' + rate.toFixed(2);
+}
+document.getElementById('pallets').addEventListener('input', recalc);
+document.getElementById('duration').addEventListener('change', recalc);
+recalc();
+
+function renderSummary() {
+  const p = Number(document.getElementById('pallets').value);
+  const rate = rateForPallets(p);
+  const duration = document.getElementById('duration').value;
+  const d = document.getElementById('f-company').value;
+  document.getElementById('summary').innerHTML = `
+    <div><strong>${p}</strong> pallets × <strong>£${rate.toFixed(2)}</strong>/week</div>
+    <div style="color:#8a8a8a;font-size:13px;margin-top:4px">Month 1: FREE · Month 2 onwards: £${(p * rate * 4.33).toFixed(0)}/mo</div>
+    <div style="margin-top:10px">Commitment: ${duration === 'ongoing' ? 'Ongoing rolling' : duration + ' months'}</div>
+    <div style="color:#8a8a8a;font-size:13px;margin-top:4px">${d || '(company)'} · ${document.getElementById('f-contact').value || '(contact)'} · ${document.getElementById('f-email').value || '(email)'}</div>
+  `;
+}
+
+async function submitBooking() {
+  const err = document.getElementById('err');
+  err.classList.remove('on');
+  const tc = document.getElementById('tc');
+  if (!tc.checked) { err.textContent = 'Please agree to the T&Cs.'; err.classList.add('on'); return; }
+  const btn = document.getElementById('submit');
+  btn.disabled = true; btn.textContent = 'Reserving…';
+
+  const payload = {
+    pallets: Number(document.getElementById('pallets').value),
+    rate_per_pallet_week: rateForPallets(Number(document.getElementById('pallets').value)),
+    duration: document.getElementById('duration').value,
+    company_name: document.getElementById('f-company').value,
+    contact_name: document.getElementById('f-contact').value,
+    contact_email: document.getElementById('f-email').value,
+    contact_phone: document.getElementById('f-phone').value,
+    goods_type: document.getElementById('f-goods').value,
+    start_date: document.getElementById('f-start').value || null,
+    promo_code: document.getElementById('f-promo').value || null,
+    source: 'website_self_quote',
+  };
+
+  try {
+    // TODO: call /api/quote-submit once wired (separate Vercel project)
+    // For now: POST directly to Command Centre's supabase-proxy
+    const r = await fetch('https://rbtr-jarvis.vercel.app/api/supabase-proxy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'x-rbtr-auth': 'PUBLIC_QUOTE'},
+      body: JSON.stringify({
+        table: 'psnm_enquiries', op: 'insert',
+        row: {
+          company: payload.company_name,
+          contact_name: payload.contact_name,
+          email: payload.contact_email,
+          phone: payload.contact_phone,
+          goods: payload.goods_type,
+          pallets: payload.pallets,
+          start_date: payload.start_date,
+          status: 'signed_online_pending_stripe',
+          source: payload.source,
+          notes: JSON.stringify({ duration: payload.duration, rate: payload.rate_per_pallet_week, promo: payload.promo_code, submitted_at: new Date().toISOString() }),
+        }
+      })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const ref = 'PSNM-' + Date.now().toString(36).toUpperCase();
+    document.getElementById('ref').textContent = ref;
+    goto(5);
+  } catch (e) {
+    err.textContent = 'Submission failed: ' + e.message + '. Please call 07506 255033.';
+    err.classList.add('on');
+    btn.disabled = false; btn.textContent = 'Reserve my pallets';
+  }
+}
+</script>
+</body>
+</html>
