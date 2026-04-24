@@ -42,6 +42,7 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 <script>
 'use strict';
 const C = window.RBTR_Components;
@@ -1117,6 +1118,8 @@ const BEN_PORTAL = {
           'When hiring: define the role clearly before the hire. Delegate outcomes not tasks. Review weekly for first 3 months. Never delegate without a written SOP. Trust is earned through specificity — vague instructions produce vague results.')
       ) })
     )) },
+    { id: 'crm',            group: 'CONTACTS',     label: 'Contacts',             emoji: '👥', render: () => window.CRM_UI.renderContacts('personal') },
+    { id: 'sops',           group: 'SOPs',         label: 'SOPs',                 emoji: '📋', render: () => window.SOPS_UI.renderSopSection('ben') },
   ],
 };
 

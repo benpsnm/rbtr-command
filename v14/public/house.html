@@ -44,6 +44,7 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 
 <script>
 const C = window.RBTR_Components;
@@ -813,6 +814,8 @@ const HOUSE_PORTAL = {
     { id: 'pricing',           group: 'OPERATIONS',  label: 'Pricing',           emoji: '🏷', render: renderPricing },
     { id: 'messages',          group: 'OPERATIONS',  label: 'Guest Messages',    emoji: '✉️', render: renderMessages },
     { id: 'inventory',         group: 'OPERATIONS',  label: 'Inventory',         emoji: '📦', render: renderInventory },
+    { id: 'crm',               group: 'CONTACTS',    label: 'Contacts',          emoji: '👥', render: () => window.CRM_UI.renderContacts('house') },
+    { id: 'sops',              group: 'SOPs',        label: 'SOPs',              emoji: '📋', render: () => window.SOPS_UI.renderSopSection('house') },
   ],
 };
 

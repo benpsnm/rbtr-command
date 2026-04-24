@@ -35,6 +35,7 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 
 <script>
 const C = window.RBTR_Components;
@@ -503,6 +504,8 @@ const ETERNAL_PORTAL = {
     { id: 'coffee',         group: 'PROJECTS',     label: 'Coffee Brothers',    emoji: '☕', render: renderCoffeeBike },
     { id: 'builds',         group: 'PROJECTS',     label: 'Builds Programme',   emoji: '🔧', render: renderBuilds },
     { id: 'shareholders',   group: 'STRUCTURE',    label: 'Shareholders',       emoji: '📋', render: renderShareholders },
+    { id: 'crm',            group: 'CONTACTS',     label: 'Contacts',           emoji: '👥', render: () => window.CRM_UI.renderContacts('eternal') },
+    { id: 'sops',           group: 'SOPs',         label: 'SOPs',               emoji: '📋', render: () => window.SOPS_UI.renderSopSection('eternal') },
   ],
 };
 

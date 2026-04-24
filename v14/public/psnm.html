@@ -122,6 +122,7 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 
 <!-- PSNM portal config -->
 <script>
@@ -773,12 +774,11 @@ async function renderOccupancyLogger() {
 }
 
 async function renderPsnmSops() {
-  const C = window.RBTR_Components;
-  const wrap = el('div', {});
-  wrap.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', padding:'var(--space-2) var(--space-3)', background:'var(--bg-secondary)', borderLeft:'2px solid var(--border-subtle)', marginBottom:'var(--space-4)' } },
-    'PSNM SOPs seeded in Workstream D (Chunk 4). 6 procedures: Forklift Check, Pallet Receipt, Pallet Release, Monthly Stock Count, Incident Report, New Customer Onboarding.'));
-  wrap.appendChild(C.emptyState({ icon: '📋', title: 'SOPs — Workstream D', body: 'Run Chunk 4 to seed SOPs library across PSNM/House/Eternal/Ben.' }));
-  return wrap;
+  return window.SOPS_UI.renderSopSection('psnm');
+}
+
+async function renderPsnmCrm() {
+  return window.CRM_UI.renderContacts('psnm');
 }
 
 // ── Portal config ───────────────────────────────────────────────────────────
@@ -813,6 +813,7 @@ const PSNM_PORTAL = {
     { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', render: renderPsnmTemplates },
     { id: 'quote',        group: 'OUTREACH',   label: 'Quote Generator',emoji: '📄', render: renderQuoteGenerator },
     { id: 'site-visit',   group: 'OUTREACH',   label: 'Site Visit',     emoji: '🏭', render: renderSiteVisitBooking },
+    { id: 'crm',          group: 'CONTACTS',   label: 'Contacts',       emoji: '👥', render: renderPsnmCrm },
     { id: 'sops',         group: 'SOPs',       label: 'SOPs',           emoji: '📋', render: renderPsnmSops },
   ],
 };
