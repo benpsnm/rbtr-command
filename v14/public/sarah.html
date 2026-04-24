@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SARAH · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
+<style>
+.tab-bar{display:flex;gap:4px;margin-bottom:var(--space-4);flex-wrap:wrap}
+.tab-btn{padding:var(--space-1) var(--space-3);background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-sm);cursor:pointer;border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.tab-btn.active{background:var(--text-primary);color:var(--bg-primary);border-color:var(--text-primary)}
+.slim-table{width:100%;border-collapse:collapse;font-size:var(--text-sm)}
+.slim-table th{text-align:left;padding:var(--space-2);border-bottom:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.05em;font-weight:400}
+.slim-table td{padding:var(--space-2);border-bottom:1px solid var(--border-subtle)}
+.slim-table tr:last-child td{border:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}
+.form-row{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);flex-wrap:wrap;align-items:flex-end}
+.form-row input,.form-row select,.form-row textarea{flex:1;min-width:120px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);font-size:var(--text-sm);border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.form-row textarea{min-height:80px}
+.section-note{font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:var(--space-3);padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border-left:2px solid var(--border-subtle)}
+.pill{display:inline-block;padding:2px 8px;border-radius:var(--radius-pill);font-size:var(--text-xs);font-family:var(--font-mono)}
+.pill-ok{background:rgba(74,124,89,.15);color:#6ee7b7}
+.pill-warm{background:rgba(217,119,6,.15);color:#fbbf24}
+.pill-cold{background:rgba(99,102,241,.15);color:#a5b4fc}
+.pill-hot{background:rgba(220,38,38,.15);color:#f87171}
+.progress-bar{height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;margin:var(--space-2) 0}
+.progress-fill{height:100%;background:var(--text-primary);border-radius:4px}
+.module-card{padding:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);margin-bottom:var(--space-2)}
+.module-card.complete{border-color:#4a7c59;opacity:.7}
+.goal-row{display:flex;gap:var(--space-2);padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);align-items:center}
+.goal-row:last-child{border:none}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="portal-root"></div>
@@ -18,62 +45,536 @@
 const C = window.RBTR_Components;
 const { el, card, statCard, button, emptyState } = C;
 
+function proxy(table, op, extra = {}) {
+  return fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ table, op, ...extra })
+  }).then(r => r.ok ? r.json() : []);
+}
+
+function logTable(rows, cols) {
+  if (!rows || !rows.length) return emptyState({ icon: '📋', title: 'Nothing logged yet', body: 'Add an entry below.' });
+  const t = el('table', { className: 'slim-table' });
+  const head = el('tr');
+  cols.forEach(c => head.appendChild(el('th', {}, c.label)));
+  t.appendChild(el('thead', {}, head));
+  const tbody = el('tbody');
+  rows.forEach(row => {
+    const tr = el('tr');
+    cols.forEach(c => {
+      const val = c.render ? c.render(row) : (row[c.key] ?? '—');
+      const td = el('td');
+      if (val instanceof HTMLElement) td.appendChild(val);
+      else td.textContent = String(val);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  t.appendChild(tbody);
+  return t;
+}
+
+function tabs(defs, host) {
+  const bar = el('div', { className: 'tab-bar' });
+  const bodies = [];
+  defs.forEach((d, i) => {
+    const btn = el('button', { className: 'tab-btn' + (i === 0 ? ' active' : ''), type: 'button' }, d.label);
+    const body = el('div', { style: { display: i === 0 ? '' : 'none' } });
+    bodies.push(body);
+    let loaded = i === 0;
+    bar.appendChild(btn);
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      bodies.forEach((b, j) => { b.style.display = j === i ? '' : 'none'; });
+      if (!loaded) { loaded = true; d.render(body); }
+    });
+    if (i === 0) d.render(body);
+  });
+  host.appendChild(bar);
+  bodies.forEach(b => host.appendChild(b));
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
 async function renderSarahDashboard() {
   const wrap = el('div', {});
-  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-5)' } },
-    'Your space. Wellness, Pilates, your channel, your reflections.'));
 
-  // Sarah-specific goals + reflections
-  const goalsCard = card({ children: el('div', {},
-    el('div', { className: 'ds-caption' }, 'YOUR GOALS'),
-    el('div', { id: 'sarah-goals', style: { marginTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' } }, 'Loading…'),
-  )});
-  wrap.appendChild(goalsCard);
-
+  const today = new Date().toISOString().split('T')[0];
+  let todayLog = null, goals = [], pilates = [];
   try {
-    const r = await fetch('/api/supabase-proxy', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'sarah_goals', op: 'select' })
-    });
-    const rows = r.ok ? await r.json() : [];
-    const host = goalsCard.querySelector('#sarah-goals');
-    host.innerHTML = '';
-    const open = (rows || []).filter(g => g.status === 'open');
-    if (!open.length) host.appendChild(emptyState({ icon: '🎯', title: 'No open goals yet', body: 'Add one via the SQL editor for now; goal-adding UI coming next pass.' }));
-    else open.forEach(g => {
-      const row = el('div', { style: { padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-subtle)' } },
-        el('span', { className: 'ds-badge', style: { marginRight: 'var(--space-2)' } }, (g.scope || '—').toUpperCase()),
-        g.title,
-      );
-      host.appendChild(row);
-    });
-  } catch(e) {
-    goalsCard.querySelector('#sarah-goals').textContent = 'Load failed: ' + (e.message || e);
-  }
+    [todayLog, goals, pilates] = await Promise.all([
+      proxy('sarah_today_log', 'select', { filters: [{ column: 'date', op: 'eq', value: today }] }),
+      proxy('sarah_goals', 'select', { filters: [{ column: 'status', op: 'eq', value: 'open' }] }),
+      proxy('sarah_pilates_progress', 'select'),
+    ]);
+  } catch(e) {}
 
+  const log = Array.isArray(todayLog) && todayLog.length ? todayLog[0] : {};
+  const completedModules = Array.isArray(pilates) ? pilates.filter(m => m.assignment_status === 'passed').length : 0;
+  const openGoals = Array.isArray(goals) ? goals.length : 0;
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '🧘', label: 'Pilates modules', value: completedModules + '/16', sub: 'APPI Level 3' }));
+  stats.appendChild(statCard({ emoji: '🎯', label: 'Open goals', value: openGoals, sub: 'across all tiers' }));
+  stats.appendChild(statCard({ emoji: '💜', label: 'Mood today', value: log.mood ? log.mood + '/10' : '—', sub: log.energy ? 'energy ' + log.energy + '/10' : 'not logged' }));
+  wrap.appendChild(stats);
+
+  // Top 3 today
+  const top3Card = card({ children: el('div', {}) });
+  const t3b = top3Card.querySelector('div');
+  t3b.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, "TODAY'S TOP 3"));
+  if (log.top3) {
+    log.top3.split('\n').filter(Boolean).forEach((item, i) => {
+      t3b.appendChild(el('div', { style: { padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } },
+        el('span', { style: { color:'var(--text-secondary)', marginRight:'var(--space-2)', fontFamily:'var(--font-mono)' } }, String(i+1) + '.'),
+        item
+      ));
+    });
+  } else {
+    t3b.appendChild(el('p', { style: { color:'var(--text-secondary)', fontSize:'var(--text-sm)', margin:'0' } }, 'Not set yet today — add below.'));
+  }
+  wrap.appendChild(top3Card);
+
+  // Quick log form
+  const logCard = card({ children: el('div', {}) });
+  const lb = logCard.querySelector('div');
+  lb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'LOG TODAY'));
+  const moodIn = el('input', { type:'number', min:'1', max:'10', placeholder:'Mood 1-10', value: log.mood || '' });
+  const energyIn = el('input', { type:'number', min:'1', max:'10', placeholder:'Energy 1-10', value: log.energy || '' });
+  const sleepIn = el('input', { type:'number', step:'0.5', min:'0', placeholder:'Sleep hrs', value: log.sleep_hours || '' });
+  const top3In = el('textarea', { placeholder: 'Top 3 focus (one per line)' });
+  if (log.top3) top3In.value = log.top3;
+  const r1 = el('div', { className:'form-row' }); r1.appendChild(moodIn); r1.appendChild(energyIn); r1.appendChild(sleepIn);
+  const r2 = el('div', { className:'form-row' }); r2.appendChild(top3In);
+  lb.appendChild(r1); lb.appendChild(r2);
+  lb.appendChild(button({ label: 'Save', onClick: async () => {
+    const record = {
+      date: today, mood: parseInt(moodIn.value) || null, energy: parseInt(energyIn.value) || null,
+      sleep_hours: parseFloat(sleepIn.value) || null, top3: top3In.value || null
+    };
+    try {
+      await proxy('sarah_today_log', 'upsert', { record, on_conflict: 'date' });
+      C.toast({ message: 'Saved', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(logCard);
   return wrap;
 }
 
+// ── PILATES ──────────────────────────────────────────────────────────────────
+async function renderPilates() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'APPI Level 3 Pilates qualification — 16 modules. Track study hours, practice hours, and assignment status.'));
+
+  let modules = [];
+  try { modules = await proxy('sarah_pilates_progress', 'select', { order: { column: 'module' } }); } catch(e) {}
+  if (!Array.isArray(modules)) modules = [];
+
+  const passed = modules.filter(m => m.assignment_status === 'passed').length;
+  const studyTotal = modules.reduce((a, m) => a + (m.study_hours || 0), 0);
+  const practiceTotal = modules.reduce((a, m) => a + (m.practice_hours || 0), 0);
+  const pct = Math.round((passed / 16) * 100);
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '📚', label: 'Modules passed', value: passed + '/16', sub: pct + '% complete' }));
+  stats.appendChild(statCard({ emoji: '⏱', label: 'Study hours', value: studyTotal.toFixed(1), sub: 'total' }));
+  stats.appendChild(statCard({ emoji: '🧘', label: 'Practice hours', value: practiceTotal.toFixed(1), sub: 'client + self' }));
+  wrap.appendChild(stats);
+
+  const bar = el('div', { className: 'progress-bar' });
+  bar.appendChild(el('div', { className: 'progress-fill', style: { width: pct + '%' } }));
+  wrap.appendChild(bar);
+
+  const statusCls = { not_started: 'pill-cold', in_progress: 'pill-warm', submitted: 'pill-warm', passed: 'pill-ok' };
+  const updateModule = async (mod, field, val) => {
+    try {
+      await proxy('sarah_pilates_progress', 'update', {
+        filters: [{ column: 'module', op: 'eq', value: mod.module }],
+        updates: { [field]: val, updated_at: new Date().toISOString() }
+      });
+      mod[field] = val;
+    } catch(e) { C.toast({ message: 'Update failed', type: 'error' }); }
+  };
+
+  modules.forEach(mod => {
+    const done = mod.assignment_status === 'passed';
+    const c = el('div', { className: 'module-card' + (done ? ' complete' : '') });
+    c.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--space-2)' } },
+      el('strong', {}, 'Module ' + mod.module),
+      el('span', { className: 'pill ' + (statusCls[mod.assignment_status] || 'pill-cold') }, (mod.assignment_status || 'not_started').replace(/_/g,' ').toUpperCase())
+    ));
+    const row = el('div', { style: { display:'flex', gap:'var(--space-3)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginBottom:'var(--space-2)' } });
+    row.appendChild(el('span', {}, 'Study: ' + (mod.study_hours || 0) + 'h'));
+    row.appendChild(el('span', {}, 'Practice: ' + (mod.practice_hours || 0) + 'h'));
+    c.appendChild(row);
+    if (mod.tutor_notes) c.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', margin:'0 0 var(--space-2)' } }, 'Tutor: ' + mod.tutor_notes));
+
+    const editRow = el('div', { style: { display:'flex', gap:'var(--space-2)', flexWrap:'wrap' } });
+    const studyIn = el('input', { type:'number', step:'0.5', min:'0', value: mod.study_hours || '', placeholder:'Study h', style: { width:'80px', padding:'4px', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', borderRadius:'var(--radius-sm)', fontSize:'var(--text-xs)', fontFamily:'var(--font-mono)' } });
+    const practIn = el('input', { type:'number', step:'0.5', min:'0', value: mod.practice_hours || '', placeholder:'Practice h', style: { width:'80px', padding:'4px', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', borderRadius:'var(--radius-sm)', fontSize:'var(--text-xs)', fontFamily:'var(--font-mono)' } });
+    const statusIn = el('select', { style: { padding:'4px', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', borderRadius:'var(--radius-sm)', fontSize:'var(--text-xs)' } });
+    ['not_started','in_progress','submitted','passed'].forEach(s => {
+      const opt = el('option', { value: s }, s.replace(/_/g,' '));
+      if (s === mod.assignment_status) opt.selected = true;
+      statusIn.appendChild(opt);
+    });
+    const saveBtn = button({ label: 'Save', size: 'sm', onClick: async () => {
+      await updateModule(mod, 'study_hours', parseFloat(studyIn.value) || 0);
+      await updateModule(mod, 'practice_hours', parseFloat(practIn.value) || 0);
+      await updateModule(mod, 'assignment_status', statusIn.value);
+      C.toast({ message: 'Module ' + mod.module + ' saved', type: 'success' });
+    }});
+    editRow.appendChild(studyIn); editRow.appendChild(practIn); editRow.appendChild(statusIn); editRow.appendChild(saveBtn);
+    c.appendChild(editRow);
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ── WELLNESS ─────────────────────────────────────────────────────────────────
+async function renderWellness() {
+  const wrap = el('div', {});
+
+  let logs = [];
+  try { logs = await proxy('sarah_wellness_log', 'select', { order: { column: 'log_date', ascending: false }, limit: 30 }); } catch(e) {}
+  if (!Array.isArray(logs)) logs = [];
+
+  wrap.appendChild(logTable(logs, [
+    { label: 'Date', render: r => r.log_date ? new Date(r.log_date).toLocaleDateString('en-GB') : '—' },
+    { label: 'Activity', key: 'activity' },
+    { label: 'Duration', render: r => r.duration_mins ? r.duration_mins + 'min' : '—' },
+    { label: 'Notes', key: 'notes' },
+  ]));
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'LOG SESSION'));
+  const dateIn = el('input', { type:'date', value: new Date().toISOString().split('T')[0] });
+  const actIn = el('select');
+  ['yoga','pilates','running','strength','walk','swim','cycling','other'].forEach(a => actIn.appendChild(el('option', { value:a }, a)));
+  const durIn = el('input', { type:'number', placeholder:'Duration (min)', min:'1' });
+  const notesIn = el('input', { type:'text', placeholder:'Notes (optional)' });
+  const r1 = el('div', { className:'form-row' }); r1.appendChild(dateIn); r1.appendChild(actIn); r1.appendChild(durIn);
+  const r2 = el('div', { className:'form-row' }); r2.appendChild(notesIn);
+  ab.appendChild(r1); ab.appendChild(r2);
+  ab.appendChild(button({ label: 'Save', onClick: async () => {
+    const record = { log_date: dateIn.value, activity: actIn.value, duration_mins: parseInt(durIn.value) || null, notes: notesIn.value };
+    try {
+      await proxy('sarah_wellness_log', 'insert', { record });
+      logs.unshift({ ...record, id: 'tmp-' + Date.now() });
+      durIn.value = ''; notesIn.value = '';
+      C.toast({ message: 'Session logged', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+// ── GOALS ────────────────────────────────────────────────────────────────────
+async function renderGoals() {
+  const wrap = el('div', {});
+  const tiers = ['today', 'week', 'month', 'life', 'rbtr'];
+
+  let goals = [];
+  try { goals = await proxy('sarah_goals', 'select'); } catch(e) {}
+  if (!Array.isArray(goals)) goals = [];
+
+  const goalHost = el('div', {});
+  wrap.appendChild(goalHost);
+
+  function renderGoalList(tier, host) {
+    host.innerHTML = '';
+    const filtered = goals.filter(g => (g.tier || 'week') === tier && g.status !== 'done');
+    if (!filtered.length) {
+      host.appendChild(emptyState({ icon: '🎯', title: 'No ' + tier + ' goals', body: 'Add one below.' }));
+      return;
+    }
+    filtered.forEach(g => {
+      const row = el('div', { className: 'goal-row' });
+      const cb = el('input', { type:'checkbox' });
+      cb.addEventListener('change', async () => {
+        try {
+          await proxy('sarah_goals', 'update', {
+            filters: [{ column: 'id', op: 'eq', value: g.id }],
+            updates: { status: 'done', completed_at: new Date().toISOString() }
+          });
+          g.status = 'done';
+          row.remove();
+        } catch(e) {}
+      });
+      row.appendChild(cb);
+      row.appendChild(el('span', { style: { fontSize:'var(--text-sm)', flex:'1' } }, g.content || g.title || '—'));
+      if (g.due_date) row.appendChild(el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' } }, new Date(g.due_date).toLocaleDateString('en-GB')));
+      host.appendChild(row);
+    });
+  }
+
+  const tabDefs = tiers.map(tier => ({
+    label: tier.charAt(0).toUpperCase() + tier.slice(1),
+    render: (host) => {
+      renderGoalList(tier, host);
+      const addForm = el('div', { style: { marginTop:'var(--space-3)', display:'flex', gap:'var(--space-2)' } });
+      const inp = el('input', { type:'text', placeholder:'Add ' + tier + ' goal…', style: { flex:'1', padding:'var(--space-2)', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', borderRadius:'var(--radius-sm)', fontSize:'var(--text-sm)', fontFamily:'var(--font-mono)' } });
+      const addBtn = button({ label: '+ Add', size: 'sm', onClick: async () => {
+        if (!inp.value.trim()) return;
+        const record = { tier, content: inp.value.trim(), status: 'open', created_at: new Date().toISOString() };
+        try {
+          await proxy('sarah_goals', 'insert', { record });
+          goals.unshift({ ...record, id: 'tmp-' + Date.now() });
+          inp.value = '';
+          renderGoalList(tier, host);
+        } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+      }});
+      addForm.appendChild(inp); addForm.appendChild(addBtn);
+      host.appendChild(addForm);
+    }
+  }));
+
+  tabs(tabDefs, goalHost);
+  return wrap;
+}
+
+// ── CONTENT CHANNEL ──────────────────────────────────────────────────────────
+async function renderSarahChannel() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, "Sarah's wellness channel — content calendar, ideas backlog, analytics."));
+
+  let calendar = [];
+  try { calendar = await proxy('sarah_content_calendar', 'select', { order: { column: 'post_date', ascending: false }, limit: 20 }); } catch(e) {}
+  if (!Array.isArray(calendar)) calendar = [];
+
+  const statsCls = { idea: 'pill-cold', draft: 'pill-cold', filmed: 'pill-warm', editing: 'pill-warm', scheduled: 'pill-warm', published: 'pill-ok' };
+
+  const calHost = el('div', {});
+  wrap.appendChild(calHost);
+  function renderCal() {
+    calHost.innerHTML = '';
+    calHost.appendChild(logTable(calendar, [
+      { label: 'Date', render: r => r.post_date ? new Date(r.post_date).toLocaleDateString('en-GB') : '—' },
+      { label: 'Platform', render: r => el('span', { className: 'pill pill-cold', style: { fontSize:'10px' } }, (r.platform || '—').toUpperCase()) },
+      { label: 'Type', key: 'content_type' },
+      { label: 'Title', key: 'title' },
+      { label: 'Status', render: r => el('span', { className: 'pill ' + (statsCls[r.status] || 'pill-cold') }, (r.status || '—').toUpperCase()) },
+    ]));
+  }
+  renderCal();
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'ADD TO CALENDAR'));
+  const dateIn = el('input', { type:'date' });
+  const platformIn = el('select');
+  ['instagram','youtube','tiktok','newsletter'].forEach(p => platformIn.appendChild(el('option', { value:p }, p)));
+  const typeIn = el('select');
+  ['reel','post','story','video','short','newsletter'].forEach(t => typeIn.appendChild(el('option', { value:t }, t)));
+  const titleIn = el('input', { type:'text', placeholder:'Title / concept' });
+  const statusIn = el('select');
+  ['idea','draft','filmed','editing','scheduled','published'].forEach(s => statusIn.appendChild(el('option', { value:s }, s)));
+  const r1 = el('div', { className:'form-row' }); r1.appendChild(dateIn); r1.appendChild(platformIn); r1.appendChild(typeIn);
+  const r2 = el('div', { className:'form-row' }); r2.appendChild(titleIn); r2.appendChild(statusIn);
+  ab.appendChild(r1); ab.appendChild(r2);
+  ab.appendChild(button({ label: 'Save', onClick: async () => {
+    if (!titleIn.value) return;
+    const record = { post_date: dateIn.value || null, platform: platformIn.value, content_type: typeIn.value, title: titleIn.value, status: statusIn.value };
+    try {
+      await proxy('sarah_content_calendar', 'insert', { record });
+      calendar.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderCal();
+      titleIn.value = '';
+      C.toast({ message: 'Added to calendar', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(addCard);
+
+  // Ideas backlog section
+  const ideasCard = card({ children: el('div', {}) });
+  const ib = ideasCard.querySelector('div');
+  ib.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, 'CONTENT IDEAS'));
+  const ideas = [
+    'Day in my life — pilates + kids + house',
+    '5 Pilates exercises for back pain',
+    'How I stay consistent with training while running a house renovation',
+    'What I eat in a day — real family food',
+    'Our plan: moving aboard a truck for 5 years',
+    'Honest review: APPI Level 3 — is it worth it?',
+  ];
+  ideas.forEach(idea => {
+    ib.appendChild(el('div', { style: { padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)', color:'var(--text-secondary)' } }, idea));
+  });
+  wrap.appendChild(ideasCard);
+  return wrap;
+}
+
+// ── SARAH WELLNESS LOG ───────────────────────────────────────────────────────
+async function renderSarahWellnessDeep() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Fitness', render: renderWellness },
+    { label: 'Mood log', render: async (host) => {
+      let logs = [];
+      try { logs = await proxy('sarah_today_log', 'select', { order: { column: 'date', ascending: false }, limit: 14 }); } catch(e) {}
+      if (!Array.isArray(logs)) logs = [];
+      host.appendChild(logTable(logs, [
+        { label: 'Date', render: r => r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—' },
+        { label: 'Mood', render: r => r.mood ? r.mood + '/10' : '—' },
+        { label: 'Energy', render: r => r.energy ? r.energy + '/10' : '—' },
+        { label: 'Sleep', render: r => r.sleep_hours ? r.sleep_hours + 'h' : '—' },
+      ]));
+    }},
+    { label: 'Nutrition', render: (host) => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, 'PRINCIPLES'));
+      const principles = [
+        'Protein-led meals — minimum 100g/day',
+        'No processed food Mon–Thu (relax Fri–Sun)',
+        'One coffee before noon only',
+        'One alcohol-free week per month minimum',
+        'Meal prep Sunday — saves decisions during the week',
+      ];
+      principles.forEach(p => body.appendChild(el('div', { style: { padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } }, p)));
+      host.appendChild(c);
+    }},
+  ], wrap);
+  return wrap;
+}
+
+// ── SONS (shared with Ben) ───────────────────────────────────────────────────
+async function renderSons() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Hudson + Benson — shared with Ben\'s portal. Same data, editable from both.'));
+
+  let sons = [];
+  try { sons = await proxy('family_sons', 'select'); } catch(e) {}
+  if (!Array.isArray(sons)) sons = [];
+
+  if (!sons.length) {
+    wrap.appendChild(emptyState({ icon: '👦', title: 'No son profiles', body: 'Seed from Ben portal → Family → Sons.' }));
+    return wrap;
+  }
+
+  sons.forEach(son => {
+    const dob = son.dob ? new Date(son.dob) : null;
+    const now = new Date();
+    let age = '—';
+    if (dob) {
+      const y = now.getFullYear() - dob.getFullYear();
+      const m = now.getMonth() - dob.getMonth();
+      const totalMonths = y * 12 + m;
+      age = Math.floor(totalMonths / 12) + 'y ' + (totalMonths % 12) + 'mo';
+    }
+    const c = card({ children: el('div', {}) });
+    const body = c.querySelector('div');
+    body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-2)' } },
+      el('strong', {}, son.name),
+      el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-sm)', color:'var(--text-secondary)' } }, age)
+    ));
+    if (son.school) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, 'School: ' + son.school));
+    if (son.gp_contact) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, 'GP: ' + son.gp_contact));
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ── PEANUT (shared with Ben) ─────────────────────────────────────────────────
+async function renderPeanut() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, "Peanut the dog — shared with Ben's portal. Same data."));
+
+  let config = {};
+  try {
+    const rows = await proxy('family_peanut', 'select');
+    if (Array.isArray(rows)) rows.forEach(r => { config[r.key] = r.value; });
+  } catch(e) {}
+
+  let events = [];
+  try { events = await proxy('family_peanut_events', 'select', { order: { column: 'date', ascending: false }, limit: 5 }); } catch(e) {}
+
+  const fields = ['name','breed','dob','vet_contact','food_brand','passport_status'];
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'PEANUT PROFILE'));
+  fields.forEach(f => {
+    const row = el('div', { style: { display:'flex', justifyContent:'space-between', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } });
+    row.appendChild(el('span', { style: { color:'var(--text-secondary)' } }, f.replace(/_/g,' ')));
+    row.appendChild(el('span', {}, config[f] ? String(config[f]) : '—'));
+    body.appendChild(row);
+  });
+  wrap.appendChild(c);
+
+  if (events.length) {
+    wrap.appendChild(logTable(events, [
+      { label: 'Date', render: r => r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—' },
+      { label: 'Event', key: 'event_type' },
+      { label: 'Notes', key: 'notes' },
+      { label: 'Next due', render: r => r.next_due_date ? new Date(r.next_due_date).toLocaleDateString('en-GB') : '—' },
+    ]));
+  }
+  return wrap;
+}
+
+// ── RELATIONSHIP ─────────────────────────────────────────────────────────────
+async function renderRelationship() {
+  const wrap = el('div', {});
+
+  tabs([
+    { label: 'Connection', render: (host) => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, "SARAH'S VIEW"));
+      const practices = [
+        { practice: 'Weekly check-in', detail: 'Sunday 9pm — 30 minutes, no phones except timer. How are we both actually doing?' },
+        { practice: 'Appreciation log', detail: 'One thing each week — specific, not generic. "You handled X well" not "you\'re great".' },
+        { practice: 'Hard conversations', detail: 'Name the thing directly. Sarah: if it needs saying, say it in the moment, not 3 days later.' },
+        { practice: 'Date night', detail: 'Once a month minimum. Off the property. Away from renovation talk and future planning.' },
+        { practice: 'Morning acknowledgement', detail: 'One minute before the day starts. Not a discussion — just a touch base.' },
+      ];
+      practices.forEach(p => {
+        const row = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+        row.appendChild(el('strong', { style: { fontSize:'var(--text-sm)', display:'block', marginBottom:'var(--space-1)' } }, p.practice));
+        row.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, p.detail));
+        body.appendChild(row);
+      });
+      host.appendChild(c);
+    }},
+    { label: 'Date nights', render: async (host) => {
+      let logs = [];
+      try {
+        const rows = await proxy('ben_notes', 'select', { filters: [{ column: 'tags', op: 'cs', value: '{"date-night"}' }] });
+        if (Array.isArray(rows)) logs = rows.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+      } catch(e) {}
+      host.appendChild(logTable(logs, [
+        { label: 'Date', render: r => r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB') : '—' },
+        { label: 'Notes', key: 'content' },
+      ]));
+    }},
+  ], wrap);
+  return wrap;
+}
+
+// ── PORTAL CONFIG ─────────────────────────────────────────────────────────────
 const SARAH_PORTAL = {
   id: 'sarah',
   name: 'SARAH',
   emoji: '💜',
-  tagline: 'Wellness · Channel · Partnership',
+  tagline: 'Wellness · Pilates · Channel · Family',
   access: ['ben', 'sarah'],
-  liveStatFetcher: async () => 'your space',
+  liveStatFetcher: async () => {
+    try {
+      const rows = await proxy('sarah_pilates_progress', 'select');
+      const passed = Array.isArray(rows) ? rows.filter(m => m.assignment_status === 'passed').length : 0;
+      return passed + '/16 modules';
+    } catch { return 'your space'; }
+  },
   sections: [
-    { id: 'dashboard',   group: 'OVERVIEW', label: 'Dashboard',     emoji: '📊', render: renderSarahDashboard, default: true },
-    { id: 'hub',         group: 'WELLNESS', label: 'Hub',           emoji: '🧘', iframeHash: '#sec-sarah' },
-    { id: 'pilates',     group: 'WELLNESS', label: 'Pilates',       emoji: '🧘', iframeHash: '#sec-sarah' },
-    { id: 'fitness',     group: 'WELLNESS', label: 'Fitness',       emoji: '💪', iframeHash: '#sec-sarah' },
-    { id: 'channel',     group: 'CONTENT',  label: 'Her Channel',   emoji: '📺', iframeHash: '#sec-sarah' },
-    { id: 'goals',       group: 'CONTENT',  label: 'Her Goals',     emoji: '🎯', iframeHash: '#sec-sarah' },
-    { id: 'reflections', group: 'CONTENT',  label: 'Her Reflections', emoji: '✍️', iframeHash: '#sec-sarah' },
-    { id: 'relationship',group: 'SHARED',   label: 'Relationship',  emoji: '💑', iframeHash: '#sec-relationship' },
-    { id: 'house-link',  group: 'SHARED',   label: 'House (view) →', emoji: '🏠', render: () => {
-      location.href = '/house.html';
-      return C.emptyState({ icon: '🏠', title: 'Redirecting to House portal…' });
-    }},
+    { id: 'dashboard',      group: 'OVERVIEW',   label: 'Dashboard',       emoji: '📊', render: renderSarahDashboard, default: true },
+    { id: 'pilates',        group: 'PILATES',     label: 'APPI Level 3',    emoji: '🧘', render: renderPilates },
+    { id: 'wellness',       group: 'WELLNESS',    label: 'Wellness',        emoji: '💪', render: renderSarahWellnessDeep },
+    { id: 'goals',          group: 'GOALS',       label: 'Goals',           emoji: '🎯', render: renderGoals },
+    { id: 'channel',        group: 'CONTENT',     label: 'Her Channel',     emoji: '📺', render: renderSarahChannel },
+    { id: 'sons',           group: 'FAMILY',      label: 'Hudson + Benson', emoji: '👦', render: renderSons },
+    { id: 'peanut',         group: 'FAMILY',      label: 'Peanut',          emoji: '🐕', render: renderPeanut },
+    { id: 'relationship',   group: 'FAMILY',      label: 'Relationship',    emoji: '💑', render: renderRelationship },
   ],
 };
 

@@ -5,6 +5,41 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>RBTR · Command</title>
 <link rel="stylesheet" href="/css/portal.css">
+<style>
+.tab-bar{display:flex;gap:4px;margin-bottom:var(--space-4);flex-wrap:wrap}
+.tab-btn{padding:var(--space-1) var(--space-3);background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-sm);cursor:pointer;border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.tab-btn.active{background:var(--text-primary);color:var(--bg-primary);border-color:var(--text-primary)}
+.slim-table{width:100%;border-collapse:collapse;font-size:var(--text-sm)}
+.slim-table th{text-align:left;padding:var(--space-2);border-bottom:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.05em;font-weight:400}
+.slim-table td{padding:var(--space-2);border-bottom:1px solid var(--border-subtle)}
+.slim-table tr:last-child td{border:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}
+.form-row{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);flex-wrap:wrap;align-items:flex-end}
+.form-row input,.form-row select,.form-row textarea{flex:1;min-width:120px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);font-size:var(--text-sm);border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.form-row textarea{min-height:80px}
+.section-note{font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:var(--space-3);padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border-left:2px solid var(--border-subtle)}
+.stage-card{padding:var(--space-4);border:1px solid var(--border-subtle);border-radius:var(--radius-md);margin-bottom:var(--space-3)}
+.stage-card.active{border-color:var(--text-primary)}
+.stage-card.locked{opacity:.5}
+.stage-card.complete{border-color:#4a7c59;background:rgba(74,124,89,.05)}
+.pill{display:inline-block;padding:2px 8px;border-radius:var(--radius-pill);font-size:var(--text-xs);font-family:var(--font-mono)}
+.pill-hot{background:rgba(220,38,38,.15);color:#f87171}
+.pill-warm{background:rgba(217,119,6,.15);color:#fbbf24}
+.pill-cold{background:rgba(99,102,241,.15);color:#a5b4fc}
+.pill-ok{background:rgba(74,124,89,.15);color:#6ee7b7}
+.checklist-item{display:flex;gap:var(--space-2);align-items:flex-start;padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle)}
+.checklist-item:last-child{border:none}
+.checklist-item input[type=checkbox]{margin-top:2px;accent-color:var(--text-primary);width:16px;height:16px;cursor:pointer;flex-shrink:0}
+.checklist-item label{font-size:var(--text-sm);cursor:pointer;line-height:1.4}
+.checklist-item label.done{text-decoration:line-through;color:var(--text-secondary)}
+.country-row{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:var(--space-2);padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);font-size:var(--text-sm)}
+.build-phase{padding:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);margin-bottom:var(--space-2)}
+.build-phase h4{margin:0 0 var(--space-2);font-size:var(--text-sm);font-weight:600}
+.progress-bar{height:4px;background:var(--bg-secondary);border-radius:2px;overflow:hidden;margin:var(--space-2) 0}
+.progress-fill{height:100%;background:var(--text-primary);border-radius:2px}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}.country-row{grid-template-columns:1fr 60px 60px}}
+</style>
 </head>
 <body>
 <div id="portal-root"></div>
@@ -18,37 +53,1330 @@
 const C = window.RBTR_Components;
 const { el, card, statCard, button, emptyState } = C;
 
-async function renderRbtrDashboard() {
-  const wrap = el('div', {});
-  const stats = el('div', {
-    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
+// ── Shared helpers ──────────────────────────────────────────────────────────
+function proxy(table, op, extra = {}) {
+  return fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ table, op, ...extra })
+  }).then(r => r.ok ? r.json() : []);
+}
+
+function tabs(defs, host) {
+  const bar = el('div', { className: 'tab-bar' });
+  const bodies = [];
+  defs.forEach((d, i) => {
+    const btn = el('button', { className: 'tab-btn' + (i === 0 ? ' active' : ''), type: 'button' }, d.label);
+    const body = el('div', { style: { display: i === 0 ? '' : 'none' } });
+    bodies.push(body);
+    let loaded = i === 0;
+    bar.appendChild(btn);
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      bodies.forEach((b, j) => { b.style.display = j === i ? '' : 'none'; });
+      if (!loaded) { loaded = true; d.render(body); }
+    });
+    if (i === 0) d.render(body);
   });
-  stats.appendChild(statCard({ emoji: '🚛', label: 'Days to departure', value: '—', sub: '1 July 2027' }));
-  stats.appendChild(statCard({ emoji: '💪', label: 'Built Dad', value: '—', sub: 'day of 56' }));
-  stats.appendChild(statCard({ emoji: '📈', label: 'Audience total', value: '—', sub: 'YT + IG + TikTok' }));
-  stats.appendChild(statCard({ emoji: '🔨', label: 'Build sections', value: '—', sub: 'in progress' }));
+  host.appendChild(bar);
+  bodies.forEach(b => host.appendChild(b));
+}
+
+function logTable(rows, cols) {
+  if (!rows || !rows.length) return emptyState({ icon: '📋', title: 'Nothing logged yet', body: 'Add an entry below.' });
+  const t = el('table', { className: 'slim-table' });
+  const head = el('tr');
+  cols.forEach(c => head.appendChild(el('th', {}, c.label)));
+  t.appendChild(el('thead', {}, head));
+  const body = el('tbody');
+  rows.forEach(row => {
+    const tr = el('tr');
+    cols.forEach(c => {
+      const val = c.render ? c.render(row) : (row[c.key] ?? '—');
+      const td = el('td');
+      if (val instanceof HTMLElement) td.appendChild(val);
+      else td.textContent = String(val);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  t.appendChild(body);
+  return t;
+}
+
+function daysUntil(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  return Math.ceil((d - now) / 86400000);
+}
+
+// ── MISSION CONTROL ─────────────────────────────────────────────────────────
+async function renderCountdown() {
+  const wrap = el('div', {});
+  const departure = '2027-07-01';
+  const days = daysUntil(departure);
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom: 'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '🚛', label: 'Days to departure', value: days, sub: '1 July 2027' }));
+  stats.appendChild(statCard({ emoji: '🗺', label: 'Countries', value: '45', sub: '5 years on road' }));
+  stats.appendChild(statCard({ emoji: '📍', label: 'Destination', value: 'QLD', sub: 'Burleigh Heads, Australia' }));
   wrap.appendChild(stats);
-  try {
-    const r = await fetch('/api/briefing-data');
-    const j = await r.json();
-    const d = j.data || {};
-    const vals = stats.querySelectorAll('.ds-stat .value');
-    if (vals[0]) vals[0].textContent = d.days_to_departure ?? '—';
-    if (vals[1]) vals[1].textContent = d.built_dad_day ?? '—';
-    if (vals[2]) vals[2].textContent = d.audience_total ?? '—';
-    if (vals[3]) vals[3].textContent = Array.isArray(d.build_sections_in_progress) ? d.build_sections_in_progress.length : '—';
-  } catch(e) {}
 
-  wrap.appendChild(card({ children: el('div', {},
-    el('div', { className: 'ds-caption' }, 'MISSION'),
-    el('p', { style: { margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } },
-      "Mercedes Arocs 6x6. 45 countries, 5 years. Departing Rotherham 1 July 2027. " +
-      "Destination Burleigh Heads, QLD. Three shipping legs: Central Asia → Delhi, Chennai → Mombasa, Cape Town → Singapore."),
-  )}));
+  const milestonesData = [
+    { label: 'Guy Martin — Stage 2 eligible', date: '2026-08-01', tag: 'audience' },
+    { label: 'Truck acquisition complete', date: '2026-10-01', tag: 'build' },
+    { label: 'AirBnB launched — House revenue live', date: '2026-07-01', tag: 'money' },
+    { label: 'Eternal retainer starts', date: '2026-05-01', tag: 'money' },
+    { label: '50,000 combined audience', date: '2026-09-01', tag: 'audience' },
+    { label: '100,000 combined audience', date: '2027-01-01', tag: 'audience' },
+    { label: 'Build complete, systems tested', date: '2027-04-01', tag: 'build' },
+    { label: 'Sponsors locked in (target 5)', date: '2027-05-01', tag: 'sponsors' },
+    { label: 'DEPARTURE — Rotherham → Turkey', date: '2027-07-01', tag: 'expedition' },
+  ];
 
+  const milestoneCard = card({ children: el('div', {}) });
+  const mc = milestoneCard.querySelector('div');
+  mc.appendChild(el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, 'MILESTONES'));
+  milestonesData.forEach(m => {
+    const d = daysUntil(m.date);
+    const past = d < 0;
+    const row = el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', opacity: past ? '.5' : '1' } });
+    const left = el('div');
+    left.appendChild(el('span', { className: 'pill ' + (past ? 'pill-ok' : 'pill-warm'), style: { marginRight: 'var(--space-2)' } }, m.tag.toUpperCase()));
+    left.appendChild(el('span', { style: { fontSize: 'var(--text-sm)' } }, (past ? '✓ ' : '') + m.label));
+    row.appendChild(left);
+    row.appendChild(el('span', { style: { fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' } },
+      past ? new Date(m.date).toLocaleDateString('en-GB', { month:'short', year:'numeric' }) : d + 'd'));
+    mc.appendChild(row);
+  });
+  wrap.appendChild(milestoneCard);
   return wrap;
 }
 
+async function renderGates() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'The Three Gates must all be open before departure funds are secure. Each gate is a single yes/no event.'));
+
+  const gates = [
+    { id: 1, name: 'Van sale', desc: 'Sell current van, clear finance, bank residual into truck fund', target_date: '2026-10-01' },
+    { id: 2, name: 'Coffee Brothers bike', desc: 'Resolve Coffee Brothers financial dispute. Bike sale clears or settles. Frees headspace.', target_date: '2026-08-01' },
+    { id: 3, name: 'T6.1 sale', desc: 'VW T6.1 sold or part-exchanged. Releases £25,000+ into expedition fund.', target_date: '2026-12-01' },
+  ];
+
+  let gateStates = {};
+  try {
+    const rows = await proxy('rbtr_gates', 'select');
+    if (Array.isArray(rows)) rows.forEach(r => { gateStates[r.gate_id] = r; });
+  } catch(e) {}
+
+  gates.forEach(g => {
+    const state = gateStates[g.id] || {};
+    const open = state.open === true;
+    const c = el('div', { className: 'stage-card' + (open ? ' complete' : '') });
+    const header = el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--space-2)' } });
+    header.appendChild(el('div', {},
+      el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginRight:'var(--space-2)' } }, 'GATE ' + g.id),
+      el('strong', {}, g.name)
+    ));
+    header.appendChild(el('span', { className: 'pill ' + (open ? 'pill-ok' : 'pill-cold') }, open ? 'OPEN' : 'LOCKED'));
+    c.appendChild(header);
+    c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-2)' } }, g.desc));
+    c.appendChild(el('div', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, 'Target: ' + new Date(g.target_date).toLocaleDateString('en-GB', { month:'long', year:'numeric' })));
+    if (state.notes) c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', marginTop:'var(--space-2)', padding:'var(--space-2)', background:'var(--bg-secondary)', borderRadius:'var(--radius-sm)' } }, state.notes));
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+async function renderPredeparture() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, '97-item pre-departure checklist. State persists to Supabase. Tick as you go.'));
+
+  const categories = {
+    'Truck & Build': [
+      'Truck acquired and registered','Engine service complete','Gearbox service','Diff oils changed','Suspension check',
+      'Tyres — 6 new fitted','Spare tyres (2) fitted to rack','Brake system checked and certified','Electrical system rewired',
+      'Roof rack fitted and load-tested','Rooftop tent fitted and tested','Drawer system installed','Fridge installed (12V)',
+      'Water system (80L tank, pump, grey tank)','Shore power inlet fitted','Solar (400W) wired','Batteries (leisure bank)',
+      'Inverter fitted','Air compressor fitted','Winch fitted and tested','Snorkel fitted','Underbody armour complete',
+      'Recovery kit (boards, straps, hi-lift)','Tool kit compiled','Spares kit compiled (belts, filters, fuses)',
+    ],
+    'Documents & Legal': [
+      'Ben passport — valid past Aug 2029','Sarah passport — valid past Aug 2029','Hudson passport','Benson passport',
+      'Pet passport (Peanut)','Peanut microchip registered','International driving permit (Ben)','International driving permit (Sarah)',
+      'Carnet de Passages issued','Vehicle registration document (V5)','Insurance — vehicle (worldwide)','Insurance — health (all 4)',
+      'Insurance — repatriation','Insurance — content/media gear','Vaccination certificates (all humans)',
+      'Rabies vaccine (Peanut)','Tapeworm treatment certificate (Peanut)',
+    ],
+    'Finance': [
+      'Expedition fund target: £50,000 reached','Monthly runway confirmed: £3,500/mo','Three Gates all open',
+      'PSNM revenue: 827 pallets secured or sold to new owner','House AirBnB revenue live','Eternal retainer active',
+      'UK tax obligations settled through departure date','Mortgage overpayment / rent arrangement agreed (House)',
+      'Emergency fund: £10,000 accessible',
+    ],
+    'Audience & Sponsors': [
+      '100,000 combined audience reached','YouTube monetised (1,000 subs + 4,000hrs)','Instagram 10,000+ followers',
+      'Minimum 3 sponsors signed pre-departure','Guy Martin pathway: Stage 4 decision received','First sponsor payment received',
+      'Branded content format documented','Content release schedule agreed',
+    ],
+    'Logistics': [
+      'Routing — Turkey visa acquired','Routing — Georgia / Armenia planned','Routing — Iran route confirmed or alternative set',
+      'Routing — Central Asia borders checked','Shipping Leg 1: agent in Delhi confirmed','Shipping Leg 2: agent in Mombasa confirmed',
+      'Shipping Leg 3: agent in Cape Town confirmed','Shipping Leg 4: agent in Singapore confirmed',
+      'SD card supply (12 months)','Camera batteries (spares)','Laptop and charging sorted','Sat comms (Starlink/Garmin inReach)',
+      'Medical kit compiled and certified','First aid training (Ben + Sarah)',
+    ],
+    'Family': [
+      'Hudson school — plan agreed with school and ex','Benson nursery — plan agreed','Family communication cadence agreed',
+      'Emergency contact list distributed','Power of attorney in place (UK business decisions)',
+      'Kids passport emergency contacts added','Wills updated',
+    ],
+  };
+
+  let savedStates = {};
+  try {
+    const rows = await proxy('rbtr_predeparture_checklist', 'select');
+    if (Array.isArray(rows)) rows.forEach(r => { savedStates[r.item_key] = r.checked; });
+  } catch(e) {}
+
+  const saveState = async (key, checked) => {
+    try {
+      await proxy('rbtr_predeparture_checklist', 'upsert', {
+        record: { item_key: key, checked, updated_at: new Date().toISOString() },
+        on_conflict: 'item_key'
+      });
+    } catch(e) {}
+  };
+
+  Object.entries(categories).forEach(([cat, items]) => {
+    const catCard = card({ children: el('div', {}) });
+    const body = catCard.querySelector('div');
+    body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, cat.toUpperCase()));
+    items.forEach((item, i) => {
+      const key = cat.replace(/\s+/g, '_').toLowerCase() + '_' + i;
+      const checked = savedStates[key] === true;
+      const row = el('div', { className: 'checklist-item' });
+      const cb = el('input', { type: 'checkbox' });
+      cb.checked = checked;
+      const lbl = el('label', {}, item);
+      if (checked) lbl.className = 'done';
+      cb.addEventListener('change', () => {
+        lbl.className = cb.checked ? 'done' : '';
+        saveState(key, cb.checked);
+      });
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      body.appendChild(row);
+    });
+    wrap.appendChild(catCard);
+  });
+  return wrap;
+}
+
+// ── ROUTE ───────────────────────────────────────────────────────────────────
+async function renderRoute() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Overview', render: async (host) => {
+      let phases = [];
+      try { phases = await proxy('rbtr_route_phases', 'select'); } catch(e) {}
+      if (!Array.isArray(phases) || !phases.length) {
+        phases = [
+          { phase: 1, name: 'UK → Turkey', distance_km: 3200, duration_weeks: 6, notes: 'Via France, Switzerland, Italy, Greece or Balkans route' },
+          { phase: 2, name: 'Turkey → Central Asia', distance_km: 4800, duration_weeks: 8, notes: 'Via Georgia, Armenia or Iran (TBC), Azerbaijan, Kazakhstan' },
+          { phase: 3, name: 'Central Asia → India (Ship)', distance_km: 0, duration_weeks: 3, notes: 'Truck ships: Central Asia port → Delhi. Fly ahead.' },
+          { phase: 4, name: 'India → East Africa', distance_km: 0, duration_weeks: 2, notes: 'Truck ships: Chennai → Mombasa. Drive India while truck ships.' },
+          { phase: 5, name: 'East Africa → South Africa', distance_km: 6000, duration_weeks: 16, notes: 'Overland Africa: Kenya → Tanzania → Zambia → Malawi → Mozambique → South Africa' },
+          { phase: 6, name: 'South Africa → SE Asia (Ship)', distance_km: 0, duration_weeks: 4, notes: 'Cape Town → Singapore (ship). Fly to SE Asia.' },
+          { phase: 7, name: 'SE Asia → Australia', distance_km: 3000, duration_weeks: 12, notes: 'Fly truck Darwin or ship. Drive to Burleigh Heads, QLD.' },
+        ];
+      }
+      const totalKm = phases.filter(p => p.distance_km > 0).reduce((a,b) => a + (b.distance_km||0), 0);
+      const s = el('div', { className: 'grid-2', style: { marginBottom: 'var(--space-4)' } });
+      s.appendChild(statCard({ emoji: '📏', label: 'Drive distance', value: totalKm.toLocaleString() + 'km', sub: 'overland only' }));
+      s.appendChild(statCard({ emoji: '🚢', label: 'Shipping legs', value: '3', sub: 'Asia / Africa / Australia' }));
+      host.appendChild(s);
+      phases.forEach(p => {
+        const c = el('div', { className: 'build-phase' });
+        c.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center' } },
+          el('h4', {}, 'Phase ' + p.phase + ': ' + p.name),
+          el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' } },
+            p.distance_km ? p.distance_km.toLocaleString() + ' km' : 'SHIP')
+        ));
+        if (p.duration_weeks) c.appendChild(el('div', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginTop:'var(--space-1)' } }, p.duration_weeks + ' weeks'));
+        if (p.notes) c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-2) 0 0' } }, p.notes));
+        host.appendChild(c);
+      });
+    }},
+    { label: 'Shipping', render: (host) => {
+      const legs = [
+        { leg: 1, route: 'Central Asia → Delhi (India)', via: 'TBC — agent in Delhi', notes: 'Truck shipped while we fly ahead. Estimated 3 weeks transit.' },
+        { leg: 2, route: 'Chennai → Mombasa (Kenya)', via: 'RoRo shipping, agent in Mombasa TBC', notes: '12-14 days transit. Drive India coast while truck ships.' },
+        { leg: 3, route: 'Cape Town → Singapore', via: 'RoRo or container, Singapore agent TBC', notes: 'Final shipping leg. 3-4 weeks. Fly to SE Asia, collect in Singapore.' },
+      ];
+      legs.forEach(l => {
+        const c = el('div', { className: 'stage-card', style: { marginBottom:'var(--space-3)' } });
+        c.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-2)' } },
+          el('strong', {}, 'Leg ' + l.leg + ': ' + l.route),
+          el('span', { className: 'pill pill-cold' }, 'PENDING')
+        ));
+        c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, 'Via: ' + l.via));
+        c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, l.notes));
+        host.appendChild(c);
+      });
+    }},
+    { label: 'Live Map', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Live map goes here once expedition starts. Current position updated via Garmin inReach.'));
+      const c = card({ children: el('div', {},
+        el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, 'CURRENT POSITION'),
+        el('p', { style: { color:'var(--text-secondary)', fontSize:'var(--text-sm)' } }, 'Pre-departure — Rotherham, South Yorkshire, UK'),
+        el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginTop:'var(--space-2)' } }, 'Departure: 1 July 2027'),
+      )});
+      host.appendChild(c);
+    }},
+  ], wrap);
+  return wrap;
+}
+
+async function renderItinerary() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, '45-country itinerary. Approximate schedule, subject to visa availability and conditions.'));
+
+  const countries = [
+    // Europe
+    { phase: 'Europe', country: 'United Kingdom', entry: 'Jul 2027', nights: 0, stay: 'Rotherham (start)', visa: 'Home', cost: '—' },
+    { phase: 'Europe', country: 'France', entry: 'Jul 2027', nights: 3, stay: 'Calais → Lyon → Nice', visa: 'Schengen', cost: '£50/d' },
+    { phase: 'Europe', country: 'Switzerland', entry: 'Jul 2027', nights: 3, stay: 'Bern → Zürich', visa: 'No', cost: '£80/d' },
+    { phase: 'Europe', country: 'Austria', entry: 'Aug 2027', nights: 3, stay: 'Innsbruck → Salzburg', visa: 'Schengen', cost: '£55/d' },
+    { phase: 'Europe', country: 'Serbia', entry: 'Aug 2027', nights: 4, stay: 'Belgrade', visa: 'No (90d)', cost: '£30/d' },
+    { phase: 'Europe', country: 'Bulgaria', entry: 'Aug 2027', nights: 3, stay: 'Sofia', visa: 'Schengen', cost: '£35/d' },
+    { phase: 'Europe', country: 'Turkey', entry: 'Aug 2027', nights: 21, stay: 'Istanbul → Cappadocia → East', visa: 'e-Visa £50', cost: '£40/d' },
+    // Caucasus
+    { phase: 'Caucasus', country: 'Georgia', entry: 'Sep 2027', nights: 14, stay: 'Tbilisi → Kazbegi → Batumi', visa: 'No (365d)', cost: '£30/d' },
+    { phase: 'Caucasus', country: 'Armenia', entry: 'Sep 2027', nights: 7, stay: 'Yerevan → Lake Sevan', visa: 'No (180d)', cost: '£25/d' },
+    { phase: 'Caucasus', country: 'Azerbaijan', entry: 'Oct 2027', nights: 7, stay: 'Baku → Sheki', visa: 'e-Visa £20', cost: '£30/d' },
+    // Central Asia
+    { phase: 'Central Asia', country: 'Kazakhstan', entry: 'Oct 2027', nights: 14, stay: 'Aktau → Almaty', visa: 'No (30d)', cost: '£25/d' },
+    { phase: 'Central Asia', country: 'Uzbekistan', entry: 'Nov 2027', nights: 14, stay: 'Tashkent → Samarkand → Bukhara', visa: 'e-Visa £20', cost: '£20/d' },
+    { phase: 'Central Asia', country: 'Kyrgyzstan', entry: 'Nov 2027', nights: 10, stay: 'Bishkek → Osh → Issyk-Kul', visa: 'No (60d)', cost: '£18/d' },
+    { phase: 'Central Asia', country: 'Tajikistan', entry: 'Dec 2027', nights: 10, stay: 'Dushanbe → Pamir Highway', visa: 'e-Visa £30', cost: '£15/d' },
+    // [Ship: Central Asia → Delhi]
+    { phase: 'South Asia', country: 'India', entry: 'Jan 2028', nights: 42, stay: 'Delhi → Rajasthan → Goa → Tamil Nadu', visa: 'e-Visa £50', cost: '£25/d' },
+    // [Ship: Chennai → Mombasa]
+    { phase: 'East Africa', country: 'Kenya', entry: 'Apr 2028', nights: 21, stay: 'Mombasa → Nairobi → Maasai Mara', visa: 'eTA £30', cost: '£45/d' },
+    { phase: 'East Africa', country: 'Tanzania', entry: 'May 2028', nights: 14, stay: 'Serengeti → Ngorongoro → Zanzibar', visa: '$50', cost: '£50/d' },
+    { phase: 'East Africa', country: 'Rwanda', entry: 'Jun 2028', nights: 7, stay: 'Kigali → Volcanoes NP', visa: 'No (30d)', cost: '£35/d' },
+    { phase: 'East Africa', country: 'Uganda', entry: 'Jun 2028', nights: 7, stay: 'Kampala → Bwindi', visa: '$50', cost: '£35/d' },
+    { phase: 'East Africa', country: 'Burundi', entry: 'Jul 2028', nights: 3, stay: 'Bujumbura', visa: 'On arrival', cost: '£20/d' },
+    { phase: 'East Africa', country: 'Zambia', entry: 'Jul 2028', nights: 10, stay: 'Lusaka → Victoria Falls → South Luangwa', visa: 'KAZA $50', cost: '£30/d' },
+    { phase: 'East Africa', country: 'Zimbabwe', entry: 'Aug 2028', nights: 7, stay: 'Victoria Falls → Hwange', visa: 'KAZA $50', cost: '£30/d' },
+    { phase: 'South Africa', country: 'Botswana', entry: 'Aug 2028', nights: 10, stay: 'Chobe → Okavango → Kalahari', visa: 'No (90d)', cost: '£35/d' },
+    { phase: 'South Africa', country: 'Namibia', entry: 'Sep 2028', nights: 21, stay: 'Windhoek → Sossusvlei → Skeleton Coast', visa: 'No (90d)', cost: '£30/d' },
+    { phase: 'South Africa', country: 'South Africa', entry: 'Oct 2028', nights: 30, stay: 'Johannesburg → Garden Route → Cape Town', visa: 'No (90d)', cost: '£35/d' },
+    // [Ship: Cape Town → Singapore]
+    { phase: 'SE Asia', country: 'Singapore', entry: 'Jan 2029', nights: 7, stay: 'Collect truck → transit', visa: 'No (30d)', cost: '£80/d' },
+    { phase: 'SE Asia', country: 'Malaysia', entry: 'Jan 2029', nights: 14, stay: 'KL → Cameron Highlands → Penang', visa: 'No (90d)', cost: '£35/d' },
+    { phase: 'SE Asia', country: 'Thailand', entry: 'Feb 2029', nights: 21, stay: 'Bangkok → Chiang Mai → Islands', visa: 'No (30d, extendable)', cost: '£30/d' },
+    { phase: 'SE Asia', country: 'Laos', entry: 'Mar 2029', nights: 10, stay: 'Vientiane → Luang Prabang → 4,000 Islands', visa: 'On arrival $35', cost: '£20/d' },
+    { phase: 'SE Asia', country: 'Cambodia', entry: 'Apr 2029', nights: 10, stay: 'Phnom Penh → Angkor', visa: 'On arrival $30', cost: '£25/d' },
+    { phase: 'SE Asia', country: 'Vietnam', entry: 'Apr 2029', nights: 21, stay: 'Ho Chi Minh → Hanoi → Ha Long Bay', visa: 'e-Visa', cost: '£25/d' },
+    { phase: 'SE Asia', country: 'Indonesia', entry: 'May 2029', nights: 21, stay: 'Bali → Java → Komodo', visa: 'On arrival (Bali)', cost: '£30/d' },
+    { phase: 'Australia', country: 'Australia', entry: 'Jun 2029', nights: 365, stay: 'Darwin → via East Coast → Burleigh Heads, QLD', visa: 'ETA or WH', cost: '£50/d' },
+  ];
+
+  const phases = [...new Set(countries.map(c => c.phase))];
+  phases.forEach(phase => {
+    const phaseItems = countries.filter(c => c.phase === phase);
+    const c = card({ children: el('div', {}) });
+    const body = c.querySelector('div');
+    body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, phase.toUpperCase()));
+    const header = el('div', { className: 'country-row', style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginBottom:'var(--space-1)' } });
+    ['Country','Entry','Nights','Visa'].forEach(h => header.appendChild(el('span', {}, h.toUpperCase())));
+    body.appendChild(header);
+    phaseItems.forEach(item => {
+      const row = el('div', { className: 'country-row' });
+      row.appendChild(el('span', {}, item.country));
+      row.appendChild(el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' } }, item.entry));
+      row.appendChild(el('span', { style: { fontFamily:'var(--font-mono)' } }, String(item.nights || '—')));
+      row.appendChild(el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, item.visa));
+      body.appendChild(row);
+    });
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+async function renderVisas() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Visa requirements for Ben + Sarah + Hudson + Benson (UK passports). Dog (Peanut) tracked separately in Peanut portal.'));
+
+  const visaData = [
+    { country: 'France/Schengen', ben: 'No visa', sarah: 'No visa', kids: 'No visa', notes: '90-day limit per 180 days' },
+    { country: 'Turkey', ben: 'e-Visa £50 (90d)', sarah: 'e-Visa £50', kids: 'e-Visa', notes: 'Apply online before travel' },
+    { country: 'Georgia', ben: 'None (365d)', sarah: 'None', kids: 'None', notes: 'Exceptional freedom for overlanders' },
+    { country: 'Armenia', ben: 'None (180d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'Azerbaijan', ben: 'e-Visa £20 (30d)', sarah: 'e-Visa', kids: 'e-Visa', notes: 'ASAN system online' },
+    { country: 'Iran', ben: 'TBC — route decision pending', sarah: 'TBC', kids: 'TBC', notes: 'Political/safety assessment needed' },
+    { country: 'Kazakhstan', ben: 'None (30d)', sarah: 'None', kids: 'None', notes: 'Can extend' },
+    { country: 'Uzbekistan', ben: 'e-Visa (30d)', sarah: 'e-Visa', kids: 'e-Visa', notes: 'Very tourist-friendly now' },
+    { country: 'Kyrgyzstan', ben: 'None (60d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'Tajikistan', ben: 'e-Visa $50 (45d)', sarah: 'e-Visa', kids: 'e-Visa', notes: 'GBAO permit extra $20 for Pamir' },
+    { country: 'India', ben: 'e-Tourist Visa £50', sarah: 'e-Tourist Visa', kids: 'e-Tourist Visa', notes: '60d double entry or 1yr multiple entry' },
+    { country: 'Kenya', ben: 'eTA $30 (90d)', sarah: 'eTA', kids: 'eTA', notes: 'As of 2024 no sticker visa' },
+    { country: 'Tanzania', ben: '$50 single entry', sarah: '$50', kids: '$50', notes: 'KAZA visa for Zambia/Zimbabwe combo' },
+    { country: 'Zambia/Zimbabwe', ben: 'KAZA $50 (univisa)', sarah: 'KAZA $50', kids: 'KAZA $50', notes: 'Valid for both countries' },
+    { country: 'Botswana', ben: 'None (90d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'Namibia', ben: 'None (90d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'South Africa', ben: 'None (90d)', sarah: 'None', kids: 'None', notes: 'Kids need unabridged birth certificate' },
+    { country: 'Singapore', ben: 'None (30d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'Malaysia', ben: 'None (90d)', sarah: 'None', kids: 'None', notes: '' },
+    { country: 'Thailand', ben: 'None (30d)', sarah: 'None', kids: 'None', notes: 'Land border limit — may need tourist visa' },
+    { country: 'Vietnam', ben: 'e-Visa (90d)', sarah: 'e-Visa', kids: 'e-Visa', notes: '' },
+    { country: 'Indonesia', ben: 'Free on arrival (30d)', sarah: 'Free', kids: 'Free', notes: 'Bali only — other islands need visa' },
+    { country: 'Australia', ben: 'ETA (12mo) or WHV', sarah: 'ETA', kids: 'ETA', notes: 'Ben working holiday if age allows; check age limit' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'VISA MATRIX — UK PASSPORTS'));
+  const t = el('table', { className: 'slim-table' });
+  t.appendChild(el('thead', {}, el('tr', {},
+    ...['Country','Ben','Sarah','Kids','Notes'].map(h => el('th', {}, h))
+  )));
+  const tbody = el('tbody');
+  visaData.forEach(v => {
+    tbody.appendChild(el('tr', {},
+      el('td', {}, el('strong', {}, v.country)),
+      el('td', {}, v.ben),
+      el('td', {}, v.sarah),
+      el('td', {}, v.kids),
+      el('td', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, v.notes),
+    ));
+  });
+  t.appendChild(tbody);
+  body.appendChild(t);
+  wrap.appendChild(c);
+  return wrap;
+}
+
+async function renderVaccines() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Recommended vaccines for the full route. Check with travel clinic 8 weeks before departure.'));
+
+  const vaccines = [
+    { vaccine: 'Hepatitis A', who: 'All', schedule: '2 doses, 6-12mo apart', status: 'pending', notes: 'Essential for all destinations' },
+    { vaccine: 'Hepatitis B', who: 'All', schedule: '3 doses over 6 months', status: 'pending', notes: 'Combined Twinrix option' },
+    { vaccine: 'Typhoid', who: 'All', schedule: 'Single dose or oral', status: 'pending', notes: 'Essential for India, Africa, SE Asia' },
+    { vaccine: 'Yellow Fever', who: 'All', schedule: 'Single dose (lifetime)', status: 'pending', notes: 'REQUIRED for Kenya, Uganda — carry certificate' },
+    { vaccine: 'Rabies', who: 'All + Peanut', schedule: '3 doses pre-exposure', status: 'pending', notes: 'Important for remote areas + dog' },
+    { vaccine: 'Meningitis ACWY', who: 'All', schedule: 'Single dose', status: 'pending', notes: 'For Hajj season/Mecca belt if passing' },
+    { vaccine: 'Japanese Encephalitis', who: 'All', schedule: '2 doses over 1 month', status: 'pending', notes: 'For SE Asia + India' },
+    { vaccine: 'Cholera', who: 'All', schedule: 'Oral vaccine 2 doses', status: 'pending', notes: 'Africa + South Asia' },
+    { vaccine: 'Polio booster', who: 'Adults', schedule: 'Single dose (if last was 10y ago)', status: 'pending', notes: 'Required by Pakistan/India for entry if risk area' },
+    { vaccine: 'Tetanus/Diphtheria', who: 'All', schedule: 'Check — boost if >10y', status: 'pending', notes: 'Part of standard UK childhood schedule' },
+    { vaccine: 'MMR', who: 'All', schedule: 'Check — 2 doses needed', status: 'pending', notes: 'Check kids are up to date' },
+    { vaccine: 'Malaria prophylaxis', who: 'All', schedule: 'Ongoing in malarial zones', status: 'pending', notes: 'Not a vaccine — medication (Malarone/Doxycycline). Africa, India, SE Asia.' },
+    { vaccine: 'Rabies (Peanut)', who: 'Peanut', schedule: 'Annual + pet passport', status: 'pending', notes: 'EU pet passport. Tapeworm treatment 1-5d before UK re-entry.' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'VACCINE TRACKER'));
+  const t = el('table', { className: 'slim-table' });
+  t.appendChild(el('thead', {}, el('tr', {},
+    ...['Vaccine','Who','Schedule','Status','Notes'].map(h => el('th', {}, h))
+  )));
+  const tbody = el('tbody');
+  vaccines.forEach(v => {
+    tbody.appendChild(el('tr', {},
+      el('td', {}, el('strong', {}, v.vaccine)),
+      el('td', {}, v.who),
+      el('td', { style: { fontSize:'var(--text-xs)' } }, v.schedule),
+      el('td', {}, el('span', { className: 'pill ' + (v.status === 'done' ? 'pill-ok' : 'pill-cold') }, v.status.toUpperCase())),
+      el('td', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, v.notes),
+    ));
+  });
+  t.appendChild(tbody);
+  body.appendChild(t);
+  wrap.appendChild(c);
+  return wrap;
+}
+
+async function renderDocuments() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Critical documents with expiry dates. Anything expiring within 18 months of departure is flagged.'));
+
+  const docs = [
+    { doc: 'Ben Passport', expiry: '2034-06-01', holder: 'Ben', notes: 'Must be valid past Aug 2029' },
+    { doc: 'Sarah Passport', expiry: '2033-09-01', holder: 'Sarah', notes: '' },
+    { doc: 'Hudson Passport', expiry: '2029-01-01', holder: 'Hudson', notes: 'Renew before departure if <2yr validity' },
+    { doc: 'Benson Passport', expiry: '2030-06-01', holder: 'Benson', notes: '' },
+    { doc: 'Peanut Pet Passport', expiry: null, holder: 'Peanut', notes: 'No expiry but rabies annual renewal required' },
+    { doc: 'Carnet de Passages', expiry: '2028-06-01', holder: 'Vehicle', notes: 'Apply through AA — requires vehicle value deposit' },
+    { doc: 'Vehicle Insurance (worldwide)', expiry: null, holder: 'Arocs', notes: 'Annual renewal — specialist expedition insurer required' },
+    { doc: 'Health Insurance (all)', expiry: null, holder: 'Family', notes: 'Annual — WorldNomads or Battleface' },
+    { doc: 'International Driving Permits', expiry: null, holder: 'Ben + Sarah', notes: 'Annual renewal from Post Office' },
+    { doc: 'Yellow Fever Certificate', expiry: null, holder: 'All', notes: 'Lifetime validity — required for East Africa' },
+  ];
+
+  const departure = new Date('2027-07-01');
+  const warnBefore = new Date(departure);
+  warnBefore.setMonth(warnBefore.getMonth() - 18);
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'DOCUMENT VAULT'));
+  const t = el('table', { className: 'slim-table' });
+  t.appendChild(el('thead', {}, el('tr', {},
+    ...['Document','Holder','Expiry','Status','Notes'].map(h => el('th', {}, h))
+  )));
+  const tbody = el('tbody');
+  docs.forEach(d => {
+    const exp = d.expiry ? new Date(d.expiry) : null;
+    const warn = exp && exp < warnBefore;
+    const ok = exp && exp > departure;
+    tbody.appendChild(el('tr', {},
+      el('td', {}, el('strong', {}, d.doc)),
+      el('td', {}, d.holder),
+      el('td', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)' } }, exp ? exp.toLocaleDateString('en-GB') : 'Ongoing'),
+      el('td', {}, el('span', { className: 'pill ' + (warn ? 'pill-hot' : ok ? 'pill-ok' : 'pill-warm') }, warn ? 'WARN' : ok ? 'OK' : '—')),
+      el('td', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, d.notes),
+    ));
+  });
+  t.appendChild(tbody);
+  body.appendChild(t);
+  wrap.appendChild(c);
+  return wrap;
+}
+
+// ── BUILD ───────────────────────────────────────────────────────────────────
+async function renderBuild() {
+  const wrap = el('div', {});
+
+  const departure = new Date('2027-07-01');
+  const now = new Date();
+  const weeksLeft = Math.ceil((departure - now) / (7 * 86400000));
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '🔨', label: 'Weeks to build deadline', value: weeksLeft, sub: 'truck must be ready Apr 2027' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Build budget', value: '£50k+', sub: 'acquisition + conversion' }));
+  stats.appendChild(statCard({ emoji: '🚛', label: 'Truck', value: 'Arocs 6x6', sub: 'Mercedes — TBC acquisition' }));
+  wrap.appendChild(stats);
+
+  const buildPhases = [
+    { phase: 'Acquisition', status: 'in_progress', items: ['Identify Mercedes Arocs 6x6', 'Survey and inspection', 'Purchase + registration', 'Import if needed'] },
+    { phase: 'Mechanical Prep', status: 'planned', items: ['Full service (engine, gearbox, diffs)', 'Brake system', 'Electrics audit', 'Tyres x8 (6 + 2 spare)'] },
+    { phase: 'Chassis + Armour', status: 'planned', items: ['Underbody skid plates', 'Rock sliders', 'Snorkel', 'Winch + recovery points'] },
+    { phase: 'Living Platform', status: 'planned', items: ['Roof rack + tent', 'Living space / drawer system', 'Fridge (Engel or Dometic)', 'Water tank (80L) + pump + grey tank'] },
+    { phase: 'Power & Comms', status: 'planned', items: ['Solar (400W + controller)', 'Leisure batteries (200Ah+)', 'Inverter', 'Garmin inReach', 'Starlink TBC'] },
+    { phase: 'Media / Content', status: 'planned', items: ['Camera mount points', 'External power for rigs', 'Weather protection for kit', 'Interior lighting for A-roll'] },
+  ];
+
+  const bCard = card({ children: el('div', {}) });
+  const bb = bCard.querySelector('div');
+  bb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'BUILD PHASES'));
+  buildPhases.forEach(p => {
+    const phaseEl = el('div', { className: 'build-phase' });
+    phaseEl.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--space-2)' } },
+      el('h4', {}, p.phase),
+      el('span', { className: 'pill ' + (p.status === 'complete' ? 'pill-ok' : p.status === 'in_progress' ? 'pill-warm' : 'pill-cold') },
+        p.status.replace('_',' ').toUpperCase())
+    ));
+    const ul = el('ul', { style: { margin:'0', paddingLeft:'var(--space-4)', fontSize:'var(--text-sm)', color:'var(--text-secondary)' } });
+    p.items.forEach(item => ul.appendChild(el('li', { style: { marginBottom:'var(--space-1)' } }, item)));
+    phaseEl.appendChild(ul);
+    bb.appendChild(phaseEl);
+  });
+  wrap.appendChild(bCard);
+  return wrap;
+}
+
+async function renderBuildLog() {
+  const wrap = el('div', {});
+
+  let logs = [];
+  try { logs = await proxy('rbtr_build_log', 'select', { order: { column: 'log_date', ascending: false }, limit: 50 }); } catch(e) {}
+  if (!Array.isArray(logs)) logs = [];
+
+  const stats = el('div', { className: 'grid-2', style: { marginBottom:'var(--space-4)' } });
+  const totalHours = logs.reduce((a, r) => a + (r.hours_worked || 0), 0);
+  const totalCost = logs.reduce((a, r) => a + (r.cost_spent || 0), 0);
+  stats.appendChild(statCard({ emoji: '⏱', label: 'Hours logged', value: totalHours.toFixed(1), sub: 'on build' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Spend logged', value: '£' + totalCost.toLocaleString(), sub: 'to date' }));
+  wrap.appendChild(stats);
+
+  const logHost = el('div', {});
+  wrap.appendChild(logHost);
+  function renderLogs() {
+    logHost.innerHTML = '';
+    logHost.appendChild(logTable(logs, [
+      { label: 'Date', key: 'log_date', render: r => r.log_date ? new Date(r.log_date).toLocaleDateString('en-GB') : '—' },
+      { label: 'Hours', key: 'hours_worked' },
+      { label: 'Task', key: 'tasks_done' },
+      { label: 'Parts', key: 'parts_fitted' },
+      { label: 'Cost', render: r => r.cost_spent ? '£' + Number(r.cost_spent).toLocaleString() : '—' },
+    ]));
+  }
+  renderLogs();
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'LOG BUILD DAY'));
+  const form = el('div', {});
+  const dateIn = el('input', { type: 'date', value: new Date().toISOString().split('T')[0] });
+  const hoursIn = el('input', { type: 'number', step: '0.5', min: '0', placeholder: 'Hours' });
+  const tasksIn = el('input', { type: 'text', placeholder: 'Tasks done' });
+  const partsIn = el('input', { type: 'text', placeholder: 'Parts fitted' });
+  const costIn = el('input', { type: 'number', step: '0.01', placeholder: 'Cost £' });
+  const issuesIn = el('input', { type: 'text', placeholder: 'Issues hit (optional)' });
+  const row1 = el('div', { className: 'form-row' });
+  row1.appendChild(dateIn); row1.appendChild(hoursIn); row1.appendChild(costIn);
+  const row2 = el('div', { className: 'form-row' });
+  row2.appendChild(tasksIn);
+  const row3 = el('div', { className: 'form-row' });
+  row3.appendChild(partsIn); row3.appendChild(issuesIn);
+  form.appendChild(row1); form.appendChild(row2); form.appendChild(row3);
+  const saveBtn = button({ label: 'Save', onClick: async () => {
+    if (!hoursIn.value) return;
+    const record = {
+      log_date: dateIn.value,
+      hours_worked: parseFloat(hoursIn.value),
+      tasks_done: tasksIn.value,
+      parts_fitted: partsIn.value,
+      cost_spent: costIn.value ? parseFloat(costIn.value) : null,
+      issues_hit: issuesIn.value,
+    };
+    try {
+      await proxy('rbtr_build_log', 'insert', { record });
+      logs.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderLogs();
+      [hoursIn, tasksIn, partsIn, costIn, issuesIn].forEach(i => { i.value = ''; });
+    } catch(e) { alert('Save failed'); }
+  }});
+  form.appendChild(saveBtn);
+  ab.appendChild(form);
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+// ── ATLAS ───────────────────────────────────────────────────────────────────
+async function renderSponsors() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, '52 targets. Target: £142,990 in sponsorship. Priority engine enhanced in Chunk 3.'));
+
+  let sponsors = [];
+  try { sponsors = await proxy('sponsor_targets', 'select', { order: { column: 'company_name' } }); } catch(e) {}
+  if (!Array.isArray(sponsors)) sponsors = [];
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  const contacted = sponsors.filter(s => s.status && s.status !== 'not_contacted');
+  const interested = sponsors.filter(s => ['hot','warm','interested','proposal_sent'].includes(s.status));
+  const totalValue = sponsors.reduce((a, s) => a + (s.target_value || 0), 0);
+  stats.appendChild(statCard({ emoji: '🤝', label: 'Targets', value: sponsors.length, sub: '52 identified' }));
+  stats.appendChild(statCard({ emoji: '📞', label: 'Contacted', value: contacted.length, sub: 'of ' + sponsors.length }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Potential', value: '£' + Math.round(totalValue / 1000) + 'k', sub: 'target value' }));
+  wrap.appendChild(stats);
+
+  wrap.appendChild(logTable(sponsors, [
+    { label: 'Company', key: 'company_name' },
+    { label: 'Contact', key: 'contact_name' },
+    { label: 'Value', render: r => r.target_value ? '£' + Number(r.target_value).toLocaleString() : '—' },
+    { label: 'Status', render: r => {
+      const cls = { hot:'pill-hot', warm:'pill-warm', cold:'pill-cold', contacted:'pill-warm', not_contacted:'pill-cold' }[r.status] || 'pill-cold';
+      return el('span', { className: 'pill ' + cls }, (r.status || '—').replace(/_/g,' ').toUpperCase());
+    }},
+    { label: 'Last touch', render: r => r.last_contact_date ? new Date(r.last_contact_date).toLocaleDateString('en-GB') : '—' },
+  ]));
+  return wrap;
+}
+
+async function renderProposals() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'SB7 proposal builder. Full generator with 7-section template in Chunk 3.'));
+
+  let proposals = [];
+  try { proposals = await proxy('rbtr_sponsor_proposals', 'select', { order: { column: 'created_at', ascending: false } }); } catch(e) {}
+  if (!Array.isArray(proposals)) proposals = [];
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'PROPOSALS'));
+
+  if (!proposals.length) {
+    ab.appendChild(emptyState({ icon: '📄', title: 'No proposals yet', body: 'Proposals generated in Chunk 3 Atlas build.' }));
+  } else {
+    ab.appendChild(logTable(proposals, [
+      { label: 'Sponsor', key: 'sponsor_name' },
+      { label: 'Amount', render: r => r.ask_amount ? '£' + Number(r.ask_amount).toLocaleString() : '—' },
+      { label: 'Status', render: r => el('span', { className: 'pill pill-cold' }, (r.status || '—').toUpperCase()) },
+      { label: 'Sent', render: r => r.sent_at ? new Date(r.sent_at).toLocaleDateString('en-GB') : '—' },
+    ]));
+  }
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+async function renderSponsorIntel() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Sponsor intelligence reports. Auto-populated by ROCKO in Chunk 3. One card per sponsor showing decision-maker profile, brand values, best-fit pitch angle.'));
+
+  let intel = [];
+  try { intel = await proxy('rbtr_sponsor_intelligence', 'select'); } catch(e) {}
+  if (!Array.isArray(intel)) intel = [];
+
+  if (!intel.length) {
+    wrap.appendChild(emptyState({ icon: '🔍', title: 'No intel yet', body: 'ROCKO generates sponsor intelligence profiles in Chunk 3. Run the Atlas engine to populate.' }));
+  } else {
+    intel.forEach(item => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('strong', {}, item.sponsor_name));
+      if (item.decision_maker) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-1) 0' } }, 'Decision maker: ' + item.decision_maker));
+      if (item.pitch_angle) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', margin:'0' } }, item.pitch_angle));
+      wrap.appendChild(c);
+    });
+  }
+  return wrap;
+}
+
+async function renderAudienceProof() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Layer 5 of ATLAS v2 — Audience Proof Dashboard. Shows audience credibility metrics for sponsor conversations.'));
+
+  let snapshots = [];
+  try { snapshots = await proxy('rbtr_audience_snapshots', 'select', { order: { column: 'snapshot_date', ascending: false }, limit: 10 }); } catch(e) {}
+  if (!Array.isArray(snapshots)) snapshots = [];
+
+  const latest = snapshots[0] || {};
+  const yt = latest.youtube_subs || 0;
+  const ig = latest.instagram_followers || 0;
+  const tk = latest.tiktok_followers || 0;
+  const em = latest.email_subscribers || 0;
+  const total = yt + ig + tk + em;
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '▶️', label: 'YouTube', value: yt.toLocaleString(), sub: 'subscribers' }));
+  stats.appendChild(statCard({ emoji: '📸', label: 'Instagram', value: ig.toLocaleString(), sub: 'followers' }));
+  stats.appendChild(statCard({ emoji: '🎵', label: 'TikTok', value: tk.toLocaleString(), sub: 'followers' }));
+  wrap.appendChild(stats);
+  const stats2 = el('div', { className: 'grid-2', style: { marginBottom:'var(--space-4)' } });
+  stats2.appendChild(statCard({ emoji: '✉️', label: 'Email', value: em.toLocaleString(), sub: 'subscribers' }));
+  stats2.appendChild(statCard({ emoji: '📊', label: 'Total audience', value: total.toLocaleString(), sub: 'combined' }));
+  wrap.appendChild(stats2);
+
+  let resurrection = [];
+  try { resurrection = await proxy('rbtr_account_resurrection', 'select'); } catch(e) {}
+  if (Array.isArray(resurrection) && resurrection.length) {
+    const rc = card({ children: el('div', {}) });
+    const rb = rc.querySelector('div');
+    rb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'ACCOUNT RESURRECTION STATUS'));
+    resurrection.forEach(acc => {
+      const row = el('div', { style: { display:'flex', justifyContent:'space-between', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)' } });
+      row.appendChild(el('span', {}, acc.platform));
+      row.appendChild(el('span', { className: 'pill ' + (acc.status === 'active' ? 'pill-ok' : 'pill-warm') }, (acc.status || '—').toUpperCase()));
+      rb.appendChild(row);
+    });
+    wrap.appendChild(rc);
+  }
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'LOG AUDIENCE SNAPSHOT'));
+  const form = el('div', {});
+  const dateIn = el('input', { type: 'date', value: new Date().toISOString().split('T')[0] });
+  const ytIn = el('input', { type: 'number', placeholder: 'YouTube subs' });
+  const igIn = el('input', { type: 'number', placeholder: 'Instagram followers' });
+  const tkIn = el('input', { type: 'number', placeholder: 'TikTok followers' });
+  const emIn = el('input', { type: 'number', placeholder: 'Email subscribers' });
+  const r1 = el('div', { className: 'form-row' }); r1.appendChild(dateIn); r1.appendChild(ytIn); r1.appendChild(igIn);
+  const r2 = el('div', { className: 'form-row' }); r2.appendChild(tkIn); r2.appendChild(emIn);
+  form.appendChild(r1); form.appendChild(r2);
+  form.appendChild(button({ label: 'Save snapshot', onClick: async () => {
+    const record = {
+      snapshot_date: dateIn.value,
+      youtube_subs: parseInt(ytIn.value) || 0,
+      instagram_followers: parseInt(igIn.value) || 0,
+      tiktok_followers: parseInt(tkIn.value) || 0,
+      email_subscribers: parseInt(emIn.value) || 0,
+    };
+    try {
+      await proxy('rbtr_audience_snapshots', 'insert', { record });
+      C.toast({ message: 'Snapshot saved', type: 'success' });
+      [ytIn, igIn, tkIn, emIn].forEach(i => { i.value = ''; });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  ab.appendChild(form);
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+// ── GUY MARTIN PATHWAY ───────────────────────────────────────────────────────
+async function renderGuyMartin() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'ATLAS v2 Layer 8: The Guy Martin pathway. 5 stages. Do not rush Stage 2 — audience threshold applies.'));
+
+  let pathway = {};
+  try {
+    const rows = await proxy('rbtr_guy_martin_pathway', 'select');
+    if (Array.isArray(rows) && rows.length) pathway = rows[0];
+  } catch(e) {}
+
+  const currentStage = pathway.current_stage || 1;
+
+  const stages = [
+    {
+      stage: 1,
+      name: "DON'T — Build audience first",
+      window: 'May–Jul 2026',
+      status: currentStage > 1 ? 'complete' : currentStage === 1 ? 'active' : 'locked',
+      desc: "Do nothing about Guy Martin until August 2026. Build audience. Threshold: 70,000 combined audience before Stage 2. " +
+            "Reaching out too early kills the opportunity — he'll see a small channel and say no.",
+      checklist: [
+        'Combined audience: 70,000 required before Stage 2',
+        'YouTube monetised (1,000 subs + 4,000 watch hours)',
+        'Instagram 15,000+ followers',
+        'At least 3 uploaded videos with expedition content',
+      ],
+    },
+    {
+      stage: 2,
+      name: 'LETTER — Draft the approach',
+      window: 'Aug 2026',
+      status: currentStage > 2 ? 'complete' : currentStage === 2 ? 'active' : 'locked',
+      desc: "Write the letter. Not an email — a letter. Direct to his management (Off Limits TV / DV8 PR). " +
+            "One page. The hook: we're not asking him to come — we're asking if he has an opinion on what we're doing. " +
+            "Include a 45-second edit of the most compelling build/route footage.",
+      checklist: [
+        'Letter written and reviewed by Nate',
+        '45-second edit created',
+        'Management contact confirmed (DV8 PR)',
+        'Physical address confirmed',
+        'Sent via recorded post',
+      ],
+    },
+    {
+      stage: 3,
+      name: 'FOLLOW-UP — 4-week lockout',
+      window: 'Sep 2026',
+      status: currentStage > 3 ? 'complete' : currentStage === 3 ? 'active' : 'locked',
+      desc: "Wait exactly 4 weeks after letter sent. No chasing before. If no response after 4 weeks, one email to management. " +
+            "Subject: following up on letter from 4 weeks prior. One sentence. No waffle.",
+      checklist: [
+        'Letter sent date logged',
+        '4-week lockout respected',
+        'Follow-up email sent (one only)',
+      ],
+    },
+    {
+      stage: 4,
+      name: 'DECISION — Response logged',
+      window: 'Oct 2026+',
+      status: currentStage > 4 ? 'complete' : currentStage === 4 ? 'active' : 'locked',
+      desc: "Three outcomes: Yes → go to Stage 5. No → accept it, build audience bigger, try in 12 months. No response → treat as No for now.",
+      checklist: [
+        'Response (or no-response decision) logged',
+        'Response type: yes / no / no response',
+        'If yes: terms discussed',
+        'If no: next attempt date set (12 months)',
+      ],
+    },
+    {
+      stage: 5,
+      name: 'LEGAL STRUCTURING — If yes',
+      window: 'Oct–Dec 2026',
+      status: currentStage >= 5 ? 'active' : 'locked',
+      desc: "If Stage 4 returned a Yes: structure the deal. Revenue share only — no equity. Guy gets % of sponsorship deals he actively enables. " +
+            "Check with Debt Line that DRO/StepChange doesn't affect revenue share receipt. Legal review required before signing.",
+      checklist: [
+        'Debt Line consulted — DRO compatibility confirmed',
+        'Deal structure agreed (revenue share only)',
+        'Legal review of terms',
+        'Revenue share running total tracker set up',
+      ],
+    },
+  ];
+
+  stages.forEach(s => {
+    const c = el('div', { className: 'stage-card ' + (s.status === 'active' ? 'active' : s.status === 'complete' ? 'complete' : 'locked') });
+    c.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--space-2)' } },
+      el('div', {},
+        el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginRight:'var(--space-2)' } }, 'STAGE ' + s.stage),
+        el('strong', {}, s.name)
+      ),
+      el('div', {},
+        el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginRight:'var(--space-2)' } }, s.window),
+        el('span', { className: 'pill ' + (s.status === 'active' ? 'pill-warm' : s.status === 'complete' ? 'pill-ok' : 'pill-cold') }, s.status.toUpperCase())
+      )
+    ));
+    c.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-3)' } }, s.desc));
+    s.checklist.forEach(item => {
+      const row = el('div', { className: 'checklist-item' });
+      const cb = el('input', { type:'checkbox' });
+      cb.disabled = s.status === 'locked';
+      row.appendChild(cb);
+      row.appendChild(el('label', {}, item));
+      c.appendChild(row);
+    });
+    if (s.status === 'active') {
+      c.appendChild(el('div', { style: { marginTop:'var(--space-3)' } },
+        button({ label: 'Log progress', size: 'sm', onClick: () => {
+          const notes = prompt('Notes for Stage ' + s.stage + ':');
+          if (!notes) return;
+          proxy('rbtr_guy_martin_pathway', 'upsert', {
+            record: { id: pathway.id || undefined, current_stage: currentStage, stage_notes: notes, updated_at: new Date().toISOString() },
+            on_conflict: 'id'
+          });
+          C.toast({ message: 'Progress logged', type: 'success' });
+        }})
+      ));
+    }
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ── CONTENT ─────────────────────────────────────────────────────────────────
+async function renderContentStrategy() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Strategy', render: (host) => {
+      const pillars = [
+        { name: 'The Build', desc: 'Truck build process — raw, unpolished, real. The mess is the content. Parts failing, welding going wrong, Ben frustrated in the yard.', format: 'Short clips + monthly long-form' },
+        { name: 'The Why', desc: "Why a 41-year-old dad is preparing to drive to Australia. Life context, family context, the debt, the decisions. Vulnerable but not weak.", format: 'Monthly narrative video' },
+        { name: 'The World', desc: 'Route research, visa challenges, country prep, logistical nightmares. Makes the destination real before departure.', format: 'Short + occasional long-form' },
+        { name: 'The Family', desc: 'Hudson, Benson, Peanut, Sarah. Not Instagram-perfect — real. Dogs in garages, kids watching Dad weld, Sarah being honest.', format: 'Occasional — led by them wanting to feature' },
+        { name: 'The Sponsors', desc: 'Transparent sponsor integration. Why we chose them, how they fit, what they provide. Trust = audience stays.', format: 'As sponsors are signed' },
+      ];
+      pillars.forEach(p => {
+        const c = card({ children: el('div', {}) });
+        const body = c.querySelector('div');
+        body.appendChild(el('strong', {}, p.name));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-2) 0' } }, p.desc));
+        body.appendChild(el('span', { className: 'pill pill-cold', style: { fontSize:'var(--text-xs)' } }, p.format));
+        host.appendChild(c);
+      });
+    }},
+    { label: 'First Video', render: (host) => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'THE FIRST VIDEO — SCRIPT OUTLINE'));
+      const points = [
+        'Open: Ben on-camera. Direct. No B-roll. "I\'m driving to Australia. No flight. No shortcuts. Five years, 45 countries, a six-wheel-drive truck I haven\'t bought yet."',
+        'The stakes: the debt, the departure date, what\'s been building. Two minutes of honesty about why this has to happen.',
+        'The truck: show the spec sheet, show the research. The vision is clear even if the truck isn\'t in the yard yet.',
+        'The route: 45-country map. Each shipping leg explained. The family.',
+        'Close: "I\'m Ben. I don\'t know if this will work. But it starts today." — then the channel name, subscribe.',
+        'Length: 8-12 minutes. One take with no presenter script — just bullet points.',
+      ];
+      const ul = el('ul', { style: { paddingLeft:'var(--space-4)', margin:'0' } });
+      points.forEach(p => ul.appendChild(el('li', { style: { marginBottom:'var(--space-2)', fontSize:'var(--text-sm)' } }, p)));
+      body.appendChild(ul);
+      host.appendChild(c);
+    }},
+    { label: 'Channel Plan', render: (host) => {
+      const plan = [
+        { platform: 'YouTube', handle: '@RBTRexpedition', target: '1,000 subs by Aug 2026, 10k by Jan 2027', cadence: 'Twice monthly long-form, weekly shorts' },
+        { platform: 'Instagram', handle: '@rbtradventure', target: '10k by Sep 2026, 25k by Jan 2027', cadence: 'Daily stories, 4x/week posts, 2x reels/week' },
+        { platform: 'TikTok', handle: '@rbtrexpedition', target: '5k by Sep 2026', cadence: '3-5x/week short clips from build' },
+        { platform: 'Newsletter', handle: 'Substack / Beehiiv TBC', target: '1,000 subscribers by Jan 2027', cadence: 'Weekly 5-minute read every Sunday' },
+      ];
+      plan.forEach(p => {
+        const c = card({ children: el('div', {}) });
+        const body = c.querySelector('div');
+        body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-2)' } },
+          el('strong', {}, p.platform),
+          el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, p.handle)
+        ));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, 'Target: ' + p.target));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, 'Cadence: ' + p.cadence));
+        host.appendChild(c);
+      });
+    }},
+  ], wrap);
+  return wrap;
+}
+
+async function renderContentPublishing() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Scheduler', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Content calendar scheduler. Tie to social media scheduling tools (Buffer/Later/Publer) when accounts are active.'));
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'WEEKLY TEMPLATE'));
+      const schedule = [
+        { day: 'Monday', platform: 'Instagram', type: 'Build photo or quote card' },
+        { day: 'Tuesday', platform: 'TikTok', type: 'Short clip from build footage' },
+        { day: 'Wednesday', platform: 'Instagram', type: 'Behind-the-scenes story sequence' },
+        { day: 'Thursday', platform: 'TikTok + Instagram', type: 'Reel — "Day in the life" or location content' },
+        { day: 'Friday', platform: 'YouTube', type: 'Short — under 60 seconds build update' },
+        { day: 'Saturday', platform: 'Instagram', type: 'Personal content — family or mindset' },
+        { day: 'Sunday', platform: 'Newsletter', type: 'Weekly dispatch — 500 words' },
+      ];
+      schedule.forEach(s => {
+        const row = el('div', { style: { display:'flex', gap:'var(--space-3)', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } });
+        row.appendChild(el('span', { style: { width:'100px', flexShrink:'0', fontWeight:'600' } }, s.day));
+        row.appendChild(el('span', { style: { color:'var(--text-secondary)', width:'140px', flexShrink:'0' } }, s.platform));
+        row.appendChild(el('span', { style: { color:'var(--text-secondary)' } }, s.type));
+        body.appendChild(row);
+      });
+      host.appendChild(c);
+    }},
+    { label: 'Account Resurrection', render: async (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Bringing dormant RBTR accounts back to life. Instagram + YouTube resurrection plan.'));
+      let accounts = [];
+      try { accounts = await proxy('rbtr_account_resurrection', 'select'); } catch(e) {}
+      if (!Array.isArray(accounts)) accounts = [];
+      const resurrection_plan = [
+        'Week 1: Post 7 days straight — no gaps. Algorithm needs to see consistency.',
+        'Week 2: Engage on 50 accounts per day in your niche. Real comments only.',
+        'Week 3: Collaborate — ask one bigger creator for a mention or duet.',
+        'Week 4: First paid push — boost top-performing post to relevant audience.',
+        "Month 2: Pin best video, update bio and header. A/B test two hooks per week.",
+      ];
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'RESURRECTION PROTOCOL'));
+      resurrection_plan.forEach((step, i) => {
+        body.appendChild(el('div', { style: { display:'flex', gap:'var(--space-2)', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } },
+          el('span', { style: { color:'var(--text-secondary)', width:'20px', flexShrink:'0' } }, String(i + 1)),
+          el('span', {}, step)
+        ));
+      });
+      host.appendChild(c);
+      if (accounts.length) {
+        const ac = card({ children: el('div', {}) });
+        const ab = ac.querySelector('div');
+        ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'ACCOUNT STATUS'));
+        accounts.forEach(acc => {
+          const row = el('div', { style: { display:'flex', justifyContent:'space-between', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)' } });
+          row.appendChild(el('span', {}, acc.platform + (acc.handle ? ' · ' + acc.handle : '')));
+          row.appendChild(el('span', { className: 'pill ' + (acc.status === 'active' ? 'pill-ok' : 'pill-warm') }, (acc.status||'—').toUpperCase()));
+          ab.appendChild(row);
+        });
+        host.appendChild(ac);
+      }
+    }},
+    { label: 'Perfectionism Override', render: (host) => {
+      const rules = [
+        { rule: 'Ship it imperfect', detail: 'An imperfect video that ships beats a perfect video that never posts. Always.' },
+        { rule: 'B-camera for A-moments', detail: 'Stop waiting for perfect light / perfect setting. The iPhone in your pocket is the camera if the moment is right.' },
+        { rule: 'No second-guessing uploads', detail: 'When the content is ready, it goes live within 24 hours. No holding it "one more day" to tweak.' },
+        { rule: 'Response rate over quality', detail: 'Audience responds to consistency more than polish. 20 videos beats 2 polished ones, always.' },
+        { rule: 'Discomfort is the signal', detail: 'If you\'re uncomfortable posting it, that\'s usually the content that performs best. Post it.' },
+        { rule: '20-minute edit rule', detail: 'Short content caps at 20 minutes of editing. After that, ship it. Long-form: cap at 3 edit passes.' },
+      ];
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'PERFECTIONISM OVERRIDE RULES'));
+      rules.forEach(r => {
+        const row = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+        row.appendChild(el('strong', { style: { fontSize:'var(--text-sm)' } }, r.rule));
+        row.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-1) 0 0' } }, r.detail));
+        body.appendChild(row);
+      });
+      host.appendChild(c);
+    }},
+  ], wrap);
+  return wrap;
+}
+
+async function renderContentProduction() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Media Vault', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Master media library. Footage log for video production. Connect to cloud storage when ready.'));
+      const categories = ['Build', 'Route Research', 'Talking Head', 'B-Roll', 'Family', 'Misc'];
+      const grid = el('div', { className: 'grid-2' });
+      categories.forEach(cat => {
+        const c = card({ children: el('div', {},
+          el('strong', {}, cat),
+          el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-1) 0 0' } }, '0 clips logged')
+        )});
+        grid.appendChild(c);
+      });
+      host.appendChild(grid);
+      host.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginTop:'var(--space-3)' } }, 'Clip logging UI and Supabase Storage integration — Phase 1.7.'));
+    }},
+    { label: 'B-Roll Extraction', render: (host) => {
+      const targets = [
+        { scene: 'Warehouse morning', desc: 'Ben arriving at PSNM 5:30am. Forklift loading. Pallets stacking.', priority: 'high' },
+        { scene: 'Garage build footage', desc: 'Any work on truck/van. Even if truck not acquired yet — the research and spec work.', priority: 'high' },
+        { scene: 'Family morning', desc: 'Kids breakfast, school run, normal life before the expedition.', priority: 'medium' },
+        { scene: 'Rotherham / Barnsley', desc: 'B-roll of home area — context for the "why we\'re leaving" narrative.', priority: 'medium' },
+        { scene: 'Night-time planning', desc: 'Maps on screen, route books, atlas on the table.', priority: 'high' },
+        { scene: 'Peanut', desc: 'Dog needs to feature. Get footage of Peanut now — pre-expedition character building.', priority: 'medium' },
+      ];
+      targets.forEach(t => {
+        const c = card({ children: el('div', {}) });
+        const body = c.querySelector('div');
+        body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+          el('strong', {}, t.scene),
+          el('span', { className: 'pill ' + (t.priority === 'high' ? 'pill-hot' : 'pill-warm') }, t.priority.toUpperCase())
+        ));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, t.desc));
+        host.appendChild(c);
+      });
+    }},
+    { label: 'Editing Tools', render: (host) => {
+      const tools = [
+        { tool: 'DaVinci Resolve', use: 'Primary edit — long form YouTube', status: 'installed' },
+        { tool: 'CapCut', use: 'Quick turnaround — TikTok and Reels', status: 'installed' },
+        { tool: 'Descript', use: 'Transcript-based editing for talking head', status: 'trial' },
+        { tool: 'Eleven Labs', use: 'Voice-over + ROCKO morning brief', status: 'active' },
+        { tool: 'Adobe Premiere', use: 'Backup / collaboration with editor', status: 'not installed' },
+        { tool: 'Canva', use: 'Thumbnails, social graphics, newsletter header', status: 'active' },
+      ];
+      const t = el('table', { className: 'slim-table' });
+      t.appendChild(el('thead', {}, el('tr', {},
+        ...['Tool','Use','Status'].map(h => el('th', {}, h))
+      )));
+      const tbody = el('tbody');
+      tools.forEach(tool => {
+        tbody.appendChild(el('tr', {},
+          el('td', {}, el('strong', {}, tool.tool)),
+          el('td', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)' } }, tool.use),
+          el('td', {}, el('span', { className: 'pill ' + (tool.status === 'active' || tool.status === 'installed' ? 'pill-ok' : tool.status === 'trial' ? 'pill-warm' : 'pill-cold') }, tool.status.toUpperCase()))
+        ));
+      });
+      t.appendChild(tbody);
+      host.appendChild(t);
+    }},
+  ], wrap);
+  return wrap;
+}
+
+async function renderPodcast() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Podcast: working title "Through Heartache". Interview format — builders, adventurers, people who left and stayed gone.'));
+
+  const episodes = [
+    { ep: 1, title: 'Why Leave?', status: 'concept', guest: 'Ben (solo)', desc: 'The origin story. Why a 41-year-old dad decides to drive to Australia.' },
+    { ep: 2, title: 'The Truck', status: 'concept', guest: 'Build expert TBC', desc: 'Mercedes 6x6 expedition builds — what it takes.' },
+    { ep: 3, title: 'The Money', status: 'concept', guest: 'Nate TBC', desc: 'Building an income while preparing for 5 years away.' },
+    { ep: 4, title: 'The Audience', status: 'concept', guest: 'Creator TBC', desc: 'Building a following before you have anything to show.' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'EPISODE PIPELINE'));
+  episodes.forEach(e => {
+    const row = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+    row.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+      el('strong', {}, 'Ep ' + e.ep + ': ' + e.title),
+      el('span', { className: 'pill pill-cold' }, e.status.toUpperCase())
+    ));
+    row.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, 'Guest: ' + e.guest));
+    row.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, e.desc));
+    body.appendChild(row);
+  });
+  wrap.appendChild(c);
+  return wrap;
+}
+
+async function renderGear() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Camera and production gear. Build out as gear is acquired. Weight and waterproofing are critical constraints for expedition use.'));
+
+  const gear = [
+    { category: 'Primary camera', item: 'Sony A7IV (or similar)', status: 'TBC', weight: '650g body', notes: 'FF, dual card, excellent autofocus' },
+    { category: 'Secondary / action', item: 'GoPro Hero 12', status: 'owned', weight: '150g', notes: 'Mounted on truck exterior, helmet' },
+    { category: 'Audio', item: 'Røde Wireless GO II', status: 'TBC', weight: '30g', notes: 'Lapel for walking segments' },
+    { category: 'Stabilisation', item: 'DJI RS3 Mini', status: 'TBC', weight: '790g with camera', notes: 'Gimbal for B-roll and walking shots' },
+    { category: 'Drone', item: 'DJI Mini 4 Pro', status: 'TBC', weight: '249g', notes: 'Under 250g — most countries no drone license' },
+    { category: 'Storage', item: 'CFexpress B + SD (x8)', status: 'TBC', weight: 'Negligible', notes: '512GB each. 12-month supply.' },
+    { category: 'Power', item: 'Anker charging hub + truck 12V', status: 'TBC', weight: '—', notes: 'Shore power + solar both charge' },
+    { category: 'Laptop', item: 'MacBook Pro M3 14"', status: 'owned', weight: '1.55kg', notes: 'Edit in-field. 18hr battery.' },
+    { category: 'Backup', item: 'Crucial X9 Pro 4TB (x2)', status: 'TBC', weight: '40g each', notes: 'Offload every SD card daily. Redundant backups.' },
+  ];
+
+  const byCategory = {};
+  gear.forEach(g => {
+    if (!byCategory[g.category]) byCategory[g.category] = [];
+    byCategory[g.category].push(g);
+  });
+
+  Object.entries(byCategory).forEach(([cat, items]) => {
+    items.forEach(g => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+        el('div', {},
+          el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginRight:'var(--space-2)' } }, cat.toUpperCase()),
+          el('strong', {}, g.item)
+        ),
+        el('span', { className: 'pill ' + (g.status === 'owned' ? 'pill-ok' : 'pill-cold') }, g.status.toUpperCase())
+      ));
+      body.appendChild(el('div', { style: { display:'flex', gap:'var(--space-4)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginTop:'var(--space-1)' } },
+        el('span', {}, g.weight),
+        el('span', {}, g.notes)
+      ));
+      wrap.appendChild(c);
+    });
+  });
+  return wrap;
+}
+
+async function renderMerch() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Merch planning. Keep it simple: one quality product at launch. Expansion based on what audience asks for.'));
+
+  const ideas = [
+    { item: 'RBTR patch', status: 'concept', priority: 'high', notes: 'Iron-on. Put it on your bag, your jacket, your tent. £8-12. Low risk.' },
+    { item: 'Route map print', status: 'concept', priority: 'high', notes: 'A2/A3 print of the 45-country route. £20-25. Limited print run.' },
+    { item: 'RBTR trucker cap', status: 'concept', priority: 'medium', notes: 'Logo on front. £25-30. Richardson 112 or similar.' },
+    { item: 'Sticker pack', status: 'concept', priority: 'high', notes: 'Truck sticker, RBTR logo, route map. Free or £5 bundle. Gifted first 100.' },
+    { item: 'Expedition journal', status: 'concept', priority: 'low', notes: 'Branded notebook. Phase 2 — depends on audience size.' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'PRODUCT IDEAS'));
+  ideas.forEach(i => {
+    const row = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+    row.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+      el('strong', {}, i.item),
+      el('span', { className: 'pill ' + (i.priority === 'high' ? 'pill-warm' : 'pill-cold') }, i.priority.toUpperCase())
+    ));
+    row.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, i.notes));
+    body.appendChild(row);
+  });
+  wrap.appendChild(c);
+  return wrap;
+}
+
+async function renderAudienceEmails() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Email templates for RBTR audience — subscribers, welcome sequences, expedition updates.'));
+
+  const templates = [
+    {
+      name: 'Welcome — new subscriber',
+      subject: 'Welcome — you\'re in on something',
+      body: `Hi,
+
+Thanks for subscribing.
+
+I'm Ben. I'm a 41-year-old dad from Rotherham, and I'm preparing to drive a six-wheel-drive truck from South Yorkshire to Burleigh Heads, Queensland, Australia. 45 countries. Five years. Three shipping legs.
+
+This newsletter is where the real stuff happens — not the polished version on YouTube, but the actual weekly update on the build, the finances, the setbacks, and the decisions.
+
+It's free. It'll stay free. And I'll never try to sell you something that doesn't belong in an expedition vehicle.
+
+Thanks for being here.
+
+Ben`
+    },
+    {
+      name: 'Monthly expedition update',
+      subject: 'RBTR Update — {{month}} {{year}}',
+      body: `{{month}} {{year}} update.
+
+**Build:** {{build_progress}}
+
+**Audience:** {{audience_total}} combined. {{audience_change}} this month.
+
+**Finance:** {{finance_note}}
+
+**Family:** {{family_note}}
+
+**Next month:** {{next_month_plan}}
+
+If you've got questions or know someone who'd find this useful — forward this on.
+
+Ben`
+    },
+    {
+      name: 'Sponsor announcement',
+      subject: '{{sponsor_name}} are coming with us',
+      body: `Big news.
+
+{{sponsor_name}} are sponsoring the RBTR expedition.
+
+Here's why this works: {{why_sponsor_fits}}
+
+Here's what they're providing: {{sponsor_offering}}
+
+I'll be honest about this the whole way — if something they make doesn't perform in the field, I'll say so. That's the only way trust works.
+
+More on this in the next video.
+
+Ben`
+    },
+  ];
+
+  templates.forEach(t => {
+    const c = card({ children: el('div', {}) });
+    const body = c.querySelector('div');
+    body.appendChild(el('strong', {}, t.name));
+    body.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', margin:'var(--space-1) 0' } }, 'Subject: ' + t.subject));
+    const pre = el('pre', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'var(--bg-secondary)', padding:'var(--space-3)', borderRadius:'var(--radius-sm)', margin:'var(--space-2) 0 0', maxHeight:'200px', overflowY:'auto' } });
+    pre.textContent = t.body;
+    body.appendChild(pre);
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+async function renderCommunity() {
+  const wrap = el('div', {});
+  tabs([
+    { label: 'Audience', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Audience engagement. Comments, DMs, super fans. Log key interactions and community builders.'));
+      host.appendChild(emptyState({ icon: '👥', title: 'No audience data yet', body: 'Start logging audience interactions as the channel grows.' }));
+    }},
+    { label: 'Guests', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Podcast and YouTube guest pipeline. Outreach, status, scheduling.'));
+      const guests = [
+        { name: 'Guy Martin', angle: 'Expedition + motorcycles + being your own person', status: 'Stage 1 — do not contact yet', tier: '1' },
+        { name: 'Charley Boorman', angle: 'Long-distance overlanding — Africa + The Americas', status: 'concept', tier: '1' },
+        { name: 'Local overlander TBC', angle: 'Someone who has done Africa overland — peer level guest', status: 'to identify', tier: '2' },
+      ];
+      guests.forEach(g => {
+        const c = card({ children: el('div', {}) });
+        const body = c.querySelector('div');
+        body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+          el('strong', {}, g.name),
+          el('span', { className: 'pill pill-cold' }, 'TIER ' + g.tier)
+        ));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, g.angle));
+        body.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', margin:'0' } }, 'Status: ' + g.status));
+        host.appendChild(c);
+      });
+    }},
+    { label: 'Subscribers', render: (host) => {
+      host.appendChild(el('p', { className: 'section-note' }, 'Email subscriber management. Segments, engagement rates, growth tracking.'));
+      host.appendChild(emptyState({ icon: '✉️', title: 'No subscribers yet', body: 'Connect Beehiiv or Substack when newsletter launches.' }));
+    }},
+  ], wrap);
+  return wrap;
+}
+
+async function renderSocial() {
+  const wrap = el('div', {});
+  const platforms = [
+    { name: 'YouTube', handle: '@RBTRexpedition', url: '#', status: 'dormant' },
+    { name: 'Instagram', handle: '@rbtradventure', url: '#', status: 'dormant' },
+    { name: 'TikTok', handle: '@rbtrexpedition', url: '#', status: 'not started' },
+    { name: 'Facebook', handle: 'RBTR Expedition', url: '#', status: 'not started' },
+  ];
+  platforms.forEach(p => {
+    const c = card({ children: el('div', {}) });
+    const body = c.querySelector('div');
+    body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center' } },
+      el('div', {},
+        el('strong', {}, p.name),
+        el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginLeft:'var(--space-2)' } }, p.handle)
+      ),
+      el('span', { className: 'pill ' + (p.status === 'active' ? 'pill-ok' : p.status === 'dormant' ? 'pill-warm' : 'pill-cold') }, p.status.toUpperCase())
+    ));
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ── PORTAL CONFIG ────────────────────────────────────────────────────────────
 const RBTR_PORTAL = {
   id: 'rbtr',
   name: 'RBTR',
@@ -56,45 +1384,43 @@ const RBTR_PORTAL = {
   tagline: 'Expedition · Build · Content · Audience',
   access: ['ben'],
   liveStatFetcher: async () => {
-    try {
-      const r = await fetch('/api/briefing-data');
-      const j = await r.json();
-      return (j.data?.days_to_departure ?? '—') + 'd to depart';
-    } catch { return '—'; }
+    const days = daysUntil('2027-07-01');
+    return days + 'd to depart';
   },
   sections: [
-    { id: 'dashboard',         group: 'OVERVIEW',    label: 'Dashboard',      emoji: '📊', render: renderRbtrDashboard, default: true },
-    { id: 'route',             group: 'EXPEDITION',  label: 'Route',          emoji: '🗺', iframeHash: '#sec-route' },
-    { id: 'route-full',        group: 'EXPEDITION',  label: 'Route Full',     emoji: '🗺', iframeHash: '#sec-route-full' },
-    { id: 'livemap',           group: 'EXPEDITION',  label: 'Live Map',       emoji: '📍', iframeHash: '#sec-livemap' },
-    { id: 'itinerary',         group: 'EXPEDITION',  label: 'Itinerary',      emoji: '📅', iframeHash: '#sec-itinerary' },
-    { id: 'visas',             group: 'EXPEDITION',  label: 'Visas',          emoji: '🛂', iframeHash: '#sec-visas' },
-    { id: 'vaccines',          group: 'EXPEDITION',  label: 'Vaccines',       emoji: '💉', iframeHash: '#sec-vaccines' },
-    { id: 'pre-departure',     group: 'EXPEDITION',  label: 'Pre-Departure',  emoji: '✈️', iframeHash: '#sec-predeparture' },
-    { id: 'documents',         group: 'EXPEDITION',  label: 'Documents',      emoji: '📁', iframeHash: '#sec-documents' },
-    { id: 'countdown',         group: 'EXPEDITION',  label: 'Countdown',      emoji: '⏳', iframeHash: '#sec-countdown' },
-    { id: 'build',             group: 'BUILD',       label: 'Build',          emoji: '🔧', iframeHash: '#sec-build' },
-    { id: 'gear',              group: 'BUILD',       label: 'Gear',           emoji: '📦', iframeHash: '#sec-gear' },
-    { id: 'skills',            group: 'BUILD',       label: 'Skills',         emoji: '🛠', iframeHash: '#sec-skills' },
-    { id: 'gates',             group: 'BUILD',       label: 'Three Gates',    emoji: '🚪', iframeHash: '#sec-gates' },
-    { id: 'first-video',       group: 'CONTENT',     label: 'First Video',    emoji: '🎬', iframeHash: '#sec-firstvideo' },
-    { id: 'channel',           group: 'CONTENT',     label: 'Channel Transition', emoji: '📺', iframeHash: '#sec-channel' },
-    { id: 'customer-emails',   group: 'CONTENT',     label: 'Customer Emails',emoji: '✉️', iframeHash: '#sec-custemer-emails' },
-    { id: 'scheduler',         group: 'CONTENT',     label: 'Social Scheduler',emoji: '📲', iframeHash: '#sec-scheduler' },
-    { id: 'broll',             group: 'CONTENT',     label: 'B-Roll',         emoji: '🎞', iframeHash: '#sec-broll' },
-    { id: 'media-plan',        group: 'CONTENT',     label: 'Media Plan',     emoji: '🎨', iframeHash: '#sec-mediaplan' },
-    { id: 'media-vault',       group: 'CONTENT',     label: 'Media Vault',    emoji: '🎭', iframeHash: '#sec-media' },
-    { id: 'editing',           group: 'CONTENT',     label: 'Editing',        emoji: '✂️', iframeHash: '#sec-editing' },
-    { id: 'podcast',           group: 'CONTENT',     label: 'Podcast',        emoji: '🎙', iframeHash: '#sec-podcast' },
-    { id: 'guests',            group: 'CONTENT',     label: 'Guests',         emoji: '🎤', iframeHash: '#sec-guests' },
-    { id: 'resurrection',      group: 'CONTENT',     label: 'Resurrection',   emoji: '📢', iframeHash: '#sec-resurrection' },
-    { id: 'content-override',  group: 'CONTENT',     label: 'Content Override',emoji: '🛡', iframeHash: '#sec-contentoverride' },
-    { id: 'sponsors',          group: 'COMMERCIAL',  label: 'Sponsors',       emoji: '🤝', iframeHash: '#sec-sponsors' },
-    { id: 'proposals',         group: 'COMMERCIAL',  label: 'Proposals',      emoji: '📄', iframeHash: '#sec-proposals' },
-    { id: 'merch',             group: 'COMMERCIAL',  label: 'Merch',          emoji: '👕', iframeHash: '#sec-merch' },
-    { id: 'subscribers',       group: 'COMMERCIAL',  label: 'Subscribers',    emoji: '📧', iframeHash: '#sec-subscribers' },
-    { id: 'audience',          group: 'COMMERCIAL',  label: 'Audience',       emoji: '📊', iframeHash: '#sec-audience' },
-    { id: 'colab-debt',        group: 'LEGAL',       label: 'Colab Debt',     emoji: '⚖️', iframeHash: '#sec-colab' },
+    // Mission Control
+    { id: 'countdown',           group: 'MISSION CONTROL', label: 'Countdown',           emoji: '⏳', render: renderCountdown, default: true },
+    { id: 'gates',               group: 'MISSION CONTROL', label: 'Three Gates',          emoji: '🚪', render: renderGates },
+    { id: 'predeparture',        group: 'MISSION CONTROL', label: 'Pre-Departure',        emoji: '✅', render: renderPredeparture },
+    // Route
+    { id: 'route',               group: 'ROUTE',           label: 'Route',                emoji: '🗺', render: renderRoute },
+    { id: 'itinerary',           group: 'ROUTE',           label: 'Itinerary',            emoji: '📅', render: renderItinerary },
+    { id: 'visas',               group: 'ROUTE',           label: 'Visas',                emoji: '🛂', render: renderVisas },
+    { id: 'vaccines',            group: 'ROUTE',           label: 'Vaccines',             emoji: '💉', render: renderVaccines },
+    { id: 'documents',           group: 'ROUTE',           label: 'Documents',            emoji: '📁', render: renderDocuments },
+    // Build
+    { id: 'build',               group: 'BUILD',           label: 'Build Spec',           emoji: '🔧', render: renderBuild },
+    { id: 'build-log',           group: 'BUILD',           label: 'Build Log',            emoji: '📓', render: renderBuildLog },
+    // Atlas
+    { id: 'sponsors',            group: 'ATLAS',           label: 'Sponsors',             emoji: '🤝', render: renderSponsors },
+    { id: 'proposals',           group: 'ATLAS',           label: 'Proposals',            emoji: '📄', render: renderProposals },
+    { id: 'sponsor-intel',       group: 'ATLAS',           label: 'Sponsor Intel',        emoji: '🔍', render: renderSponsorIntel },
+    { id: 'audience-proof',      group: 'ATLAS',           label: 'Audience Proof',       emoji: '📊', render: renderAudienceProof },
+    // Guy Martin
+    { id: 'guy-martin',          group: 'GUY MARTIN',      label: 'GM Pathway',           emoji: '🎯', render: renderGuyMartin },
+    // Content
+    { id: 'content-strategy',    group: 'CONTENT',         label: 'Strategy',             emoji: '🎬', render: renderContentStrategy },
+    { id: 'content-publishing',  group: 'CONTENT',         label: 'Publishing',           emoji: '📲', render: renderContentPublishing },
+    { id: 'content-production',  group: 'CONTENT',         label: 'Production',           emoji: '🎞', render: renderContentProduction },
+    { id: 'podcast',             group: 'CONTENT',         label: 'Podcast',              emoji: '🎙', render: renderPodcast },
+    // Gear
+    { id: 'gear',                group: 'GEAR',            label: 'Gear',                 emoji: '📦', render: renderGear },
+    // Commercial
+    { id: 'merch',               group: 'COMMERCIAL',      label: 'Merch',                emoji: '👕', render: renderMerch },
+    { id: 'audience-emails',     group: 'COMMERCIAL',      label: 'Audience Emails',      emoji: '✉️', render: renderAudienceEmails },
+    // Community
+    { id: 'community',           group: 'COMMUNITY',       label: 'Community',            emoji: '👥', render: renderCommunity },
+    { id: 'social',              group: 'COMMUNITY',       label: 'Social',               emoji: '📱', render: renderSocial },
   ],
 };
 

@@ -3,8 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ETERNAL · RBTR</title>
+<title>ETERNAL KUSTOMS · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
+<style>
+.tab-bar{display:flex;gap:4px;margin-bottom:var(--space-4);flex-wrap:wrap}
+.tab-btn{padding:var(--space-1) var(--space-3);background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-sm);cursor:pointer;border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.tab-btn.active{background:var(--text-primary);color:var(--bg-primary);border-color:var(--text-primary)}
+.slim-table{width:100%;border-collapse:collapse;font-size:var(--text-sm)}
+.slim-table th{text-align:left;padding:var(--space-2);border-bottom:1px solid var(--border-subtle);color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.05em;font-weight:400}
+.slim-table td{padding:var(--space-2);border-bottom:1px solid var(--border-subtle)}
+.slim-table tr:last-child td{border:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}
+.form-row{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);flex-wrap:wrap;align-items:flex-end}
+.form-row input,.form-row select,.form-row textarea{flex:1;min-width:120px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);font-size:var(--text-sm);border-radius:var(--radius-sm);font-family:var(--font-mono)}
+.section-note{font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:var(--space-3);padding:var(--space-2) var(--space-3);background:var(--bg-secondary);border-left:2px solid var(--border-subtle)}
+.pill{display:inline-block;padding:2px 8px;border-radius:var(--radius-pill);font-size:var(--text-xs);font-family:var(--font-mono)}
+.pill-ok{background:rgba(74,124,89,.15);color:#6ee7b7}
+.pill-warm{background:rgba(217,119,6,.15);color:#fbbf24}
+.pill-cold{background:rgba(99,102,241,.15);color:#a5b4fc}
+.pill-hot{background:rgba(220,38,38,.15);color:#f87171}
+.progress-bar{height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden;margin:var(--space-2) 0}
+.progress-fill{height:100%;background:var(--text-primary);border-radius:4px;transition:width .3s}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="portal-root"></div>
@@ -13,60 +35,477 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 
 <script>
 const C = window.RBTR_Components;
 const { el, card, statCard, button, emptyState } = C;
 
+function proxy(table, op, extra = {}) {
+  return fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ table, op, ...extra })
+  }).then(r => r.ok ? r.json() : []);
+}
+
+function logTable(rows, cols) {
+  if (!rows || !rows.length) return emptyState({ icon: '📋', title: 'Nothing logged yet', body: 'Add an entry below.' });
+  const t = el('table', { className: 'slim-table' });
+  const head = el('tr');
+  cols.forEach(c => head.appendChild(el('th', {}, c.label)));
+  t.appendChild(el('thead', {}, head));
+  const body = el('tbody');
+  rows.forEach(row => {
+    const tr = el('tr');
+    cols.forEach(c => {
+      const val = c.render ? c.render(row) : (row[c.key] ?? '—');
+      const td = el('td');
+      if (val instanceof HTMLElement) td.appendChild(val);
+      else td.textContent = String(val);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  t.appendChild(body);
+  return t;
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
 async function renderEternalDashboard() {
   const wrap = el('div', {});
-  const stats = el('div', {
-    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
-  });
-  stats.appendChild(statCard({ emoji: '💷', label: 'Monthly retainer', value: '£1,000', sub: 'from May 2026' }));
-  stats.appendChild(statCard({ emoji: '⏱', label: 'Hourly rate', value: '£40', sub: 'beyond retainer' }));
-  stats.appendChild(statCard({ emoji: '🔩', label: 'EK cash', value: '—', sub: 'LEGAL_SENSITIVE' }));
-  wrap.appendChild(stats);
 
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  let hours = [], shareholders = [];
   try {
-    const r = await fetch('/api/supabase-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'ek_cash_log', op: 'select' })
-    });
-    if (r.ok) {
-      const rows = await r.json();
-      if (Array.isArray(rows) && rows.length) {
-        rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
-        const vals = stats.querySelectorAll('.ds-stat .value');
-        if (vals[2]) vals[2].textContent = '£' + Number(rows[0].balance_gbp).toLocaleString('en-GB', { minimumFractionDigits: 2 });
-      }
-    }
+    hours = await proxy('eternal_hours_log', 'select', { filters: [{ column: 'log_date', op: 'gte', value: monthStart }] });
+    shareholders = await proxy('eternal_shareholder_payments', 'select');
   } catch(e) {}
 
+  const monthHours = Array.isArray(hours) ? hours.reduce((a, r) => a + (r.hours || 0), 0) : 0;
+  const billableHours = Array.isArray(hours) ? hours.filter(r => r.billable !== false).reduce((a, r) => a + (r.hours || 0), 0) : 0;
+  const monthInvoice = 1000 + (billableHours > 0 ? billableHours * 40 : 0);
+  const paidCount = Array.isArray(shareholders) ? shareholders.filter(r => r.paid).length : 0;
+  const remainingPayments = 20 - paidCount;
+  const totalRemaining = remainingPayments * 2500;
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '⏱', label: 'Hours this month', value: monthHours.toFixed(1), sub: 'logged' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Invoice this month', value: '£' + monthInvoice.toLocaleString(), sub: '£1k retainer + hours' }));
+  stats.appendChild(statCard({ emoji: '📅', label: 'Shareholder payments', value: paidCount + '/20', sub: '£' + totalRemaining.toLocaleString() + ' remaining' }));
+  wrap.appendChild(stats);
+
   wrap.appendChild(card({ children: el('div', {},
-    el('div', { className: 'ds-caption' }, 'CONSULTANCY TO SAM MOORE'),
-    el('p', { style: { margin: 'var(--space-2) 0 0', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } },
-      "Ben is external consultant for Eternal Kustoms Ltd (Sam Moore's company). £1,000/mo retainer from May 2026 + £40/hr beyond retainer. " +
-      "Ben does not hold equity. EK P&L is Sam's — Ben's consultancy fee is personal income only."),
+    el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, 'CONSULTANCY TO SAM MOORE'),
+    el('p', { style: { color:'var(--text-secondary)', fontSize:'var(--text-sm)', lineHeight:'var(--leading-loose)', margin:'0' } },
+      "External consultant to Eternal Kustoms Ltd. £1,000/mo retainer from May 2026 + £40/hr over retainer. " +
+      "Ben holds no equity. EK P&L is Sam Moore's. Ben's income is the consultancy fee only. " +
+      "Shareholders' agreement: Terry + Tracey transfer shares to Sam Shaw + Michael Whitaker on full repayment of £2,500/mo × 20 months.")
   )}));
+  return wrap;
+}
+
+// ── CONSULTANCY ROLE ─────────────────────────────────────────────────────────
+async function renderEternalRole() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, "Ben's role at Eternal Kustoms as external consultant. Not an employee. Not a director. Not a shareholder."));
+
+  const roleDetails = [
+    { area: 'Operations', detail: 'Day-to-day operational oversight on behalf of Sam Moore. Scheduling, supplier coordination, workshop flow.' },
+    { area: 'Customer management', detail: 'Client-facing contact for build updates, estimates, timelines. Sam has final approval on all commitments.' },
+    { area: 'Estimate authorisation', detail: 'Ben reviews and authorises estimates up to £[agreed limit]. Anything above requires Sam sign-off.' },
+    { area: 'Hours logging', detail: 'Ben logs weekly. Retainer covers the first implied hours. Anything above £1,000 equiv is billed at £40/hr on monthly invoice.' },
+    { area: 'What Ben does NOT do', detail: 'Ben does not sign contracts on behalf of EK. Ben does not commit EK to legal obligations. Ben does not take on personal liability for EK debts.' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'ROLE DEFINITION'));
+  roleDetails.forEach(r => {
+    const row = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+    row.appendChild(el('strong', { style: { fontSize:'var(--text-sm)' } }, r.area));
+    row.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'var(--space-1) 0 0' } }, r.detail));
+    body.appendChild(row);
+  });
+  wrap.appendChild(c);
+  return wrap;
+}
+
+// ── HOURS LOG ────────────────────────────────────────────────────────────────
+async function renderHours() {
+  const wrap = el('div', {});
+
+  let logs = [];
+  try { logs = await proxy('eternal_hours_log', 'select', { order: { column: 'log_date', ascending: false }, limit: 60 }); } catch(e) {}
+  if (!Array.isArray(logs)) logs = [];
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthLogs = logs.filter(r => r.log_date >= monthStart);
+  const monthHours = monthLogs.reduce((a, r) => a + (r.hours || 0), 0);
+  const billableHours = monthLogs.filter(r => r.billable !== false).reduce((a, r) => a + (r.hours || 0), 0);
+  const totalAllTime = logs.reduce((a, r) => a + (r.hours || 0), 0);
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '📅', label: 'Hours this month', value: monthHours.toFixed(1), sub: 'logged' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Billable this month', value: billableHours.toFixed(1) + 'h', sub: '£' + (billableHours * 40).toFixed(0) + ' @ £40/hr' }));
+  stats.appendChild(statCard({ emoji: '⏱', label: 'Total all time', value: totalAllTime.toFixed(1), sub: 'hours logged' }));
+  wrap.appendChild(stats);
+
+  const logHost = el('div', {});
+  wrap.appendChild(logHost);
+  function renderLogs() {
+    logHost.innerHTML = '';
+    logHost.appendChild(logTable(logs.slice(0, 30), [
+      { label: 'Date', render: r => r.log_date ? new Date(r.log_date).toLocaleDateString('en-GB') : '—' },
+      { label: 'Hours', key: 'hours' },
+      { label: 'Task', key: 'task' },
+      { label: 'Billable', render: r => r.billable === false ? el('span', { className: 'pill pill-cold' }, 'NO') : el('span', { className: 'pill pill-ok' }, 'YES') },
+    ]));
+  }
+  renderLogs();
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'LOG HOURS'));
+  const dateIn = el('input', { type: 'date', value: new Date().toISOString().split('T')[0] });
+  const hoursIn = el('input', { type: 'number', step: '0.5', min: '0.5', placeholder: 'Hours' });
+  const taskIn = el('input', { type: 'text', placeholder: 'Task description' });
+  const billIn = el('select');
+  ['Yes','No'].forEach(o => billIn.appendChild(el('option', { value: o === 'Yes' }, o)));
+  const r1 = el('div', { className: 'form-row' }); r1.appendChild(dateIn); r1.appendChild(hoursIn); r1.appendChild(billIn);
+  const r2 = el('div', { className: 'form-row' }); r2.appendChild(taskIn);
+  ab.appendChild(r1); ab.appendChild(r2);
+  ab.appendChild(button({ label: 'Save hours', onClick: async () => {
+    if (!hoursIn.value) return;
+    const record = {
+      log_date: dateIn.value,
+      hours: parseFloat(hoursIn.value),
+      task: taskIn.value,
+      client: 'Sam Moore',
+      billable: billIn.value === 'true',
+    };
+    try {
+      await proxy('eternal_hours_log', 'insert', { record });
+      logs.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderLogs();
+      hoursIn.value = ''; taskIn.value = '';
+      C.toast({ message: 'Hours saved', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(addCard);
+
+  // Export CSV
+  wrap.appendChild(button({ label: 'Export CSV', variant: 'secondary', onClick: () => {
+    const header = 'Date,Hours,Task,Billable\n';
+    const rows = logs.map(r => [r.log_date, r.hours, '"' + (r.task||'') + '"', r.billable ? 'Yes' : 'No'].join(','));
+    const csv = header + rows.join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'eternal_hours_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+  }}));
+  return wrap;
+}
+
+// ── ESTIMATES ────────────────────────────────────────────────────────────────
+async function renderEstimates() {
+  const wrap = el('div', {});
+
+  let estimates = [];
+  try { estimates = await proxy('eternal_estimates', 'select', { order: { column: 'created_at', ascending: false } }); } catch(e) {}
+  if (!Array.isArray(estimates)) estimates = [];
+
+  const statusCls = { draft: 'pill-cold', authorised: 'pill-warm', sent: 'pill-warm', signed: 'pill-ok', declined: 'pill-hot' };
+
+  const estHost = el('div', {});
+  wrap.appendChild(estHost);
+  function renderEst() {
+    estHost.innerHTML = '';
+    estHost.appendChild(logTable(estimates, [
+      { label: 'Customer', key: 'customer' },
+      { label: 'Job', key: 'job' },
+      { label: 'Amount', render: r => r.amount ? '£' + Number(r.amount).toLocaleString() : '—' },
+      { label: 'Status', render: r => el('span', { className: 'pill ' + (statusCls[r.status] || 'pill-cold') }, (r.status||'draft').toUpperCase()) },
+      { label: 'Authorised', render: r => r.authorised_at ? new Date(r.authorised_at).toLocaleDateString('en-GB') : '—' },
+      { label: 'Signed', render: r => r.signed_at ? new Date(r.signed_at).toLocaleDateString('en-GB') : '—' },
+    ]));
+  }
+  renderEst();
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'NEW ESTIMATE'));
+  const custIn = el('input', { type: 'text', placeholder: 'Customer name' });
+  const jobIn = el('input', { type: 'text', placeholder: 'Job description' });
+  const amtIn = el('input', { type: 'number', step: '0.01', placeholder: 'Amount £' });
+  const statusIn = el('select');
+  ['draft','authorised','sent','signed','declined'].forEach(s => statusIn.appendChild(el('option', { value: s }, s.charAt(0).toUpperCase() + s.slice(1))));
+  const r1 = el('div', { className: 'form-row' }); r1.appendChild(custIn); r1.appendChild(amtIn);
+  const r2 = el('div', { className: 'form-row' }); r2.appendChild(jobIn); r2.appendChild(statusIn);
+  ab.appendChild(r1); ab.appendChild(r2);
+  ab.appendChild(button({ label: 'Save estimate', onClick: async () => {
+    if (!custIn.value || !amtIn.value) return;
+    const record = {
+      customer: custIn.value,
+      job: jobIn.value,
+      amount: parseFloat(amtIn.value),
+      status: statusIn.value,
+      authorised_at: statusIn.value === 'authorised' ? new Date().toISOString() : null,
+    };
+    try {
+      await proxy('eternal_estimates', 'insert', { record });
+      estimates.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderEst();
+      custIn.value = ''; jobIn.value = ''; amtIn.value = '';
+      C.toast({ message: 'Estimate saved', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+// ── INVOICES ─────────────────────────────────────────────────────────────────
+async function renderInvoices() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Monthly invoices to Sam. Auto-populated from hours log. Mark as sent/paid when done.'));
+
+  let invoices = [];
+  try { invoices = await proxy('eternal_invoices', 'select', { order: { column: 'period_start', ascending: false } }); } catch(e) {}
+  if (!Array.isArray(invoices)) invoices = [];
+
+  const invHost = el('div', {});
+  wrap.appendChild(invHost);
+  function renderInv() {
+    invHost.innerHTML = '';
+    invHost.appendChild(logTable(invoices, [
+      { label: 'Period', render: r => r.period_start ? new Date(r.period_start).toLocaleDateString('en-GB', { month:'long', year:'numeric' }) : '—' },
+      { label: 'Hours', key: 'hours_total' },
+      { label: 'Amount', render: r => r.amount_total ? '£' + Number(r.amount_total).toLocaleString() : '—' },
+      { label: 'Sent', render: r => r.sent_at ? new Date(r.sent_at).toLocaleDateString('en-GB') : el('span', { className: 'pill pill-cold' }, 'UNSENT') },
+      { label: 'Paid', render: r => r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-GB') : el('span', { className: 'pill pill-warm' }, 'UNPAID') },
+    ]));
+  }
+  renderInv();
+
+  // Generate month invoice button
+  const now = new Date();
+  const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const genCard = card({ children: el('div', {}) });
+  const gb = genCard.querySelector('div');
+  gb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'GENERATE MONTHLY INVOICE'));
+  const hoursIn = el('input', { type: 'number', step: '0.5', placeholder: 'Total hours this month' });
+  const r1 = el('div', { className: 'form-row' }); r1.appendChild(hoursIn);
+  gb.appendChild(r1);
+  gb.appendChild(button({ label: 'Generate invoice', onClick: async () => {
+    const hours = parseFloat(hoursIn.value) || 0;
+    const amount = 1000 + (hours * 40);
+    const record = {
+      period_start: periodStart.toISOString().split('T')[0],
+      period_end: periodEnd.toISOString().split('T')[0],
+      hours_total: hours,
+      amount_total: amount,
+    };
+    try {
+      await proxy('eternal_invoices', 'insert', { record });
+      invoices.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderInv();
+      hoursIn.value = '';
+      C.toast({ message: 'Invoice generated — £' + amount.toLocaleString(), type: 'success' });
+    } catch(e) { C.toast({ message: 'Failed to generate', type: 'error' }); }
+  }}));
+  wrap.appendChild(genCard);
+  return wrap;
+}
+
+// ── COFFEE BROTHERS ──────────────────────────────────────────────────────────
+async function renderCoffeeBike() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Coffee Brothers motorcycle build. Spec and progress tracker for Sam\'s custom build.'));
+
+  const spec = [
+    { section: 'Base bike', detail: 'TBC — awaiting Sam confirmation', status: 'pending' },
+    { section: 'Engine', detail: 'Rebuild / freshen per Sam spec', status: 'pending' },
+    { section: 'Frame modifications', detail: 'Ben to confirm scope', status: 'pending' },
+    { section: 'Electrics', detail: 'Full re-wire, modern loom', status: 'pending' },
+    { section: 'Paint', detail: 'Coffee Brothers branded, matte finish TBC', status: 'pending' },
+    { section: 'Timeline', detail: 'Q4 2026 target', status: 'pending' },
+  ];
+
+  const c = card({ children: el('div', {}) });
+  const body = c.querySelector('div');
+  body.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'COFFEE BROTHERS BUILD SPEC'));
+  spec.forEach(s => {
+    const row = el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)' } });
+    row.appendChild(el('div', {},
+      el('strong', { style: { fontSize:'var(--text-sm)' } }, s.section),
+      el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'2px 0 0' } }, s.detail)
+    ));
+    row.appendChild(el('span', { className: 'pill pill-cold' }, s.status.toUpperCase()));
+    body.appendChild(row);
+  });
+  wrap.appendChild(c);
+  return wrap;
+}
+
+// ── BUILDS ───────────────────────────────────────────────────────────────────
+async function renderBuilds() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Seven American truck programme — custom builds for customers. One card per build.'));
+
+  let builds = [];
+  try { builds = await proxy('eternal_builds', 'select', { order: { column: 'created_at', ascending: false } }); } catch(e) {}
+  if (!Array.isArray(builds)) builds = [];
+
+  const statusCls = { planned: 'pill-cold', in_progress: 'pill-warm', complete: 'pill-ok', on_hold: 'pill-hot' };
+
+  const buildHost = el('div', {});
+  wrap.appendChild(buildHost);
+  function renderBuildsUI() {
+    buildHost.innerHTML = '';
+    if (!builds.length) {
+      buildHost.appendChild(emptyState({ icon: '🔩', title: 'No builds logged', body: 'Add builds below.' }));
+      return;
+    }
+    const grid = el('div', { className: 'grid-2' });
+    builds.forEach(b => {
+      const c = card({ children: el('div', {}) });
+      const body = c.querySelector('div');
+      body.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-2)' } },
+        el('strong', {}, b.name),
+        el('span', { className: 'pill ' + (statusCls[b.status] || 'pill-cold') }, (b.status||'planned').replace('_',' ').toUpperCase())
+      ));
+      if (b.customer) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0 0 var(--space-1)' } }, 'Customer: ' + b.customer));
+      if (b.notes) body.appendChild(el('p', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', margin:'0' } }, b.notes));
+      grid.appendChild(c);
+    });
+    buildHost.appendChild(grid);
+  }
+  renderBuildsUI();
+
+  const addCard = card({ children: el('div', {}) });
+  const ab = addCard.querySelector('div');
+  ab.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'ADD BUILD'));
+  const nameIn = el('input', { type:'text', placeholder:'Build name' });
+  const custIn = el('input', { type:'text', placeholder:'Customer' });
+  const statusIn = el('select');
+  ['planned','in_progress','complete','on_hold'].forEach(s => statusIn.appendChild(el('option', { value:s }, s.replace('_',' '))));
+  const notesIn = el('input', { type:'text', placeholder:'Notes (optional)' });
+  const r1 = el('div', { className:'form-row' }); r1.appendChild(nameIn); r1.appendChild(custIn);
+  const r2 = el('div', { className:'form-row' }); r2.appendChild(statusIn); r2.appendChild(notesIn);
+  ab.appendChild(r1); ab.appendChild(r2);
+  ab.appendChild(button({ label: 'Add build', onClick: async () => {
+    if (!nameIn.value) return;
+    const record = { name: nameIn.value, customer: custIn.value, status: statusIn.value, notes: notesIn.value };
+    try {
+      await proxy('eternal_builds', 'insert', { record });
+      builds.unshift({ ...record, id: 'tmp-' + Date.now() });
+      renderBuildsUI();
+      nameIn.value = ''; custIn.value = ''; notesIn.value = '';
+      C.toast({ message: 'Build added', type: 'success' });
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(addCard);
+  return wrap;
+}
+
+// ── SHAREHOLDERS ─────────────────────────────────────────────────────────────
+async function renderShareholders() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'section-note' }, 'Shareholders\' Agreement repayment tracker. £2,500/mo × 20 months from July 2026. Shares transfer to Sam Shaw + Michael Whitaker on completion.'));
+
+  let payments = [];
+  try { payments = await proxy('eternal_shareholder_payments', 'select', { order: { column: 'month_number' } }); } catch(e) {}
+  if (!Array.isArray(payments)) payments = [];
+
+  const paidCount = payments.filter(p => p.paid).length;
+  const paidAmount = paidCount * 2500;
+  const remaining = (20 - paidCount) * 2500;
+  const pct = Math.round((paidCount / 20) * 100);
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom:'var(--space-4)' } });
+  stats.appendChild(statCard({ emoji: '✅', label: 'Payments made', value: paidCount + '/20', sub: '£' + paidAmount.toLocaleString() + ' paid' }));
+  stats.appendChild(statCard({ emoji: '⏳', label: 'Remaining', value: (20 - paidCount), sub: '£' + remaining.toLocaleString() }));
+  stats.appendChild(statCard({ emoji: '📅', label: 'Progress', value: pct + '%', sub: 'complete' }));
+  wrap.appendChild(stats);
+
+  const bar = el('div', { className: 'progress-bar' });
+  const fill = el('div', { className: 'progress-fill', style: { width: pct + '%' } });
+  bar.appendChild(fill);
+  wrap.appendChild(bar);
+
+  const toggle = async (payment) => {
+    try {
+      await proxy('eternal_shareholder_payments', 'update', {
+        filters: [{ column: 'id', op: 'eq', value: payment.id }],
+        updates: { paid: !payment.paid, payment_date: !payment.paid ? new Date().toISOString().split('T')[0] : null }
+      });
+      payment.paid = !payment.paid;
+      renderTable();
+    } catch(e) { C.toast({ message: 'Update failed', type: 'error' }); }
+  };
+
+  const tableHost = el('div', {});
+  wrap.appendChild(tableHost);
+  function renderTable() {
+    tableHost.innerHTML = '';
+    const t = el('table', { className: 'slim-table' });
+    t.appendChild(el('thead', {}, el('tr', {},
+      ...['Mo','Date','Amount','Paid','Action'].map(h => el('th', {}, h))
+    )));
+    const tbody = el('tbody');
+    payments.forEach(p => {
+      const paid = p.paid === true;
+      const tr = el('tr', { style: { opacity: paid ? '.6' : '1' } });
+      tr.appendChild(el('td', { style: { fontFamily:'var(--font-mono)' } }, String(p.month_number)));
+      tr.appendChild(el('td', {}, p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB') : '—'));
+      tr.appendChild(el('td', {}, '£2,500'));
+      tr.appendChild(el('td', {}, el('span', { className: 'pill ' + (paid ? 'pill-ok' : 'pill-cold') }, paid ? 'PAID' : 'UNPAID')));
+      const actionTd = el('td');
+      const btn = button({ label: paid ? 'Unmark' : 'Mark paid', size: 'sm', onClick: () => toggle(p) });
+      actionTd.appendChild(btn);
+      tr.appendChild(actionTd);
+      tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+    tableHost.appendChild(t);
+  }
+  renderTable();
 
   return wrap;
 }
 
+// ── PORTAL CONFIG ────────────────────────────────────────────────────────────
 const ETERNAL_PORTAL = {
   id: 'eternal',
   name: 'ETERNAL KUSTOMS',
   emoji: '🔩',
   tagline: 'Consultancy · Retainer + Hours',
   access: ['ben'],
-  liveStatFetcher: async () => 'consultancy',
+  liveStatFetcher: async () => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    try {
+      const rows = await proxy('eternal_hours_log', 'select', { filters: [{ column: 'log_date', op: 'gte', value: monthStart }] });
+      const hours = Array.isArray(rows) ? rows.reduce((a, r) => a + (r.hours || 0), 0) : 0;
+      return hours.toFixed(1) + 'h this month';
+    } catch { return 'retainer'; }
+  },
   sections: [
-    { id: 'dashboard',   group: 'OVERVIEW',   label: 'Dashboard',     emoji: '📊', render: renderEternalDashboard, default: true },
-    { id: 'role',        group: 'CONSULTANCY',label: "Ben's Role",    emoji: '👨‍🔧', iframeHash: '#sec-eternal' },
-    { id: 'hours',       group: 'CONSULTANCY',label: 'Hours Log',     emoji: '⏱', render: () => emptyState({ icon: '⏱', title: 'Hours log coming', body: 'Ben logs consultancy hours weekly. Writes to a new ek_hours_log table (next migration).' }) },
-    { id: 'invoices',    group: 'CONSULTANCY',label: 'Invoices',      emoji: '💷', render: () => emptyState({ icon: '💷', title: 'Invoice log coming', body: 'Retainer + hours monthly invoice to Sam. Writes to ek_invoice_log (next migration).' }) },
-    { id: 'overview',    group: 'ETERNAL',    label: 'Overview',      emoji: '🔧', iframeHash: '#sec-eternal' },
-    { id: 'coffee',      group: 'ETERNAL',    label: 'Coffee Brothers',emoji: '☕', iframeHash: '#sec-coffee' },
+    { id: 'dashboard',      group: 'OVERVIEW',     label: 'Dashboard',         emoji: '📊', render: renderEternalDashboard, default: true },
+    { id: 'role',           group: 'CONSULTANCY',  label: "Ben's Role",         emoji: '👤', render: renderEternalRole },
+    { id: 'hours',          group: 'CONSULTANCY',  label: 'Hours Log',          emoji: '⏱', render: renderHours },
+    { id: 'estimates',      group: 'CONSULTANCY',  label: 'Estimates',          emoji: '📝', render: renderEstimates },
+    { id: 'invoices',       group: 'CONSULTANCY',  label: 'Invoices',           emoji: '💷', render: renderInvoices },
+    { id: 'coffee',         group: 'PROJECTS',     label: 'Coffee Brothers',    emoji: '☕', render: renderCoffeeBike },
+    { id: 'builds',         group: 'PROJECTS',     label: 'Builds Programme',   emoji: '🔧', render: renderBuilds },
+    { id: 'shareholders',   group: 'STRUCTURE',    label: 'Shareholders',       emoji: '📋', render: renderShareholders },
+    { id: 'crm',            group: 'CONTACTS',     label: 'Contacts',           emoji: '👥', render: () => window.CRM_UI.renderContacts('eternal') },
+    { id: 'sops',           group: 'SOPs',         label: 'SOPs',               emoji: '📋', render: () => window.SOPS_UI.renderSopSection('eternal') },
   ],
 };
 

@@ -122,6 +122,7 @@
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
+<script src="/js/crm-sops.js"></script>
 
 <!-- PSNM portal config -->
 <script>
@@ -255,7 +256,530 @@ async function renderWarmLeads() {
   return wrap;
 }
 
-// ── Iframe escape helper (reuses framework's iframeHash pattern) ────────────
+// ── Workstream B helpers ─────────────────────────────────────────────────────
+
+function proxyPsnm(table, op, extra = {}) {
+  return fetch('/api/supabase-proxy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ table, op, ...extra })
+  }).then(r => r.ok ? r.json() : []);
+}
+
+// Priority scoring engine
+function scoreLeads(leads) {
+  return leads.map(lead => {
+    let score = 0;
+    const now = new Date();
+    const lastContact = lead.last_contact_date ? new Date(lead.last_contact_date) : null;
+    const daysSince = lastContact ? Math.floor((now - lastContact) / 86400000) : 999;
+
+    if (lead.status === 'quote_opened_no_reply') score += 40;
+    if (lead.temperature === 'hot' && daysSince > 3) score += 35;
+    if (lead.temperature === 'warm' && daysSince > 5) score += 25;
+    if (lead.temperature === 'cold' && lead.source === 'whichwarehouse') score += 15;
+    if ((lead.pallets_count || 0) > 100) score = Math.floor(score * 1.5);
+    if (daysSince < 7 && lead.status === 'replied') score += 50;
+    if (lead.last_contact_type === 'voicemail') score += 30;
+    if (!lead.last_contact_date && (lead.tier === 1 || lead.tier === 2)) score += 20;
+
+    return { ...lead, score };
+  }).sort((a, b) => b.score - a.score);
+}
+
+async function renderAtlasPriority() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  let leads = [];
+  try {
+    leads = await proxyPsnm('psnm_warm_leads', 'select', { order: { column: 'created_at', ascending: false } });
+  } catch(e) {}
+  if (!Array.isArray(leads) || !leads.length) {
+    wrap.appendChild(C.emptyState({ icon: '📞', title: 'No leads in queue', body: 'Add warm leads to generate your daily call queue.' }));
+    return wrap;
+  }
+
+  const scored = scoreLeads(leads);
+  const today = scored.slice(0, 20);
+
+  const header = el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--space-4)' } });
+  header.appendChild(el('div', {},
+    el('div', { style: { fontSize:'var(--text-lg)', fontWeight:'600' } }, 'TODAY\'S CALL QUEUE'),
+    el('div', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' } }, today.length + ' calls · refreshed ' + new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }))
+  ));
+  header.appendChild(C.button({ label: '↻ Refresh', size:'sm', onClick: async () => { wrap.innerHTML = ''; wrap.appendChild(await renderAtlasPriority()); } }));
+  wrap.appendChild(header);
+
+  const tempCls = { hot: 'pill-hot', warm: 'pill-warm', cold: 'pill-cold' };
+  const actionMap = {
+    hot: 'Call now',
+    warm: 'Call or email',
+    cold: 'Email first',
+    quote_opened_no_reply: 'Call — they opened the quote',
+    voicemail: 'Follow-up call',
+  };
+
+  today.forEach((lead, i) => {
+    const expanded = i < 5;
+    const lastContact = lead.last_contact_date ? new Date(lead.last_contact_date) : null;
+    const daysSince = lastContact ? Math.floor((new Date() - lastContact) / 86400000) : null;
+
+    const c = el('div', { style: { padding:'var(--space-3)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-sm)', marginBottom:'var(--space-2)', background: i === 0 ? 'rgba(255,255,255,.03)' : '' } });
+
+    const top = el('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'flex-start' } });
+    const left = el('div', {});
+    left.appendChild(el('div', { style: { fontWeight:'600', marginBottom:'4px' } },
+      el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', marginRight:'var(--space-2)' } }, '#' + (i+1)),
+      lead.company || lead.contact_name || 'Unknown'
+    ));
+    left.appendChild(el('div', { style: { display:'flex', gap:'var(--space-2)', flexWrap:'wrap' } },
+      el('span', { style: { fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, 'Score: ' + lead.score),
+      lead.temperature ? el('span', { className: 'ds-badge ' + (lead.temperature || '') }, lead.temperature.toUpperCase()) : el('span'),
+      lead.pallets_count ? el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, lead.pallets_count + ' pallets') : el('span'),
+      lead.tier ? el('span', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, 'T' + lead.tier) : el('span')
+    ));
+    top.appendChild(left);
+
+    const right = el('div', { style: { display:'flex', gap:'var(--space-2)', flexShrink:'0' } });
+    if (lead.phone) right.appendChild(el('a', { href: 'tel:' + lead.phone, style: { display:'inline-flex', alignItems:'center', padding:'4px 10px', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-sm)', fontSize:'var(--text-xs)', color:'var(--text-primary)', fontFamily:'var(--font-mono)', textDecoration:'none' } }, '📞 Call'));
+    top.appendChild(right);
+    c.appendChild(top);
+
+    if (expanded) {
+      const details = el('div', { style: { marginTop:'var(--space-3)', paddingTop:'var(--space-2)', borderTop:'1px solid var(--border-subtle)' } });
+
+      if (lead.contact_name) details.appendChild(el('div', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', marginBottom:'4px' } }, 'Contact: ' + lead.contact_name));
+      if (lastContact) details.appendChild(el('div', { style: { fontSize:'var(--text-sm)', color:'var(--text-secondary)', marginBottom:'4px' } }, 'Last contact: ' + lastContact.toLocaleDateString('en-GB') + (daysSince !== null ? ' (' + daysSince + ' days ago)' : '') + (lead.last_contact_type ? ' via ' + lead.last_contact_type : '')));
+
+      const action = el('div', { style: { marginBottom:'var(--space-2)' } });
+      const actionText = lead.status === 'quote_opened_no_reply' ? actionMap.quote_opened_no_reply : lead.last_contact_type === 'voicemail' ? actionMap.voicemail : actionMap[lead.temperature] || 'Contact';
+      action.appendChild(el('span', { style: { fontSize:'var(--text-sm)', fontWeight:'600' } }, '→ ' + actionText));
+      details.appendChild(action);
+
+      if (lead.notes) details.appendChild(el('div', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', background:'var(--bg-secondary)', padding:'var(--space-2)', borderRadius:'var(--radius-sm)', marginBottom:'var(--space-2)' } }, lead.notes));
+
+      const logBtn = C.button({ label: 'Log outcome', size: 'sm', onClick: async () => {
+        const outcome = prompt('Outcome (called/no answer/voicemail/meeting booked/not interested/quote sent):');
+        if (!outcome) return;
+        const nextDate = prompt('Next contact date (YYYY-MM-DD or leave blank):');
+        try {
+          await proxyPsnm('psnm_warm_leads', 'update', {
+            filters: [{ column: 'id', op: 'eq', value: lead.id }],
+            updates: {
+              last_contact_date: new Date().toISOString().split('T')[0],
+              last_contact_type: 'call',
+              next_contact_date: nextDate || null,
+              notes: (lead.notes ? lead.notes + '\n' : '') + new Date().toLocaleDateString('en-GB') + ': ' + outcome,
+              updated_at: new Date().toISOString(),
+            }
+          });
+          C.toast({ message: 'Outcome logged', type: 'success' });
+          c.style.opacity = '.4';
+        } catch(e) { C.toast({ message: 'Log failed', type: 'error' }); }
+      }});
+      details.appendChild(logBtn);
+      c.appendChild(details);
+    }
+
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+async function renderPsnmPerformance() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  let leads = [], enquiries = [], quotes = [];
+  try {
+    [leads, enquiries, quotes] = await Promise.all([
+      proxyPsnm('psnm_warm_leads', 'select'),
+      proxyPsnm('psnm_enquiries', 'select'),
+      proxyPsnm('psnm_quotes', 'select'),
+    ]);
+  } catch(e) {}
+
+  const now = new Date();
+  const weekAgo = new Date(now - 7 * 86400000);
+  const monthAgo = new Date(now - 30 * 86400000);
+
+  const contacted = Array.isArray(leads) ? leads.filter(l => l.last_contact_date) : [];
+  const contactedWeek = contacted.filter(l => new Date(l.last_contact_date) >= weekAgo);
+  const hot = Array.isArray(leads) ? leads.filter(l => l.temperature === 'hot') : [];
+  const warm = Array.isArray(leads) ? leads.filter(l => l.temperature === 'warm') : [];
+  const cold = Array.isArray(leads) ? leads.filter(l => l.temperature === 'cold') : [];
+  const customers = Array.isArray(enquiries) ? enquiries.filter(e => e.status === 'won') : [];
+  const totalPallets = Array.isArray(enquiries) ? enquiries.filter(e => e.status === 'won').reduce((a, e) => a + (e.pallets || 0), 0) : 0;
+
+  const statsGrid = el('div', { style: { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px,1fr))', gap:'var(--space-3)', marginBottom:'var(--space-5)' } });
+  [
+    { emoji: '📞', label: 'Contacts this week', value: contactedWeek.length },
+    { emoji: '🔥', label: 'Hot leads', value: hot.length },
+    { emoji: '🌡', label: 'Warm leads', value: warm.length },
+    { emoji: '❄', label: 'Cold leads', value: cold.length },
+    { emoji: '✅', label: 'Won (all time)', value: customers.length },
+    { emoji: '📦', label: 'Pallets committed', value: totalPallets + '/827' },
+  ].forEach(s => statsGrid.appendChild(C.statCard(s)));
+  wrap.appendChild(statsGrid);
+
+  // Conversion funnel
+  const totalLeads = Array.isArray(leads) ? leads.length : 0;
+  const quoteCount = Array.isArray(quotes) ? quotes.length : 0;
+  const funnelCard = C.card({ children: el('div', {}) });
+  const fb = funnelCard.querySelector('div');
+  fb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'CONVERSION FUNNEL'));
+  const funnel = [
+    { stage: 'Leads in system', count: totalLeads },
+    { stage: 'Contacted', count: contacted.length },
+    { stage: 'Hot / Warm', count: hot.length + warm.length },
+    { stage: 'Quotes sent', count: quoteCount },
+    { stage: 'Won', count: customers.length },
+  ];
+  funnel.forEach((f, i) => {
+    const pct = i === 0 ? 100 : Math.round((f.count / (funnel[0].count || 1)) * 100);
+    const row = el('div', { style: { marginBottom:'var(--space-2)' } });
+    row.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', fontSize:'var(--text-sm)', marginBottom:'4px' } },
+      el('span', {}, f.stage),
+      el('span', { style: { fontFamily:'var(--font-mono)' } }, f.count + (i > 0 ? ' (' + pct + '%)' : ''))
+    ));
+    const bar = el('div', { style: { height:'4px', background:'var(--bg-secondary)', borderRadius:'2px', overflow:'hidden' } });
+    bar.appendChild(el('div', { style: { height:'100%', width: pct + '%', background:'var(--text-primary)', borderRadius:'2px' } }));
+    row.appendChild(bar);
+    fb.appendChild(row);
+  });
+  wrap.appendChild(funnelCard);
+  return wrap;
+}
+
+async function renderPsnmTemplates() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  let emailTemplates = [], callScripts = [];
+  try {
+    [emailTemplates, callScripts] = await Promise.all([
+      proxyPsnm('psnm_email_templates', 'select'),
+      proxyPsnm('psnm_call_scripts', 'select'),
+    ]);
+  } catch(e) {}
+
+  if (!Array.isArray(emailTemplates)) emailTemplates = [];
+  if (!Array.isArray(callScripts)) callScripts = [];
+
+  // Email templates section
+  const emailCard = C.card({ children: el('div', {}) });
+  const eb = emailCard.querySelector('div');
+  eb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'EMAIL TEMPLATES (' + emailTemplates.length + ')'));
+  if (!emailTemplates.length) {
+    eb.appendChild(C.emptyState({ icon: '✉️', title: 'No templates', body: 'Run migration 32_psnm_templates.sql to seed 5 templates.' }));
+  } else {
+    emailTemplates.forEach(t => {
+      const item = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+      item.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+        el('strong', { style: { fontSize:'var(--text-sm)' } }, t.name),
+        el('span', { className: 'ds-badge' }, (t.category||'—').toUpperCase())
+      ));
+      item.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', margin:'0 0 var(--space-2)' } }, 'Subject: ' + t.subject));
+      const pre = el('pre', { style: { fontSize:'10px', color:'var(--text-secondary)', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'var(--bg-secondary)', padding:'var(--space-2)', borderRadius:'var(--radius-sm)', margin:'0 0 var(--space-2)', maxHeight:'120px', overflowY:'auto' } });
+      pre.textContent = t.body;
+      item.appendChild(pre);
+      item.appendChild(C.button({ label: 'Copy body', size: 'sm', onClick: () => { navigator.clipboard.writeText(t.body); C.toast({ message: 'Copied', type: 'success' }); } }));
+      eb.appendChild(item);
+    });
+  }
+  wrap.appendChild(emailCard);
+
+  // Call scripts section
+  const scriptCard = C.card({ children: el('div', {}) });
+  const sb = scriptCard.querySelector('div');
+  sb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'CALL SCRIPTS (' + callScripts.length + ')'));
+  if (!callScripts.length) {
+    sb.appendChild(C.emptyState({ icon: '📋', title: 'No scripts', body: 'Run migration 32_psnm_templates.sql to seed 6 scripts.' }));
+  } else {
+    callScripts.forEach(s => {
+      const item = el('div', { style: { padding:'var(--space-3) 0', borderBottom:'1px solid var(--border-subtle)' } });
+      item.appendChild(el('div', { style: { display:'flex', justifyContent:'space-between', marginBottom:'var(--space-1)' } },
+        el('strong', { style: { fontSize:'var(--text-sm)' } }, s.name),
+        el('span', { className: 'ds-badge' }, (s.category||'—').replace(/_/g,' ').toUpperCase())
+      ));
+      const pre = el('pre', { style: { fontSize:'10px', color:'var(--text-secondary)', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'var(--bg-secondary)', padding:'var(--space-2)', borderRadius:'var(--radius-sm)', margin:'0 0 var(--space-2)', maxHeight:'150px', overflowY:'auto' } });
+      pre.textContent = s.script_body;
+      item.appendChild(pre);
+      const handlers = Array.isArray(s.objection_handlers) ? s.objection_handlers : (typeof s.objection_handlers === 'string' ? JSON.parse(s.objection_handlers || '[]') : []);
+      if (handlers.length) {
+        const oh = el('div', { style: { background:'var(--bg-secondary)', padding:'var(--space-2)', borderRadius:'var(--radius-sm)', marginBottom:'var(--space-2)' } });
+        oh.appendChild(el('div', { style: { fontSize:'10px', color:'var(--text-secondary)', marginBottom:'4px', textTransform:'uppercase', letterSpacing:'.05em' } }, 'Objection handlers'));
+        handlers.forEach(h => {
+          oh.appendChild(el('div', { style: { fontSize:'10px', marginBottom:'4px' } },
+            el('strong', {}, '"' + h.objection + '"'),
+            el('span', { style: { color:'var(--text-secondary)' } }, ' → ' + h.response)
+          ));
+        });
+        item.appendChild(oh);
+      }
+      item.appendChild(C.button({ label: 'Copy script', size: 'sm', onClick: () => { navigator.clipboard.writeText(s.script_body); C.toast({ message: 'Script copied', type: 'success' }); } }));
+      sb.appendChild(item);
+    });
+  }
+  wrap.appendChild(scriptCard);
+  return wrap;
+}
+
+async function renderQuoteGenerator() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  wrap.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', padding:'var(--space-2) var(--space-3)', background:'var(--bg-secondary)', borderLeft:'2px solid var(--border-subtle)', marginBottom:'var(--space-4)' } },
+    'Generate a branded quote. Saves to psnm_quotes. PDF output stub — full PDF generation in Phase 1.7.'));
+
+  let leads = [];
+  try { leads = await proxyPsnm('psnm_warm_leads', 'select', { order: { column: 'company' } }); } catch(e) {}
+  if (!Array.isArray(leads)) leads = [];
+
+  const formCard = C.card({ children: el('div', {}) });
+  const fb = formCard.querySelector('div');
+  fb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'QUOTE GENERATOR'));
+
+  const leadSel = el('select');
+  leadSel.appendChild(el('option', { value: '' }, '— Select lead or type manually —'));
+  leads.forEach(l => leadSel.appendChild(el('option', { value: l.id, 'data-pallets': l.pallets_count || '' }, l.company || l.contact_name || l.id)));
+
+  const companyIn = el('input', { type:'text', placeholder:'Company name' });
+  const contactIn = el('input', { type:'text', placeholder:'Contact name' });
+  const palletIn = el('input', { type:'number', min:'1', placeholder:'Pallet count' });
+  const rateIn = el('input', { type:'number', step:'0.01', value:'6.00', placeholder:'Rate £/pallet/week' });
+  const durationIn = el('input', { type:'number', min:'1', placeholder:'Duration (weeks, optional)' });
+  const termsIn = el('input', { type:'text', placeholder:'Special terms (optional)' });
+
+  leadSel.addEventListener('change', () => {
+    const sel = leads.find(l => l.id === leadSel.value);
+    if (sel) {
+      companyIn.value = sel.company || '';
+      contactIn.value = sel.contact_name || '';
+      palletIn.value = sel.pallets_count || '';
+    }
+  });
+
+  const r0 = el('div', { style: { marginBottom:'var(--space-2)' } }); r0.appendChild(leadSel);
+  const r1 = el('div', { style: { display:'flex', gap:'var(--space-2)', marginBottom:'var(--space-2)', flexWrap:'wrap' } });
+  [companyIn, contactIn].forEach(i => { i.style.cssText='flex:1;min-width:140px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r1.appendChild(i); });
+  const r2 = el('div', { style: { display:'flex', gap:'var(--space-2)', marginBottom:'var(--space-2)', flexWrap:'wrap' } });
+  [palletIn, rateIn, durationIn].forEach(i => { i.style.cssText='flex:1;min-width:80px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r2.appendChild(i); });
+  const r3 = el('div', { style: { marginBottom:'var(--space-3)' } }); termsIn.style.cssText='width:100%;box-sizing:border-box;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r3.appendChild(termsIn);
+
+  fb.appendChild(r0); fb.appendChild(r1); fb.appendChild(r2); fb.appendChild(r3);
+
+  const previewEl = el('div', { id: 'quote-preview', style: { display:'none', background:'var(--bg-secondary)', padding:'var(--space-4)', borderRadius:'var(--radius-sm)', marginBottom:'var(--space-3)', fontFamily:'var(--font-mono)', fontSize:'var(--text-sm)', whiteSpace:'pre-wrap', lineHeight:'1.6' } });
+  fb.appendChild(previewEl);
+
+  const previewBtn = C.button({ label: 'Preview quote', size: 'sm', variant: 'secondary', onClick: () => {
+    const pallets = parseInt(palletIn.value) || 0;
+    const rate = parseFloat(rateIn.value) || 6;
+    const weeks = parseInt(durationIn.value) || null;
+    const weekly = pallets * rate;
+    const text = `PALLET STORAGE QUOTATION
+Pallet Storage Near Me
+Unit 3C Denaby Way, Hellaby Industrial Estate, Rotherham S66 8HR
+palletstoragenearme.co.uk · 07506 255033
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Prepared for: ${companyIn.value || '—'} / ${contactIn.value || '—'}
+Date: ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pallets: ${pallets}
+Rate: £${rate.toFixed(2)} / pallet / week
+Weekly total: £${weekly.toFixed(2)} + VAT
+${weeks ? 'Duration: ' + weeks + ' weeks\nTotal: £' + (weekly * weeks).toFixed(2) + ' + VAT\n' : ''}${termsIn.value ? 'Special terms: ' + termsIn.value + '\n' : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT'S INCLUDED
+· 24/7 access with personal code
+· Secure, CCTV-monitored warehouse
+· 700-pallet capacity facility
+· Monthly invoicing, 30-day terms
+· No minimum contract period
+· £6M public liability insurance
+
+This quotation is valid for 30 days.
+Ben Greenwood · ben@palletstoragenearme.co.uk`;
+    previewEl.textContent = text;
+    previewEl.style.display = '';
+  }});
+
+  const saveBtn = C.button({ label: 'Save quote', onClick: async () => {
+    const pallets = parseInt(palletIn.value) || 0;
+    const rate = parseFloat(rateIn.value) || 6;
+    if (!pallets) { C.toast({ message: 'Enter pallet count', type: 'error' }); return; }
+    const record = {
+      lead_id: leadSel.value || null,
+      company: companyIn.value,
+      contact_name: contactIn.value,
+      pallets,
+      rate_per_pallet_per_week: rate,
+      weekly_total: pallets * rate,
+      duration_weeks: parseInt(durationIn.value) || null,
+      special_terms: termsIn.value || null,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    };
+    try {
+      await proxyPsnm('psnm_quotes', 'insert', { record });
+      C.toast({ message: 'Quote saved to psnm_quotes', type: 'success' });
+      [companyIn, contactIn, palletIn, durationIn, termsIn].forEach(i => { i.value = ''; });
+      rateIn.value = '6.00';
+      previewEl.style.display = 'none';
+    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+  }});
+
+  const btnRow = el('div', { style: { display:'flex', gap:'var(--space-2)' } });
+  btnRow.appendChild(previewBtn); btnRow.appendChild(saveBtn);
+  fb.appendChild(btnRow);
+  wrap.appendChild(formCard);
+  return wrap;
+}
+
+async function renderSiteVisitBooking() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  wrap.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', padding:'var(--space-2) var(--space-3)', background:'var(--bg-secondary)', borderLeft:'2px solid var(--border-subtle)', marginBottom:'var(--space-4)' } },
+    'Book a site visit for a warm/hot lead. Creates a calendar event + logs to lead record.'));
+
+  let leads = [];
+  try { leads = await proxyPsnm('psnm_warm_leads', 'select', { order: { column: 'company' } }); } catch(e) {}
+  if (!Array.isArray(leads)) leads = [];
+
+  // Recent visits
+  let recentVisits = [];
+  try {
+    const rows = await proxyPsnm('psnm_outreach_touches', 'select', { filters: [{ column: 'touch_type', op: 'eq', value: 'site_visit' }], order: { column: 'created_at', ascending: false }, limit: 5 });
+    if (Array.isArray(rows)) recentVisits = rows;
+  } catch(e) {}
+
+  const bookCard = C.card({ children: el('div', {}) });
+  const bb = bookCard.querySelector('div');
+  bb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'BOOK SITE VISIT'));
+
+  const leadSel = el('select', { style: { width:'100%', marginBottom:'var(--space-2)', padding:'var(--space-2)', background:'var(--bg-secondary)', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-mono)', fontSize:'var(--text-sm)' } });
+  leadSel.appendChild(el('option', { value: '' }, '— Select lead —'));
+  leads.forEach(l => leadSel.appendChild(el('option', { value: l.id }, (l.company || l.contact_name || l.id) + ' · ' + (l.temperature || 'cold').toUpperCase())));
+
+  const dateIn = el('input', { type:'date', placeholder:'Date' });
+  const timeIn = el('input', { type:'time', value:'10:00', placeholder:'Time' });
+  const notesIn = el('input', { type:'text', placeholder:'Notes for visit' });
+  const r1 = el('div', { style: { display:'flex', gap:'var(--space-2)', marginBottom:'var(--space-2)', flexWrap:'wrap' } });
+  [dateIn, timeIn].forEach(i => { i.style.cssText='flex:1;min-width:120px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r1.appendChild(i); });
+  const r2 = el('div', { style: { marginBottom:'var(--space-3)' } }); notesIn.style.cssText='width:100%;box-sizing:border-box;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r2.appendChild(notesIn);
+
+  bb.appendChild(leadSel); bb.appendChild(r1); bb.appendChild(r2);
+  bb.appendChild(C.button({ label: 'Book visit', onClick: async () => {
+    if (!leadSel.value || !dateIn.value) { C.toast({ message: 'Select lead and date', type: 'error' }); return; }
+    const lead = leads.find(l => l.id === leadSel.value);
+    const record = {
+      lead_id: leadSel.value,
+      touch_type: 'site_visit',
+      scheduled_date: dateIn.value + 'T' + (timeIn.value || '10:00') + ':00',
+      notes: notesIn.value,
+      status: 'scheduled',
+    };
+    try {
+      await proxyPsnm('psnm_outreach_touches', 'insert', { record });
+      await proxyPsnm('psnm_warm_leads', 'update', {
+        filters: [{ column: 'id', op: 'eq', value: leadSel.value }],
+        updates: { next_contact_date: dateIn.value, last_contact_type: 'site_visit_scheduled', updated_at: new Date().toISOString() }
+      });
+      C.toast({ message: 'Site visit booked' + (lead ? ' for ' + (lead.company || lead.contact_name) : ''), type: 'success' });
+      dateIn.value = ''; notesIn.value = '';
+    } catch(e) { C.toast({ message: 'Failed to book', type: 'error' }); }
+  }}));
+  wrap.appendChild(bookCard);
+
+  if (recentVisits.length) {
+    const visitsCard = C.card({ children: el('div', {}) });
+    const vb = visitsCard.querySelector('div');
+    vb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'RECENT VISITS'));
+    recentVisits.forEach(v => {
+      const row = el('div', { style: { padding:'var(--space-2) 0', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-sm)' } },
+        el('span', { style: { color:'var(--text-secondary)', marginRight:'var(--space-2)', fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)' } }, v.scheduled_date ? new Date(v.scheduled_date).toLocaleDateString('en-GB') : '—'),
+        v.notes || 'Site visit'
+      );
+      vb.appendChild(row);
+    });
+    wrap.appendChild(visitsCard);
+  }
+  return wrap;
+}
+
+async function renderOccupancyLogger() {
+  const wrap = el('div', {});
+  const C = window.RBTR_Components;
+
+  let snapshots = [];
+  try { snapshots = await proxyPsnm('psnm_occupancy_snapshots', 'select', { order: { column: 'date', ascending: false }, limit: 30 }); } catch(e) {}
+  if (!Array.isArray(snapshots)) snapshots = [];
+
+  const latest = snapshots[0] || {};
+  const latestPallets = latest.pallets_count || latest.pallets || 0;
+  const pctFull = Math.round((latestPallets / 700) * 100);
+
+  const stats = el('div', { style: { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:'var(--space-3)', marginBottom:'var(--space-5)' } });
+  stats.appendChild(C.statCard({ emoji: '📦', label: 'Current occupancy', value: latestPallets, sub: latestPallets + '/700 · ' + pctFull + '% full' }));
+  stats.appendChild(C.statCard({ emoji: '🎯', label: 'To break-even', value: Math.max(0, 827 - latestPallets), sub: '827 pallet target' }));
+  wrap.appendChild(stats);
+
+  const logBtn = el('div', { style: { marginBottom:'var(--space-4)' } });
+  logBtn.appendChild(C.button({ label: '📦 Log pallet count', onClick: async () => {
+    const countStr = prompt('Current pallet count:', latestPallets || '');
+    if (countStr === null) return;
+    const count = parseInt(countStr);
+    if (isNaN(count)) { C.toast({ message: 'Enter a number', type: 'error' }); return; }
+    const notesStr = prompt('Notes (optional):');
+    const record = {
+      pallets_count: count,
+      date: new Date().toISOString().split('T')[0],
+      notes: notesStr || null,
+    };
+    try {
+      await proxyPsnm('psnm_occupancy_snapshots', 'insert', { record });
+      snapshots.unshift({ ...record, id: 'tmp-' + Date.now() });
+      C.toast({ message: count + ' pallets logged', type: 'success' });
+      // Refresh the count display
+      stats.querySelectorAll('.ds-stat .value').forEach((v, i) => {
+        if (i === 0) v.textContent = count;
+        if (i === 1) v.textContent = Math.max(0, 827 - count);
+      });
+    } catch(e) { C.toast({ message: 'Log failed', type: 'error' }); }
+  }}));
+  wrap.appendChild(logBtn);
+
+  // History table
+  const histCard = C.card({ children: el('div', {}) });
+  const hb = histCard.querySelector('div');
+  hb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'HISTORY'));
+  const t = el('table', { style: { width:'100%', borderCollapse:'collapse', fontSize:'var(--text-sm)' } });
+  t.appendChild(el('thead', {}, el('tr', {},
+    ...['Date','Pallets','% full','Notes'].map(h => el('th', { style: { textAlign:'left', padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)', textTransform:'uppercase' } }, h))
+  )));
+  const tbody = el('tbody');
+  snapshots.slice(0, 30).forEach(s => {
+    const pallets = s.pallets_count || s.pallets || 0;
+    tbody.appendChild(el('tr', {},
+      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)' } }, s.date ? new Date(s.date).toLocaleDateString('en-GB') : '—'),
+      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontFamily:'var(--font-mono)', fontWeight:'600' } }, String(pallets)),
+      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, Math.round((pallets / 700) * 100) + '%'),
+      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, s.notes || '—'),
+    ));
+  });
+  t.appendChild(tbody);
+  hb.appendChild(t);
+  wrap.appendChild(histCard);
+  return wrap;
+}
+
+async function renderPsnmSops() {
+  return window.SOPS_UI.renderSopSection('psnm');
+}
+
+async function renderPsnmCrm() {
+  return window.CRM_UI.renderContacts('psnm');
+}
 
 // ── Portal config ───────────────────────────────────────────────────────────
 const PSNM_PORTAL = {
@@ -274,19 +798,23 @@ const PSNM_PORTAL = {
   sections: [
     { id: 'dashboard',    group: 'OVERVIEW',   label: 'Dashboard',      emoji: '📊', render: renderPsnmDashboard, default: true },
     { id: 'warm-leads',   group: 'ATLAS',      label: 'Warm Leads',     emoji: '🔥', badge: { label: 'NEW', variant: 'new' }, render: renderWarmLeads },
-    { id: 'atlas-today',  group: 'ATLAS',      label: "Today's Actions", emoji: '📞', iframeHash: '#sec-atlas' },
-    { id: 'pipeline',     group: 'ATLAS',      label: 'Pipeline',       emoji: '📈', render: () => emptyState({ icon: '📈', title: 'Pipeline Kanban coming', body: 'Next-pass: Kanban view of psnm_enquiries by status with drag-to-move.' }) },
-    { id: 'performance',  group: 'ATLAS',      label: 'Performance',    emoji: '🏆', render: () => emptyState({ icon: '🏆', title: 'Performance charts coming', body: 'Touches / contact rate / conversion rate over 7+30 days.' }) },
-    { id: 'templates',    group: 'ATLAS',      label: 'Templates',      emoji: '📝', render: () => emptyState({ icon: '📝', title: 'Templates library coming', body: 'Saved outbound templates — pre-fill warm-lead emails.' }) },
+    { id: 'atlas-today',  group: 'ATLAS',      label: "Today's Actions", emoji: '📞', render: renderAtlasPriority },
+    { id: 'pipeline',     group: 'ATLAS',      label: 'Pipeline',       emoji: '📈', render: () => renderList('psnm_enquiries', { empty: 'No enquiries in pipeline.' }) },
+    { id: 'performance',  group: 'ATLAS',      label: 'Performance',    emoji: '🏆', render: renderPsnmPerformance },
+    { id: 'templates',    group: 'ATLAS',      label: 'Templates',      emoji: '📝', render: renderPsnmTemplates },
     { id: 'offer-config', group: 'ATLAS',      label: 'Offer Config',   emoji: '💰', render: renderOfferConfig },
-    { id: 'enquiries',    group: 'OPERATIONS', label: 'Enquiries',      emoji: '📬', iframeHash: '#sec-psnm' },
+    { id: 'enquiries',    group: 'OPERATIONS', label: 'Enquiries',      emoji: '📬', render: () => renderList('psnm_enquiries', { empty: 'No enquiries yet.' }) },
     { id: 'customers',    group: 'OPERATIONS', label: 'Customers',      emoji: '👥', render: () => renderList('psnm_customers', { empty: 'No customers yet. First signed contract creates one.' }) },
     { id: 'quotes',       group: 'OPERATIONS', label: 'Quotes',         emoji: '📄', render: () => renderList('psnm_quotes',    { empty: 'No quotes sent yet. Send via Warm Leads or Enquiries.' }) },
-    { id: 'occupancy',    group: 'OPERATIONS', label: 'Occupancy',      emoji: '📦', iframeHash: '#sec-psnm' },
+    { id: 'occupancy',    group: 'OPERATIONS', label: 'Occupancy',      emoji: '📦', render: renderOccupancyLogger },
     { id: 'invoices',     group: 'OPERATIONS', label: 'Invoices',       emoji: '💷', render: () => renderList('psnm_invoices', { empty: 'No invoices yet.' }) },
     { id: 'targets',      group: 'OUTREACH',   label: 'Targets',        emoji: '🎯', render: () => renderList('psnm_outreach_targets', { empty: 'No targets yet.' }) },
     { id: 'touches',      group: 'OUTREACH',   label: 'Touches',        emoji: '📡', render: () => renderList('psnm_outreach_touches',  { empty: 'No touches logged yet.' }) },
-    { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', iframeHash: '#sec-atlas' },
+    { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', render: renderPsnmTemplates },
+    { id: 'quote',        group: 'OUTREACH',   label: 'Quote Generator',emoji: '📄', render: renderQuoteGenerator },
+    { id: 'site-visit',   group: 'OUTREACH',   label: 'Site Visit',     emoji: '🏭', render: renderSiteVisitBooking },
+    { id: 'crm',          group: 'CONTACTS',   label: 'Contacts',       emoji: '👥', render: renderPsnmCrm },
+    { id: 'sops',         group: 'SOPs',       label: 'SOPs',           emoji: '📋', render: renderPsnmSops },
   ],
 };
 

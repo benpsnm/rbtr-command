@@ -5,245 +5,1121 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BEN · RBTR</title>
 <link rel="stylesheet" href="/css/portal.css">
+<style>
+.tab-bar { display:flex; gap:0; border-bottom:1px solid var(--border-subtle); margin-bottom:var(--space-4); flex-wrap:wrap; }
+.tab-btn { padding:var(--space-3) var(--space-4); cursor:pointer; font-size:var(--text-sm); color:var(--text-secondary); border-bottom:2px solid transparent; transition:all var(--transition-fast); background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; }
+.tab-btn.active { color:var(--text-primary); border-bottom-color:var(--border-strong); }
+.grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:var(--space-3); }
+.grid-3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--space-3); }
+.grid-4 { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:var(--space-3); }
+.form-group { margin-bottom:var(--space-4); }
+.form-row { display:flex; gap:var(--space-3); flex-wrap:wrap; align-items:flex-end; }
+.slim-table { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+.slim-table th { text-align:left; padding:var(--space-2) var(--space-3); color:var(--text-tertiary); font-size:var(--text-xs); letter-spacing:var(--track-wide); text-transform:uppercase; border-bottom:1px solid var(--border-subtle); font-weight:600; }
+.slim-table td { padding:var(--space-3); border-bottom:1px solid var(--border-subtle); }
+.habit-row { display:flex; align-items:center; gap:var(--space-3); padding:var(--space-2) 0; border-bottom:1px solid var(--border-subtle); }
+.habit-cb { width:18px; height:18px; cursor:pointer; accent-color:var(--text-primary); }
+.checklist-item { display:flex; align-items:flex-start; gap:var(--space-3); padding:var(--space-3); border-bottom:1px solid var(--border-subtle); }
+.checklist-item input[type=checkbox] { margin-top:2px; width:16px; height:16px; cursor:pointer; accent-color:var(--text-primary); flex-shrink:0; }
+.checklist-item.done label { text-decoration:line-through; color:var(--text-tertiary); }
+.timeline-item { display:flex; gap:var(--space-4); padding:var(--space-3) 0; border-bottom:1px solid var(--border-subtle); }
+.tl-dot { width:10px; height:10px; border-radius:50%; background:var(--border-default); flex-shrink:0; margin-top:5px; }
+.tl-dot.done { background:var(--text-primary); }
+.tl-dot.upcoming { background:var(--text-secondary); }
+.gate-card { background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:var(--space-5); }
+.pbar { background:var(--bg-tertiary); border-radius:var(--radius-pill); height:6px; margin:var(--space-2) 0; }
+.pbar-fill { background:var(--text-primary); height:100%; border-radius:var(--radius-pill); transition:width 0.4s; }
+.mood-btn { padding:var(--space-2) var(--space-3); background:var(--bg-tertiary); border:1px solid var(--border-default); border-radius:var(--radius-md); cursor:pointer; font-size:var(--text-sm); transition:all var(--transition-fast); font-family:inherit; }
+.mood-btn.sel { background:var(--text-primary); color:var(--bg-primary); border-color:var(--text-primary); }
+.section-note { background:var(--bg-secondary); border-left:3px solid var(--border-default); padding:var(--space-4); border-radius:0 var(--radius-md) var(--radius-md) 0; margin-bottom:var(--space-5); font-size:var(--text-sm); color:var(--text-secondary); line-height:var(--leading-loose); }
+.task-pill { display:inline-flex; align-items:center; padding:2px var(--space-2); border-radius:var(--radius-pill); font-size:var(--text-xs); letter-spacing:var(--track-wide); text-transform:uppercase; border:1px solid var(--border-subtle); color:var(--text-tertiary); margin-right:var(--space-1); }
+@media(max-width:600px){ .grid-4{grid-template-columns:1fr 1fr;} .form-row{flex-direction:column;} }
+</style>
 </head>
 <body>
 <div id="portal-root"></div>
-
 <script src="/js/components.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/auth-guard.js"></script>
 <script src="/js/portal-framework.js"></script>
-
+<script src="/js/crm-sops.js"></script>
 <script>
+'use strict';
 const C = window.RBTR_Components;
 const { el, card, statCard, button, emptyState } = C;
 
-// ── Dashboard ───────────────────────────────────────────────────────────────
-async function renderBenDashboard() {
+// ── Shared helpers ──────────────────────────────────────────────────────────
+function proxy(table, op, extra = {}) {
+  return fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ table, op, ...extra }) }).then(r => r.ok ? r.json() : []);
+}
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-GB') : '—'; }
+function fmtGbp(n) { return n != null ? '£' + Number(n).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'; }
+
+function tabs(defs) {
+  const wrap = el('div', {});
+  const bar = el('div', { className: 'tab-bar' });
+  const bodies = [];
+  defs.forEach((d, i) => {
+    const btn = el('button', { className: 'tab-btn' + (i === 0 ? ' active' : ''), onClick: () => activate(i) }, d.label);
+    bar.appendChild(btn);
+    const body = el('div', { style: { display: i === 0 ? '' : 'none' } });
+    bodies.push(body);
+    wrap.appendChild(body);
+    if (i === 0) d.render(body);
+  });
+  wrap.insertBefore(bar, wrap.firstChild);
+  function activate(idx) {
+    bar.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+    bodies.forEach((b, i) => { b.style.display = i === idx ? '' : 'none'; });
+    if (!bodies[idx].dataset.loaded) { bodies[idx].dataset.loaded = '1'; defs[idx].render(bodies[idx]); }
+  }
+  return wrap;
+}
+
+function logTable(rows, cols) {
+  if (!rows.length) return emptyState({ icon: '·', title: 'Nothing logged yet' });
+  const tbl = el('table', { className: 'slim-table' });
+  tbl.appendChild(el('thead', {}, el('tr', {}, ...cols.map(c => el('th', {}, c.label)))));
+  const tb = el('tbody', {});
+  rows.forEach(r => tb.appendChild(el('tr', {}, ...cols.map(c => el('td', {}, c.render ? c.render(r) : (r[c.key] ?? '—'))))));
+  tbl.appendChild(tb);
+  return tbl;
+}
+
+// ── sec-today ───────────────────────────────────────────────────────────────
+async function renderToday() {
   const wrap = el('div', {});
 
-  const stats = el('div', {
-    style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
-  });
-  const cardPersonalCash = statCard({ emoji: '💷', label: 'Personal cash', value: '—', sub: 'last logged balance' });
-  const cardBuiltDad     = statCard({ emoji: '💪', label: 'Built Dad day', value: '—', sub: 'of 56' });
-  const cardMoodGap      = statCard({ emoji: '🧠', label: 'Mood gap', value: '—', sub: 'days since last reflection' });
-  const cardBills        = statCard({ emoji: '📅', label: 'Bills due', value: '—', sub: 'next 7 days' });
-  stats.appendChild(cardPersonalCash);
-  stats.appendChild(cardBuiltDad);
-  stats.appendChild(cardMoodGap);
-  stats.appendChild(cardBills);
+  // Departure + photoshoot counters
+  const dep = Math.ceil((new Date('2027-07-01') - new Date()) / 86400000);
+  const stats = el('div', { className: 'grid-4', style: { marginBottom: 'var(--space-5)' } });
+  const daysLeftStat = statCard({ emoji: '🚛', label: 'Days to departure', value: dep, sub: '1 July 2027' });
+  stats.appendChild(daysLeftStat);
+  const builtDadStat = statCard({ emoji: '💪', label: 'Built Dad', value: '—', sub: 'day of 56' });
+  stats.appendChild(builtDadStat);
+  const weatherStat = statCard({ emoji: '☁', label: 'Rotherham', value: '—', sub: 'loading…' });
+  stats.appendChild(weatherStat);
+  const moodStat = statCard({ emoji: '🧠', label: 'Last mood', value: '—', sub: 'from log' });
+  stats.appendChild(moodStat);
   wrap.appendChild(stats);
 
+  // Load live data
   try {
-    const r = await fetch('/api/briefing-data');
-    const j = await r.json();
-    const d = j.data || {};
-    const vals = stats.querySelectorAll('.ds-stat .value');
-    if (vals[0]) vals[0].textContent = d.cash_personal?.balance_gbp != null ? '£' + Number(d.cash_personal.balance_gbp).toLocaleString() : '—';
-    if (vals[1]) vals[1].textContent = d.built_dad_day != null ? d.built_dad_day : '—';
-    if (vals[2]) vals[2].textContent = d.mood_log_gap_days != null ? d.mood_log_gap_days : '—';
-    if (vals[3]) {
-      const bills = d.bills_due_this_week;
-      vals[3].textContent = Array.isArray(bills) ? bills.length : (bills == null ? '—' : '0');
+    const [bd, moods] = await Promise.all([
+      fetch('/api/briefing-data').then(r => r.json()).then(j => j.data || {}),
+      proxy('ben_mood_log', 'select'),
+    ]);
+    const val = builtDadStat.querySelector('.value');
+    if (val && bd.built_dad_day != null) val.textContent = bd.built_dad_day;
+    if (Array.isArray(moods) && moods.length) {
+      moods.sort((a,b) => b.date.localeCompare(a.date));
+      const mv = moodStat.querySelector('.value');
+      if (mv) mv.textContent = moods[0].mood + '/10';
     }
   } catch(e) {}
 
-  // Today's open goals
-  wrap.appendChild(el('h2', { className: 'ds-h2' }, "Today's open goals"));
-  const goalsWrap = el('div', { style: { display: 'grid', gap: 'var(--space-2)' } });
+  // Weather
   try {
-    const r = await fetch('/api/supabase-proxy', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'jarvis_goals', op: 'select' })
-    });
-    const rows = r.ok ? await r.json() : [];
-    const open = (rows || []).filter(g => g.status === 'open' && g.scope === 'day').slice(0, 10);
-    if (!open.length) goalsWrap.appendChild(emptyState({ icon: '🎯', title: 'No open goals', body: 'Open Today Goals in the sidebar to add some.' }));
-    else open.forEach(g => goalsWrap.appendChild(card({ children: el('div', {}, g.title || '(no title)') })));
+    const wr = await fetch('https://api.open-meteo.com/v1/forecast?latitude=53.42&longitude=-1.36&current=temperature_2m,weather_code');
+    const wj = await wr.json();
+    const wv = weatherStat.querySelector('.value');
+    if (wv && wj.current) wv.textContent = Math.round(wj.current.temperature_2m) + '°C';
+    const ws = weatherStat.querySelector('.sub');
+    if (ws) ws.textContent = 'Rotherham now';
   } catch(e) {}
-  wrap.appendChild(goalsWrap);
 
-  // Three gates
-  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Three gates'));
-  wrap.appendChild(card({ children: el('div', {},
-    el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-2)' } }, 'Personal liquidity path'),
-    el('div', {}, '• Van finish + buyer payment'),
-    el('div', {}, '• T6.1 + trailer sale (→ RBTR build fund)'),
-    el('div', {}, '• Coffee Brothers bike return (closes Gate 2)'),
-  )}));
+  // Top 3 Focus
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, "Today's Top 3"));
+  const top3Card = card({ children: el('div', { id: 'top3-host' }, 'Loading…') });
+  wrap.appendChild(top3Card);
+
+  try {
+    const goals = await proxy('ben_goals', 'select');
+    const todayOpen = (goals || []).filter(g => g.tier === 'today' && g.status === 'open').slice(0, 3);
+    const host = top3Card.querySelector('#top3-host');
+    host.innerHTML = '';
+    if (todayOpen.length === 0) {
+      host.appendChild(emptyState({ icon: '🎯', title: 'No today goals set', body: 'Add them in Goals → Today tab.' }));
+    } else {
+      todayOpen.forEach((g, i) => {
+        host.appendChild(el('div', { style: { padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' } },
+          el('span', { style: { fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', minWidth: '20px' } }, (i+1) + '.'),
+          el('span', {}, g.content)
+        ));
+      });
+    }
+  } catch(e) {}
+
+  // Daily Habits
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Daily Habits'));
+  const habitsCard = card({});
+  const habits = ['5am wake — no phone first','Water + 5 mins outside','Training done','Portal briefing read','Top 3 set','Family time protected','Evening log done'];
+  const today = new Date().toISOString().slice(0, 10);
+  const habitsKey = 'rbtr_habits_' + today;
+  let savedHabits = {};
+  try { savedHabits = JSON.parse(localStorage.getItem(habitsKey) || '{}'); } catch(e) {}
+  habits.forEach((h, i) => {
+    const row = el('div', { className: 'habit-row' });
+    const cb = el('input', { type: 'checkbox', className: 'habit-cb' });
+    cb.checked = !!savedHabits[i];
+    cb.addEventListener('change', () => { savedHabits[i] = cb.checked; try { localStorage.setItem(habitsKey, JSON.stringify(savedHabits)); } catch(e){} });
+    row.appendChild(cb);
+    row.appendChild(el('label', { style: { flex: '1', fontSize: 'var(--text-sm)', cursor: 'pointer' }, onClick: () => { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } }, h));
+    habitsCard.appendChild(row);
+  });
+  wrap.appendChild(habitsCard);
+
+  // Mood + Energy log
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Log Today'));
+  wrap.appendChild(renderMoodLogForm());
 
   return wrap;
 }
 
-// ── Evening reflection render (native, writes to evening_reflections) ──────
+function renderMoodLogForm() {
+  const wrap = el('div', {});
+  const state = { mood: null, energy: null };
+  const makeButtons = (key, max) => {
+    const row = el('div', { style: { display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' } });
+    for (let i = 1; i <= max; i++) {
+      const n = i;
+      const btn = el('button', { className: 'mood-btn', onClick: () => {
+        state[key] = n;
+        row.querySelectorAll('.mood-btn').forEach((b, j) => b.classList.toggle('sel', j + 1 === n));
+      } }, String(n));
+      row.appendChild(btn);
+    }
+    return row;
+  };
+  const sleepInp = el('input', { type: 'number', className: 'ds-input', step: '0.5', min: '0', max: '12', placeholder: 'e.g. 7.5', style: { maxWidth: '120px' } });
+  const notesInp = el('input', { className: 'ds-input', placeholder: 'One line (optional)' });
+  const status = el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-2)' } });
+
+  const saveBtn = button({ variant: 'primary', label: 'Log', onClick: async () => {
+    if (!state.mood || !state.energy) { status.textContent = 'Pick mood and energy.'; return; }
+    saveBtn.disabled = true; saveBtn.textContent = '…';
+    const today = new Date().toISOString().slice(0, 10);
+    await proxy('ben_mood_log', 'delete', { match: { date: today } });
+    const r = await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_mood_log', op:'insert', row: { date: today, mood: state.mood, energy: state.energy, sleep_hours: sleepInp.value ? Number(sleepInp.value) : null, notes: notesInp.value || null } }) });
+    saveBtn.disabled = false; saveBtn.textContent = 'Log';
+    if (r.ok) { C.toast({ type:'success', message: 'Logged.' }); status.textContent = ''; }
+    else { status.textContent = 'Save failed.'; }
+  } });
+
+  wrap.appendChild(card({ children: el('div', {},
+    el('div', { className: 'form-row' },
+      el('div', { style: { flex: '1' } }, el('div', { className: 'ds-label' }, 'Mood 1-10'), makeButtons('mood', 10)),
+      el('div', { style: { flex: '1' } }, el('div', { className: 'ds-label' }, 'Energy 1-10'), makeButtons('energy', 10)),
+    ),
+    el('div', { className: 'form-row', style: { marginTop: 'var(--space-4)' } },
+      el('div', {}, el('div', { className: 'ds-label' }, 'Sleep hours'), sleepInp),
+      el('div', { style: { flex: '1' } }, el('div', { className: 'ds-label' }, 'Note'), notesInp),
+    ),
+    el('div', { className: 'form-row', style: { marginTop: 'var(--space-4)', justifyContent: 'flex-end' } }, saveBtn),
+    status,
+  ) }));
+  return wrap;
+}
+
+// ── sec-goals ───────────────────────────────────────────────────────────────
+async function renderGoals() {
+  const TIERS = ['today', 'week', 'month', 'life', 'rbtr'];
+  const TIER_LABELS = { today: 'Today', week: 'Week', month: 'Month', life: 'Life', rbtr: 'RBTR' };
+
+  function renderTier(tierKey, host) {
+    host.innerHTML = '';
+    proxy('ben_goals', 'select').then(all => {
+      const items = (all || []).filter(g => g.tier === tierKey).sort((a, b) => a.created_at > b.created_at ? -1 : 1);
+      const addRow = el('div', { className: 'form-row', style: { marginBottom: 'var(--space-4)' } });
+      const inp = el('input', { className: 'ds-input', placeholder: 'New goal…', style: { flex: '1' } });
+      const addBtn = button({ variant: 'primary', size: 'sm', label: 'Add', onClick: async () => {
+        if (!inp.value.trim()) return;
+        addBtn.disabled = true;
+        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table:'ben_goals', op:'insert', row: { tier: tierKey, content: inp.value.trim(), status: 'open' } }) });
+        inp.value = ''; addBtn.disabled = false;
+        renderTier(tierKey, host);
+      } });
+      addRow.appendChild(inp); addRow.appendChild(addBtn);
+      host.appendChild(addRow);
+
+      if (!items.length) { host.appendChild(emptyState({ icon: '🎯', title: 'No goals here yet' })); return; }
+      items.forEach(g => {
+        const row = el('div', { className: 'checklist-item' + (g.status === 'done' ? ' done' : '') });
+        const cb = el('input', { type: 'checkbox' }); cb.checked = g.status === 'done';
+        cb.addEventListener('change', async () => {
+          await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ table:'ben_goals', op:'update', match:{ id: g.id }, row: { status: cb.checked ? 'done' : 'open', completed_at: cb.checked ? new Date().toISOString() : null } }) });
+          renderTier(tierKey, host);
+        });
+        const lbl = el('label', { style: { flex: '1', cursor: 'pointer' }, onClick: () => { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } }, g.content);
+        row.appendChild(cb); row.appendChild(lbl);
+        host.appendChild(row);
+      });
+    });
+  }
+
+  return tabs([
+    ...TIERS.map(t => ({
+      label: TIER_LABELS[t],
+      render: (host) => renderTier(t, host)
+    })),
+    { label: 'Wins Wall', render: (host) => {
+      proxy('ben_goals', 'select').then(all => {
+        const wins = (all || []).filter(g => g.status === 'done').sort((a,b) => (b.completed_at||'') > (a.completed_at||'') ? 1 : -1);
+        host.innerHTML = '';
+        if (!wins.length) { host.appendChild(emptyState({ icon: '🏆', title: 'No wins logged yet', body: 'Tick goals off above and they appear here.' })); return; }
+        wins.slice(0, 50).forEach(g => {
+          host.appendChild(el('div', { style: { padding: 'var(--space-3) 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: 'var(--space-3)', alignItems: 'center' } },
+            el('span', { style: { color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', minWidth: '80px' } }, fmtDate(g.completed_at)),
+            el('span', { className: 'task-pill' }, g.tier),
+            el('span', { style: { flex: '1' } }, g.content)
+          ));
+        });
+      });
+    } }
+  ]);
+}
+
+// ── sec-dailybrief ──────────────────────────────────────────────────────────
+async function renderDailyBrief() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-5)' } },
+    'Yesterday, today, this week — at a glance.'));
+
+  try {
+    const [bd, moods, goals] = await Promise.all([
+      fetch('/api/briefing-data').then(r => r.json()).then(j => j.data || {}),
+      proxy('ben_mood_log', 'select'),
+      proxy('ben_goals', 'select'),
+    ]);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const sortedMoods = (moods || []).sort((a, b) => b.date.localeCompare(a.date));
+    const todayMood = sortedMoods.find(m => m.date === todayStr);
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const yMood = sortedMoods.find(m => m.date === yesterdayStr);
+    const openToday = (goals || []).filter(g => g.tier === 'today' && g.status === 'open').length;
+    const doneToday = (goals || []).filter(g => g.tier === 'today' && g.status === 'done').length;
+
+    const grid = el('div', { className: 'grid-3' });
+    grid.appendChild(card({ children: el('div', {},
+      el('div', { className: 'ds-caption' }, 'YESTERDAY'),
+      el('div', { style: { fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-mono)', margin: 'var(--space-2) 0' } }, yMood ? yMood.mood + '/10 mood' : '—'),
+      el('div', { className: 'text-muted' }, yMood?.notes || 'No note logged'),
+    ) }));
+    grid.appendChild(card({ children: el('div', {},
+      el('div', { className: 'ds-caption' }, 'TODAY'),
+      el('div', { style: { fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-mono)', margin: 'var(--space-2) 0' } }, todayMood ? todayMood.mood + '/10 mood' : '— not logged'),
+      el('div', { className: 'text-muted' }, openToday + ' goals open · ' + doneToday + ' done'),
+    ) }));
+    grid.appendChild(card({ children: el('div', {},
+      el('div', { className: 'ds-caption' }, 'MONEY'),
+      el('div', { style: { fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-mono)', margin: 'var(--space-2) 0' } }, bd.cash_personal?.balance_gbp != null ? fmtGbp(bd.cash_personal.balance_gbp) : '—'),
+      el('div', { className: 'text-muted' }, 'Personal · PSNM ' + (bd.cash_psnm?.balance_gbp != null ? fmtGbp(bd.cash_psnm.balance_gbp) : '—')),
+    ) }));
+    wrap.appendChild(grid);
+
+    // 30-day mood trend
+    if (sortedMoods.length > 1) {
+      wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Mood last 30 days'));
+      const trendWrap = el('div', { style: { display: 'flex', alignItems: 'flex-end', gap: '4px', height: '60px', marginBottom: 'var(--space-4)' } });
+      sortedMoods.slice(0, 30).reverse().forEach(m => {
+        const h = Math.max(4, (m.mood / 10) * 60);
+        trendWrap.appendChild(el('div', {
+          title: fmtDate(m.date) + ': mood ' + m.mood,
+          style: { flex: '1', height: h + 'px', background: 'var(--text-primary)', borderRadius: '2px', opacity: '0.7', minWidth: '4px', cursor: 'default' }
+        }));
+      });
+      wrap.appendChild(trendWrap);
+    }
+  } catch(e) {
+    wrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed', body: e.message }));
+  }
+  return wrap;
+}
+
+// ── sec-wellness ─────────────────────────────────────────────────────────────
+function renderWellness() {
+  function routineTab(host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { className: 'section-note' },
+      'Your structure protects best energy for what moves the needle. Without it, the day eats you alive.'));
+    const schedule = [
+      ['5:30–6:00am', 'Wake. No phone. Water. Outside.'],
+      ['6:00–7:00am', 'Training block.'],
+      ['7:00–7:30am', 'Portal briefing + set Top 3.'],
+      ['7:30–12:00', 'Deep work — build / house / content.'],
+      ['12:00–1:00pm', 'Lunch + 15-min walk.'],
+      ['1:00–5:00pm', 'Ops — PSNM, Eternal, admin.'],
+      ['5:00–7:00pm', 'Family time — PROTECTED. Phone away.'],
+      ['7:00–8:00pm', 'Ben and Sarah time.'],
+      ['8:00–9:30pm', 'Content review / planning.'],
+      ['9:30–10:00pm', 'Log the day. Wins. Close out.'],
+      ['10:00pm', 'No screens. Wind down. Bed.'],
+    ];
+    schedule.forEach(([time, desc]) => {
+      host.appendChild(el('div', { className: 'timeline-item' },
+        el('div', { className: 'tl-dot done' }),
+        el('div', {},
+          el('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' } }, time),
+          el('div', { style: { fontSize: 'var(--text-sm)', marginTop: '2px' } }, desc)
+        )
+      ));
+    });
+  }
+
+  function trainingTab(host) {
+    host.innerHTML = '';
+    const weekly = [
+      ['Monday', 'Push — Chest, Shoulders, Triceps'],
+      ['Tuesday', 'Cardio — 30 min run or bike'],
+      ['Wednesday', 'Pull — Back, Biceps, Rear delts'],
+      ['Thursday', 'Active recovery — walk + mobility'],
+      ['Friday', 'Legs — Squat, hinge, carry'],
+      ['Saturday', 'Functional — outdoor, family activity'],
+      ['Sunday', 'Rest — sauna, stretch, recovery'],
+    ];
+    const grid = el('div', { className: 'grid-2' });
+    const schedCard = card({ children: el('div', {},
+      el('h3', { className: 'ds-h3' }, 'Weekly structure'),
+      ...weekly.map(([day, desc]) => el('div', { style: { display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 'var(--text-sm)' } },
+        el('span', { style: { color: 'var(--text-tertiary)', minWidth: '90px' } }, day),
+        el('span', {}, desc)
+      ))
+    ) });
+    grid.appendChild(schedCard);
+
+    // Session log form
+    const logCard = card({ children: el('div', { id: 'train-log-host' }, 'Loading…') });
+    grid.appendChild(logCard);
+    host.appendChild(grid);
+
+    const logHost = logCard.querySelector('#train-log-host');
+    logHost.innerHTML = '';
+    logHost.appendChild(el('h3', { className: 'ds-h3' }, 'Log session'));
+    const actInp = el('input', { className: 'ds-input', placeholder: 'e.g. Push day, 45 min', style: { marginBottom: 'var(--space-3)' } });
+    const logBtn = button({ variant: 'primary', size: 'sm', label: 'Log', onClick: async () => {
+      if (!actInp.value.trim()) return;
+      logBtn.disabled = true;
+      const today = new Date().toISOString().slice(0,10);
+      await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table:'sarah_wellness_log', op:'insert', row: { log_date: today, activity: actInp.value.trim(), duration_mins: null } }) });
+      actInp.value = ''; logBtn.disabled = false; C.toast({ type:'success', message: 'Logged.' });
+    } });
+    logHost.appendChild(actInp);
+    logHost.appendChild(logBtn);
+  }
+
+  function nutritionTab(host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { className: 'section-note' }, 'Not a diet. A framework. Works at home, in the workshop, on the road.'));
+    const rules = [
+      ['Protein target', '~180g/day (bodyweight in kg × 2)'],
+      ['Carbs', 'Eat around training — more on workout days'],
+      ['Fats', "Don't fear them — avocado, eggs, nuts, olive oil"],
+      ['Water', '3L minimum. More on physical days.'],
+      ['Alcohol', 'Your call — but it kills sleep, recovery and mood'],
+      ['One rule', 'Eat real food. If it came in a packet with 15 ingredients — less of that.'],
+    ];
+    const tbl = el('table', { className: 'slim-table' });
+    rules.forEach(([label, val]) => {
+      tbl.appendChild(el('tr', {}, el('td', { style: { color: 'var(--text-tertiary)', width: '160px', paddingRight: 'var(--space-4)' } }, label), el('td', {}, val)));
+    });
+    host.appendChild(card({ children: tbl }));
+  }
+
+  function sleepTab(host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { className: 'section-note' }, 'Sleep is the most underrated performance tool you have. The build is physical. Recovery matters.'));
+    host.appendChild(renderMoodLogForm());
+    host.appendChild(el('h3', { className: 'ds-h3', style: { marginTop: 'var(--space-5)' } }, 'Sleep log — last 14 days'));
+    proxy('ben_mood_log', 'select').then(rows => {
+      const sorted = (rows || []).filter(r => r.sleep_hours).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14);
+      host.appendChild(logTable(sorted, [
+        { label: 'Date', render: r => fmtDate(r.date) },
+        { label: 'Sleep hrs', key: 'sleep_hours' },
+        { label: 'Mood', key: 'mood' },
+        { label: 'Energy', key: 'energy' },
+      ]));
+    });
+  }
+
+  function dojoTab(host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { className: 'section-note' }, 'Learn one thing a day. 365 things a year. The expedition is built in the mind before it\'s built in the workshop.'));
+    proxy('jarvis_learning_sessions', 'select').then(rows => {
+      const sorted = (rows || []).sort((a, b) => b.created_at > a.created_at ? 1 : -1).slice(0, 20);
+      if (!sorted.length) { host.appendChild(emptyState({ icon: '🥋', title: 'No sessions logged', body: 'Log via the ROCKO orb or legacy portal.' })); return; }
+      host.appendChild(logTable(sorted, [
+        { label: 'Date', render: r => fmtDate(r.created_at) },
+        { label: 'Topic', key: 'topic' },
+        { label: 'Source', key: 'source' },
+      ]));
+    });
+  }
+
+  function bestSelfTab(host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { className: 'section-note' }, 'The version of you that already made it. Read this when the other version shows up.'));
+    const pillars = [
+      ['On Failure', 'Failure is data. Co-Lab gave you information about what doesn\'t work, who isn\'t trustworthy, and where you were operating outside your strengths. You paid a high price for that data. Use it.'],
+      ['On Progress', 'You don\'t need to go fast. You need to go consistently. One house job a day. One workout a day. One piece of content a week. In a year that\'s 52 videos, 365 workouts, and a house that\'s ready to rent.'],
+      ['On the Boys', 'Hudson and Benson don\'t need a perfect dad. They need a present one. The truck, the expedition, the debt payback — they\'ll understand all of it one day. What they\'ll remember is whether you were there.'],
+      ['When It Gets Hard', 'You built 20 years of skill with your hands. You survived a business collapse that would have finished most people. You came back. Rock bottom isn\'t the end of the story. It\'s the title of it.'],
+    ];
+    const grid = el('div', { className: 'grid-2' });
+    pillars.forEach(([title, body]) => {
+      grid.appendChild(card({ children: el('div', {},
+        el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-2)' } }, title),
+        el('div', { style: { fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } }, body)
+      ) }));
+    });
+    host.appendChild(grid);
+  }
+
+  return tabs([
+    { label: 'Routine', render: routineTab },
+    { label: 'Training', render: trainingTab },
+    { label: 'Nutrition', render: nutritionTab },
+    { label: 'Sleep', render: sleepTab },
+    { label: 'Dojo', render: dojoTab },
+    { label: 'Best Self', render: bestSelfTab },
+  ]);
+}
+
+// ── sec-tasks ───────────────────────────────────────────────────────────────
+async function renderTasks() {
+  const PORTALS = ['all', 'psnm', 'house', 'rbtr', 'eternal', 'personal'];
+  let filter = 'all';
+
+  function renderList(host, rows) {
+    host.innerHTML = '';
+    const filtered = filter === 'all' ? rows : rows.filter(t => t.portal === filter);
+    const open = filtered.filter(t => t.status === 'open').sort((a,b) => (a.priority||3) - (b.priority||3));
+    if (!open.length) { host.appendChild(emptyState({ icon: '✅', title: 'Nothing open', body: filter === 'all' ? 'All tasks done.' : 'No ' + filter + ' tasks open.' })); return; }
+    open.forEach(t => {
+      const row = el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) 0', borderBottom: '1px solid var(--border-subtle)' } });
+      const cb = el('input', { type: 'checkbox' }); cb.checked = false;
+      cb.addEventListener('change', async () => {
+        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table:'ben_tasks', op:'update', match:{ id: t.id }, row: { status: 'done' } }) });
+        init();
+      });
+      row.appendChild(cb);
+      if (t.portal) row.appendChild(el('span', { className: 'task-pill' }, t.portal));
+      row.appendChild(el('span', { style: { flex: '1', fontSize: 'var(--text-sm)' } }, t.title));
+      if (t.due_date) row.appendChild(el('span', { className: 'ds-caption' }, fmtDate(t.due_date)));
+      host.appendChild(row);
+    });
+  }
+
+  const wrap = el('div', {});
+  // Filter pills
+  const filterRow = el('div', { style: { display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' } });
+  const listHost = el('div', {});
+  let allTasks = [];
+
+  PORTALS.forEach(p => {
+    const btn = el('button', { className: 'mood-btn' + (p === 'all' ? ' sel' : ''), onClick: () => {
+      filter = p; filterRow.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel'); renderList(listHost, allTasks);
+    } }, p === 'all' ? 'All' : p.toUpperCase());
+    filterRow.appendChild(btn);
+  });
+
+  // Add form
+  const addRow = el('div', { className: 'form-row', style: { marginBottom: 'var(--space-5)' } });
+  const titleInp = el('input', { className: 'ds-input', placeholder: 'New task…', style: { flex: '2' } });
+  const portalSel = el('select', { className: 'ds-input', style: { flex: '1' } });
+  ['psnm','house','rbtr','eternal','personal'].forEach(p => portalSel.appendChild(el('option', { value: p }, p)));
+  const addBtn = button({ variant: 'primary', size: 'sm', label: 'Add', onClick: async () => {
+    if (!titleInp.value.trim()) return;
+    addBtn.disabled = true;
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_tasks', op:'insert', row: { title: titleInp.value.trim(), portal: portalSel.value, status: 'open' } }) });
+    titleInp.value = ''; addBtn.disabled = false; init();
+  } });
+  addRow.appendChild(titleInp); addRow.appendChild(portalSel); addRow.appendChild(addBtn);
+
+  wrap.appendChild(addRow);
+  wrap.appendChild(filterRow);
+  wrap.appendChild(listHost);
+
+  async function init() {
+    allTasks = await proxy('ben_tasks', 'select') || [];
+    renderList(listHost, allTasks);
+  }
+  init();
+  return wrap;
+}
+
+// ── sec-notes ───────────────────────────────────────────────────────────────
+async function renderNotes() {
+  const wrap = el('div', {});
+  const addArea = el('textarea', { className: 'ds-input', placeholder: 'Write something…', style: { minHeight: '100px', resize: 'vertical', marginBottom: 'var(--space-3)' } });
+  const tagsInp = el('input', { className: 'ds-input', placeholder: 'Tags (comma-separated)', style: { marginBottom: 'var(--space-3)' } });
+  const listHost = el('div', {});
+  const saveBtn = button({ variant: 'primary', label: 'Save note', onClick: async () => {
+    if (!addArea.value.trim()) return;
+    saveBtn.disabled = true;
+    const tags = tagsInp.value.split(',').map(t => t.trim()).filter(Boolean);
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_notes', op:'insert', row: { content: addArea.value.trim(), tags } }) });
+    addArea.value = ''; tagsInp.value = ''; saveBtn.disabled = false;
+    loadNotes();
+  } });
+
+  async function loadNotes() {
+    const rows = await proxy('ben_notes', 'select') || [];
+    rows.sort((a, b) => b.created_at > a.created_at ? 1 : -1);
+    listHost.innerHTML = '';
+    if (!rows.length) { listHost.appendChild(emptyState({ icon: '📝', title: 'No notes yet' })); return; }
+    rows.slice(0, 30).forEach(n => {
+      listHost.appendChild(card({ children: el('div', {},
+        el('div', { style: { fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', whiteSpace: 'pre-wrap', marginBottom: 'var(--space-2)' } }, n.content),
+        el('div', { className: 'ds-caption' }, fmtDate(n.created_at) + (n.tags?.length ? ' · ' + n.tags.join(', ') : '')),
+      ) }));
+    });
+  }
+
+  wrap.appendChild(addArea);
+  wrap.appendChild(el('div', { className: 'form-row' }, tagsInp, saveBtn));
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-5)' } }, 'Recent notes'));
+  wrap.appendChild(listHost);
+  loadNotes();
+  return wrap;
+}
+
+// ── sec-mindset ──────────────────────────────────────────────────────────────
+function renderMindset() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' },
+    'When it gets hard — read this. Not a pep talk. A reminder of what\'s actually true.'));
+  const blocks = [
+    ['When It Gets Hard', 'You built 20 years of skill with your hands. You survived a business collapse that would have finished most people. You came back. You\'re building something bigger than anything you built before — and you\'re doing it for the right reasons.\n\nThe people who come for you online have one thing you don\'t: time to sit at a keyboard. You have a welding torch, a plan, and two boys watching. That\'s not a fair fight. They lose.\n\nRock bottom isn\'t the end of the story. It\'s the title of it.'],
+    ['On the Fear', 'You said your biggest fear is it being taken away from you. Name it.\n\nThe truck can\'t be seized — it doesn\'t exist yet.\nYou can\'t be stopped from leaving — no legal mechanism prevents departure. The DRO doesn\'t restrict travel.\nOne 1-hour solicitor session confirming JMW is closed removes most of the uncertainty. £200. Worth it.'],
+    ['On Failure', 'Failure is data. Co-Lab gave you information about what doesn\'t work, who isn\'t trustworthy, and where you were operating outside your strengths. You paid a high price for that data. Use it.'],
+    ['On Progress', 'You don\'t need to go fast. You need to go consistently. One house job. One workout. One piece of content. In a year that\'s 52 videos, 365 workouts, and a house ready to rent.'],
+    ['On the Boys', 'Hudson and Benson don\'t need a perfect dad. They need a present one. The truck, the expedition, the debt payback — they\'ll understand all of it one day. What they\'ll remember is whether you were there.'],
+  ];
+  blocks.forEach(([title, text]) => {
+    wrap.appendChild(card({ children: el('div', {},
+      el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, title),
+      el('div', { style: { fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--text-secondary)', whiteSpace: 'pre-line' } }, text)
+    ) }));
+  });
+  return wrap;
+}
+
+// ── sec-relationship ─────────────────────────────────────────────────────────
+function renderRelationship() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' },
+    'You\'re about to spend 3–4 years in a 7.5m box together with two young boys in some of the most challenging environments on earth. The relationship isn\'t separate from the expedition — it is the expedition.'));
+
+  const grid = el('div', { className: 'grid-2', style: { marginBottom: 'var(--space-5)' } });
+  grid.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, 'WEEKLY CONNECTION IDEAS'),
+    el('div', { style: { fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--text-secondary)' } },
+      'Sunday evening review — 30 mins, no phones, review the week together\n\nDate night once a week — even at home, dressed, present, no work talk\n\nDaily walk together — 20 mins without kids, just talk\n\nOne thing you appreciate — say it out loud, every day\n\nMonthly check-in — where are we, what do we need, what\'s working')
+  ) }));
+  grid.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, 'WHEN THINGS ARE TENSE'),
+    el('div', { style: { fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--text-secondary)' } },
+      '"What do you actually need from me right now?"\n"Is this about today or something bigger?"\n"Can we come back to this in an hour?"\n"What would make this better for you?"')
+  ) }));
+  wrap.appendChild(grid);
+
+  // Date night log
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Date nights logged'));
+  const listHost = el('div', {});
+  wrap.appendChild(listHost);
+
+  const addRow = el('div', { className: 'form-row', style: { marginBottom: 'var(--space-4)' } });
+  const dateInp = el('input', { type: 'date', className: 'ds-input', value: new Date().toISOString().slice(0,10) });
+  const noteInp = el('input', { className: 'ds-input', placeholder: 'What did you do?', style: { flex: '1' } });
+  const logBtn = button({ variant: 'primary', size: 'sm', label: 'Log', onClick: async () => {
+    if (!dateInp.value) return;
+    logBtn.disabled = true;
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_notes', op:'insert', row: { content: '[DATE NIGHT] ' + noteInp.value, tags: ['relationship','date-night'], created_at: new Date(dateInp.value).toISOString() } }) });
+    noteInp.value = ''; logBtn.disabled = false; loadDates();
+  } });
+  addRow.appendChild(dateInp); addRow.appendChild(noteInp); addRow.appendChild(logBtn);
+  wrap.insertBefore(addRow, listHost);
+
+  async function loadDates() {
+    const rows = await proxy('ben_notes', 'select') || [];
+    const dates = rows.filter(n => n.tags?.includes('date-night')).sort((a,b) => b.created_at > a.created_at ? 1 : -1).slice(0, 20);
+    listHost.innerHTML = '';
+    if (!dates.length) { listHost.appendChild(emptyState({ icon: '💑', title: 'No date nights logged yet', body: 'Log them above.' })); return; }
+    dates.forEach(d => {
+      listHost.appendChild(el('div', { style: { padding: 'var(--space-3) 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--text-sm)' } },
+        el('span', { style: { color: 'var(--text-tertiary)', minWidth: '80px' } }, fmtDate(d.created_at)),
+        el('span', {}, d.content.replace('[DATE NIGHT] ', ''))
+      ));
+    });
+  }
+  loadDates();
+  return wrap;
+}
+
+// ── sec-colab ────────────────────────────────────────────────────────────────
+async function renderColab() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' },
+    'Co-Lab debt tracker. JMW letter status, Aylett claim, creditor payments, next actions. Legal sensitive — Ben only.'));
+
+  const stats = el('div', { className: 'grid-3', style: { marginBottom: 'var(--space-5)' } });
+  stats.appendChild(statCard({ emoji: '⚖️', label: 'JMW status', value: 'Check', sub: 'last reviewed' }));
+  stats.appendChild(statCard({ emoji: '💷', label: 'Aylett claim', value: '?', sub: 'current position' }));
+  stats.appendChild(statCard({ emoji: '📅', label: 'Next action', value: '—', sub: 'set below' }));
+  wrap.appendChild(stats);
+
+  // Log event form
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Log event'));
+  const typeInp = el('select', { className: 'ds-input', style: { marginBottom: 'var(--space-3)' } });
+  ['letter_in','letter_out','call','payment','legal_update','note'].forEach(t => typeInp.appendChild(el('option', { value: t }, t.replace(/_/g,' '))));
+  const descInp = el('textarea', { className: 'ds-input', placeholder: 'What happened?', style: { minHeight: '80px', marginBottom: 'var(--space-3)' } });
+  const amtInp = el('input', { type: 'number', className: 'ds-input', placeholder: '£ amount (if payment)', style: { maxWidth: '160px', marginBottom: 'var(--space-3)' } });
+  const logBtn = button({ variant: 'primary', label: 'Log', onClick: async () => {
+    if (!descInp.value.trim()) return;
+    logBtn.disabled = true;
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_colab_events', op:'insert', row: { date: new Date().toISOString().slice(0,10), event_type: typeInp.value, description: descInp.value.trim(), amount: amtInp.value ? Number(amtInp.value) : null } }) });
+    descInp.value = ''; amtInp.value = ''; logBtn.disabled = false; loadLog();
+  } });
+  wrap.appendChild(typeInp); wrap.appendChild(descInp);
+  wrap.appendChild(el('div', { className: 'form-row' }, amtInp, logBtn));
+
+  const logHost = el('div', { style: { marginTop: 'var(--space-5)' } });
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'History'));
+  wrap.appendChild(logHost);
+
+  async function loadLog() {
+    const rows = await proxy('ben_colab_events', 'select') || [];
+    rows.sort((a,b) => b.date.localeCompare(a.date));
+    logHost.innerHTML = '';
+    if (!rows.length) { logHost.appendChild(emptyState({ icon: '⚖️', title: 'No events logged yet' })); return; }
+    logHost.appendChild(logTable(rows.slice(0, 30), [
+      { label: 'Date', render: r => fmtDate(r.date) },
+      { label: 'Type', render: r => r.event_type?.replace(/_/g,' ') },
+      { label: 'Description', key: 'description' },
+      { label: '£', render: r => r.amount ? fmtGbp(r.amount) : '—' },
+    ]));
+  }
+  loadLog();
+  return wrap;
+}
+
+// ── sec-dro-progress ─────────────────────────────────────────────────────────
+async function renderDro() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' },
+    'DRO / StepChange tracker. Application stage, Debt Line consultation dates, total debts in scope, next action.'));
+
+  const rows = await proxy('ben_dro_status', 'select') || [];
+  const current = rows[0] || null;
+
+  const STAGES = ['not-started','in-progress','submitted','approved','denied'];
+  const stageSel = el('select', { className: 'ds-input', style: { marginBottom: 'var(--space-3)' } });
+  STAGES.forEach(s => {
+    const opt = el('option', { value: s }, s.replace(/-/g,' '));
+    if (current?.stage === s) opt.selected = true;
+    stageSel.appendChild(opt);
+  });
+  const dateInp = el('input', { type: 'date', className: 'ds-input', style: { marginBottom: 'var(--space-3)' }, value: current?.consultation_date || '' });
+  const notesInp = el('textarea', { className: 'ds-input', placeholder: 'Notes…', style: { minHeight: '80px', marginBottom: 'var(--space-3)' } });
+  if (current?.notes) notesInp.value = current.notes;
+
+  const saveBtn = button({ variant: 'primary', label: 'Save', onClick: async () => {
+    saveBtn.disabled = true;
+    if (current) {
+      await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table:'ben_dro_status', op:'update', match:{ id: current.id }, row: { stage: stageSel.value, consultation_date: dateInp.value || null, notes: notesInp.value || null, updated_at: new Date().toISOString() } }) });
+    } else {
+      await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table:'ben_dro_status', op:'insert', row: { stage: stageSel.value, consultation_date: dateInp.value || null, notes: notesInp.value || null } }) });
+    }
+    saveBtn.disabled = false; C.toast({ type: 'success', message: 'DRO status saved.' });
+  } });
+
+  wrap.appendChild(el('div', { className: 'ds-label' }, 'Stage'));
+  wrap.appendChild(stageSel);
+  wrap.appendChild(el('div', { className: 'ds-label' }, 'Debt Line consultation date'));
+  wrap.appendChild(dateInp);
+  wrap.appendChild(el('div', { className: 'ds-label' }, 'Notes'));
+  wrap.appendChild(notesInp);
+  wrap.appendChild(saveBtn);
+  return wrap;
+}
+
+// ── sec-nate-log ─────────────────────────────────────────────────────────────
+async function renderNateLog() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' }, 'Nate — mentor conversations. Date, topic, key insights, actions agreed, next scheduled.'));
+
+  // Add form
+  const dateInp = el('input', { type: 'date', className: 'ds-input', value: new Date().toISOString().slice(0,10) });
+  const topicInp = el('input', { className: 'ds-input', placeholder: 'Topic / subject' });
+  const insightsInp = el('textarea', { className: 'ds-input', placeholder: 'Key insights…', style: { minHeight: '80px' } });
+  const actionsInp = el('textarea', { className: 'ds-input', placeholder: 'Actions agreed…', style: { minHeight: '60px' } });
+  const nextInp = el('input', { type: 'date', className: 'ds-input' });
+  const listHost = el('div', {});
+
+  const saveBtn = button({ variant: 'primary', label: 'Save', onClick: async () => {
+    if (!insightsInp.value.trim()) return;
+    saveBtn.disabled = true;
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'ben_nate_conversations', op:'insert', row: { date: dateInp.value, topic: topicInp.value || null, insights: insightsInp.value, actions_agreed: actionsInp.value || null, next_scheduled: nextInp.value || null } }) });
+    insightsInp.value = ''; actionsInp.value = ''; topicInp.value = ''; saveBtn.disabled = false; loadLog();
+  } });
+
+  wrap.appendChild(card({ children: el('div', {},
+    el('h3', { className: 'ds-h3' }, 'Log conversation'),
+    el('div', { className: 'form-row' },
+      el('div', { style: { flex: '1' } }, el('div', { className: 'ds-label' }, 'Date'), dateInp),
+      el('div', { style: { flex: '2' } }, el('div', { className: 'ds-label' }, 'Topic'), topicInp),
+    ),
+    el('div', { className: 'ds-label', style: { marginTop: 'var(--space-3)' } }, 'Key insights'),
+    insightsInp,
+    el('div', { className: 'ds-label', style: { marginTop: 'var(--space-3)' } }, 'Actions agreed'),
+    actionsInp,
+    el('div', { className: 'form-row', style: { marginTop: 'var(--space-3)' } },
+      el('div', {}, el('div', { className: 'ds-label' }, 'Next scheduled'), nextInp),
+      el('div', { style: { display: 'flex', alignItems: 'flex-end' } }, saveBtn),
+    ),
+  ) }));
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-5)' } }, 'History'));
+  wrap.appendChild(listHost);
+
+  async function loadLog() {
+    const rows = await proxy('ben_nate_conversations', 'select') || [];
+    rows.sort((a,b) => b.date.localeCompare(a.date));
+    listHost.innerHTML = '';
+    if (!rows.length) { listHost.appendChild(emptyState({ icon: '🤝', title: 'No conversations logged yet' })); return; }
+    rows.forEach(r => {
+      listHost.appendChild(card({ children: el('div', {},
+        el('div', { className: 'row between' }, el('div', { style: { fontWeight: '600' } }, r.topic || '(no topic)'), el('div', { className: 'ds-caption' }, fmtDate(r.date))),
+        el('div', { style: { fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: 'var(--space-2) 0', lineHeight: 'var(--leading-loose)' } }, r.insights),
+        r.actions_agreed ? el('div', { style: { fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' } }, 'Actions: ' + r.actions_agreed) : null,
+        r.next_scheduled ? el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-2)' } }, 'Next: ' + fmtDate(r.next_scheduled)) : null,
+      ) }));
+    });
+  }
+  loadLog();
+  return wrap;
+}
+
+// ── sec-sons ─────────────────────────────────────────────────────────────────
+async function renderSons() {
+  const wrap = el('div', {});
+  const sons = await proxy('family_sons', 'select') || [];
+
+  if (!sons.length) {
+    wrap.appendChild(emptyState({
+      icon: '👦', title: 'Add the boys',
+      body: 'Hudson (born 15 Sep) and Benson (born 6 Jul). Tap below.',
+      action: { label: 'Add Hudson', onClick: async () => {
+        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table:'family_sons', op:'insert', row: { name: 'Hudson', dob: '2020-09-15' } }) });
+        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ table:'family_sons', op:'insert', row: { name: 'Benson', dob: '2022-07-06' } }) });
+        location.reload();
+      } }
+    }));
+    return wrap;
+  }
+
+  sons.forEach(son => {
+    const age = ((Date.now() - new Date(son.dob)) / (365.25 * 86400000));
+    const yrs = Math.floor(age); const mths = Math.floor((age - yrs) * 12);
+    wrap.appendChild(card({ children: el('div', {},
+      el('div', { className: 'row between' },
+        el('h3', { className: 'ds-h3' }, son.name),
+        el('div', { className: 'ds-caption' }, `${yrs}y ${mths}m · born ${fmtDate(son.dob)}`),
+      ),
+      el('div', { className: 'grid-3', style: { marginTop: 'var(--space-3)' } },
+        son.school ? el('div', {}, el('div', { className: 'ds-caption' }, 'SCHOOL'), el('div', { style: { fontSize: 'var(--text-sm)' } }, son.school)) : el('div', { className: 'ds-caption' }, 'No school set'),
+        son.gp_contact ? el('div', {}, el('div', { className: 'ds-caption' }, 'GP'), el('div', { style: { fontSize: 'var(--text-sm)' } }, son.gp_contact)) : el('div', { className: 'ds-caption' }, 'No GP set'),
+        son.dentist_contact ? el('div', {}, el('div', { className: 'ds-caption' }, 'DENTIST'), el('div', { style: { fontSize: 'var(--text-sm)' } }, son.dentist_contact)) : el('div', { className: 'ds-caption' }, 'No dentist set'),
+      ),
+    ) }));
+  });
+  return wrap;
+}
+
+// ── sec-peanut ────────────────────────────────────────────────────────────────
+async function renderPeanut() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' }, 'Peanut is coming on expedition — pet passport status is critical before 1 July 2027.'));
+
+  const rows = await proxy('family_peanut', 'select') || [];
+  const config = Object.fromEntries((rows || []).map(r => [r.key, r.value]));
+
+  const fields = [
+    ['breed', 'Breed'], ['dob', 'Date of Birth'], ['weight_kg', 'Weight (kg)'],
+    ['vet_contact', 'Vet contact'], ['insurance', 'Insurance provider'],
+    ['food_brand', 'Food brand'], ['pet_passport_status', 'Pet passport status'],
+  ];
+
+  const inputs = {};
+  const formGrid = el('div', { className: 'grid-2' });
+  fields.forEach(([key, label]) => {
+    const inp = el('input', { className: 'ds-input', placeholder: label });
+    if (config[key]) inp.value = typeof config[key] === 'string' ? config[key] : JSON.stringify(config[key]);
+    inputs[key] = inp;
+    formGrid.appendChild(el('div', {}, el('div', { className: 'ds-label' }, label), inp));
+  });
+  wrap.appendChild(formGrid);
+
+  const saveBtn = button({ variant: 'primary', label: 'Save', style: { marginTop: 'var(--space-4)' }, onClick: async () => {
+    saveBtn.disabled = true;
+    for (const [key, inp] of Object.entries(inputs)) {
+      if (!inp.value.trim()) continue;
+      await proxy('family_peanut', 'delete', { match: { key } });
+      await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ table:'family_peanut', op:'insert', row: { key, value: inp.value.trim() } }) });
+    }
+    saveBtn.disabled = false; C.toast({ type: 'success', message: 'Peanut data saved.' });
+  } });
+  wrap.appendChild(saveBtn);
+
+  // Events log
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-6)' } }, 'Events log (vet, vaccines, weight)'));
+  const evtHost = el('div', {});
+  wrap.appendChild(evtHost);
+
+  const addEvtRow = el('div', { className: 'form-row', style: { marginBottom: 'var(--space-4)' } });
+  const evtTypeInp = el('select', { className: 'ds-input' });
+  ['vet','vaccine','grooming','weight'].forEach(t => evtTypeInp.appendChild(el('option', { value: t }, t)));
+  const evtDateInp = el('input', { type: 'date', className: 'ds-input', value: new Date().toISOString().slice(0,10) });
+  const evtNoteInp = el('input', { className: 'ds-input', placeholder: 'Notes', style: { flex: '1' } });
+  const evtNextInp = el('input', { type: 'date', className: 'ds-input', placeholder: 'Next due' });
+  const addEvtBtn = button({ variant: 'secondary', size: 'sm', label: 'Add', onClick: async () => {
+    addEvtBtn.disabled = true;
+    await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'family_peanut_events', op:'insert', row: { event_type: evtTypeInp.value, date: evtDateInp.value, notes: evtNoteInp.value || null, next_due_date: evtNextInp.value || null } }) });
+    evtNoteInp.value = ''; addEvtBtn.disabled = false; loadEvents();
+  } });
+  addEvtRow.appendChild(evtTypeInp); addEvtRow.appendChild(evtDateInp); addEvtRow.appendChild(evtNoteInp); addEvtRow.appendChild(evtNextInp); addEvtRow.appendChild(addEvtBtn);
+  wrap.insertBefore(addEvtRow, evtHost);
+
+  async function loadEvents() {
+    const evts = await proxy('family_peanut_events', 'select') || [];
+    evts.sort((a,b) => b.date.localeCompare(a.date));
+    evtHost.innerHTML = '';
+    if (!evts.length) { evtHost.appendChild(emptyState({ icon: '🐕', title: 'No events logged' })); return; }
+    evtHost.appendChild(logTable(evts.slice(0, 20), [
+      { label: 'Date', render: r => fmtDate(r.date) },
+      { label: 'Type', key: 'event_type' },
+      { label: 'Notes', key: 'notes' },
+      { label: 'Next due', render: r => fmtDate(r.next_due_date) },
+    ]));
+  }
+  loadEvents();
+  return wrap;
+}
+
+// ── sec-family-health ─────────────────────────────────────────────────────────
+async function renderFamilyHealth() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('div', { className: 'section-note' }, 'Family health aggregator. Mood trends, upcoming appointments, Pilates progress.'));
+
+  const [moods, sarahMoods, sonEvents, peanutEvents] = await Promise.all([
+    proxy('ben_mood_log', 'select'),
+    proxy('sarah_today_log', 'select'),
+    proxy('family_sons_events', 'select'),
+    proxy('family_peanut_events', 'select'),
+  ]);
+
+  const grid = el('div', { className: 'grid-2' });
+
+  // Ben mood 30d
+  const benMoodsSorted = (moods || []).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 30);
+  const benAvg = benMoodsSorted.length ? Math.round(benMoodsSorted.reduce((s,m) => s + m.mood, 0) / benMoodsSorted.length * 10) / 10 : null;
+  grid.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption' }, "BEN'S MOOD — 30 DAYS"),
+    el('div', { style: { fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-mono)', margin: 'var(--space-2) 0' } }, benAvg != null ? benAvg + '/10 avg' : '—'),
+    el('div', { className: 'ds-caption' }, benMoodsSorted.length + ' days logged'),
+  ) }));
+
+  // Sarah mood
+  const sarahSorted = (sarahMoods || []).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 7);
+  const sarahAvg = sarahSorted.length ? Math.round(sarahSorted.reduce((s,m) => s + m.mood, 0) / sarahSorted.length * 10) / 10 : null;
+  grid.appendChild(card({ children: el('div', {},
+    el('div', { className: 'ds-caption' }, "SARAH'S MOOD — 7 DAYS"),
+    el('div', { style: { fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-mono)', margin: 'var(--space-2) 0' } }, sarahAvg != null ? sarahAvg + '/10 avg' : '—'),
+    el('div', { className: 'ds-caption' }, sarahSorted.length + ' days logged'),
+  ) }));
+
+  wrap.appendChild(grid);
+
+  // Upcoming appointments
+  const upcoming = [
+    ...(sonEvents || []).filter(e => e.next_due_date && e.next_due_date >= new Date().toISOString().slice(0,10)).map(e => ({ who: 'Boys', type: e.event_type, date: e.next_due_date })),
+    ...(peanutEvents || []).filter(e => e.next_due_date && e.next_due_date >= new Date().toISOString().slice(0,10)).map(e => ({ who: 'Peanut', type: e.event_type, date: e.next_due_date })),
+  ].sort((a,b) => a.date.localeCompare(b.date));
+
+  wrap.appendChild(el('h2', { className: 'ds-h2', style: { marginTop: 'var(--space-5)' } }, 'Upcoming'));
+  if (!upcoming.length) { wrap.appendChild(emptyState({ icon: '📅', title: 'No upcoming appointments' })); }
+  else {
+    wrap.appendChild(logTable(upcoming.slice(0, 10), [
+      { label: 'Who', key: 'who' },
+      { label: 'Type', key: 'type' },
+      { label: 'Date', render: r => fmtDate(r.date) },
+    ]));
+  }
+  return wrap;
+}
+
+// ── sec-registry ─────────────────────────────────────────────────────────────
+async function renderRegistry() {
+  const wrap = el('div', {});
+  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-4)' } }, 'Tools, services, and integrations in use across the command centre.'));
+  const rows = await proxy('jarvis_tool_registry', 'select') || [];
+  if (!rows.length) { wrap.appendChild(emptyState({ icon: '🛠', title: 'Tool registry empty', body: 'Seeded from migration 9.' })); return wrap; }
+  rows.sort((a,b) => (a.category || '').localeCompare(b.category || ''));
+  const grid = el('div', { className: 'grid-3' });
+  rows.forEach(t => {
+    grid.appendChild(card({ children: el('div', {},
+      el('div', { className: 'ds-caption' }, t.category || 'other'),
+      el('div', { style: { fontWeight: '600', margin: 'var(--space-1) 0' } }, t.name || '—'),
+      el('div', { style: { fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' } }, t.description || ''),
+      t.status ? el('div', { className: 'ds-badge', style: { marginTop: 'var(--space-2)' } }, t.status) : null,
+    ) }));
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+// ── Evening Reflection (existing) ─────────────────────────────────────────────
 async function renderEveningReflection() {
   const wrap = el('div', {});
-  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Evening reflection'));
-  wrap.appendChild(el('p', { className: 'text-muted' }, 'Two taps and two lines — that\'s the whole point.'));
-
+  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-3)' } }, 'Two taps and two lines.'));
   const mood = { v: null };
-  const moodRow = el('div', { className: 'row', style: { gap: 'var(--space-2)', margin: 'var(--space-4) 0' } });
+  const moodRow = el('div', { className: 'row', style: { gap: 'var(--space-2)', margin: 'var(--space-4) 0', flexWrap: 'wrap' } });
   [1,2,3,4,5].forEach(n => {
-    const b = button({
-      variant: 'secondary', size: 'sm',
-      label: '①②③④⑤'.split('')[n-1],
-      onClick: () => {
-        mood.v = n;
-        moodRow.querySelectorAll('.ds-btn').forEach((el, i) => {
-          el.classList.toggle('primary', i === n - 1);
-          el.classList.toggle('secondary', i !== n - 1);
-        });
-      }
-    });
+    const b = el('button', { className: 'mood-btn', onClick: () => {
+      mood.v = n;
+      moodRow.querySelectorAll('.mood-btn').forEach((el, i) => el.classList.toggle('sel', i === n - 1));
+    } }, String(n));
     moodRow.appendChild(b);
   });
-  wrap.appendChild(el('label', { className: 'ds-label' }, 'Mood today'));
+  wrap.appendChild(el('div', { className: 'ds-label' }, 'Mood today'));
   wrap.appendChild(moodRow);
-
-  const oneLine = el('input', { className: 'ds-input', placeholder: 'One line about today', maxlength: 80 });
-  const tomorrow = el('input', { className: 'ds-input', placeholder: "Tomorrow's priority", maxlength: 80 });
-  wrap.appendChild(el('label', { className: 'ds-label' }, 'One line today'));
-  wrap.appendChild(oneLine);
-  wrap.appendChild(el('label', { className: 'ds-label', style: { marginTop: 'var(--space-3)' } }, "Tomorrow's priority"));
-  wrap.appendChild(tomorrow);
-
+  const oneLine = el('input', { className: 'ds-input', placeholder: 'One line about today', maxlength: '80' });
+  const tomorrow = el('input', { className: 'ds-input', placeholder: "Tomorrow's priority", maxlength: '80' });
   const status = el('div', { className: 'ds-caption', style: { marginTop: 'var(--space-3)' } });
-  const save = button({
-    variant: 'primary', label: 'Log',
-    onClick: async () => {
-      if (mood.v == null) { status.textContent = 'Pick a mood.'; return; }
-      if (!oneLine.value.trim()) { status.textContent = 'Write one line.'; return; }
-      try {
-        const payload = {
-          reflection_date: new Date().toISOString().slice(0, 10),
-          mood_score: mood.v,
-          one_line: oneLine.value.trim(),
-          one_line_reflection: oneLine.value.trim(),
-          tomorrow_priority: tomorrow.value.trim() || null,
-        };
-        // upsert via delete then insert
-        await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ table: 'evening_reflections', op: 'delete', match: { reflection_date: payload.reflection_date } }) });
-        const r = await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ table: 'evening_reflections', op: 'insert', row: payload }) });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        C.toast({ type: 'success', message: 'Logged. See you at 6am.' });
-        status.textContent = '';
-        oneLine.value = ''; tomorrow.value = ''; mood.v = null;
-        moodRow.querySelectorAll('.ds-btn').forEach(el => { el.classList.remove('primary'); el.classList.add('secondary'); });
-      } catch(e) { status.textContent = 'Save failed: ' + (e.message || e); }
-    }
-  });
+  const save = button({ variant: 'primary', label: 'Log', onClick: async () => {
+    if (mood.v == null) { status.textContent = 'Pick a mood.'; return; }
+    if (!oneLine.value.trim()) { status.textContent = 'Write one line.'; return; }
+    const today = new Date().toISOString().slice(0,10);
+    await proxy('evening_reflections', 'delete', { match: { reflection_date: today } });
+    const r = await fetch('/api/supabase-proxy', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'evening_reflections', op:'insert', row: { reflection_date: today, mood_score: mood.v, one_line: oneLine.value.trim(), one_line_reflection: oneLine.value.trim(), tomorrow_priority: tomorrow.value.trim() || null } }) });
+    if (r.ok) { C.toast({ type:'success', message: 'Logged.' }); oneLine.value = ''; tomorrow.value = ''; }
+    else { status.textContent = 'Save failed.'; }
+  } });
+  wrap.appendChild(el('div', { className: 'ds-label' }, 'One line today'));
+  wrap.appendChild(oneLine);
+  wrap.appendChild(el('div', { className: 'ds-label', style: { marginTop: 'var(--space-3)' } }, "Tomorrow's priority"));
+  wrap.appendChild(tomorrow);
   wrap.appendChild(el('div', { className: 'row', style: { marginTop: 'var(--space-4)', justifyContent: 'flex-end' } }, save));
   wrap.appendChild(status);
   return wrap;
 }
 
-// ── Personal cash log render (native) ──────────────────────────────────────
+// ── Personal cash log (existing) ──────────────────────────────────────────────
 async function renderPersonalCashLog() {
   const wrap = el('div', {});
-  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Personal cash log'));
-  wrap.appendChild(el('p', { className: 'text-muted' }, 'Your personal balance over time. Never commingled with PSNM / RBTR / EK.'));
-
-  // Quick log
+  wrap.appendChild(el('p', { className: 'text-muted' }, 'Personal balance over time. Never commingled with PSNM / RBTR / EK.'));
   const inp = el('input', { type: 'number', step: '0.01', className: 'ds-input', placeholder: '£ new balance', style: { maxWidth: '200px' } });
-  const note = el('input', { className: 'ds-input', placeholder: 'Optional note', style: { maxWidth: '280px' } });
+  const note = el('input', { className: 'ds-input', placeholder: 'Note', style: { maxWidth: '280px' } });
   const logBtn = button({ variant: 'primary', label: 'Log', onClick: async () => {
     if (!inp.value) return;
-    const r = await fetch('/api/atlas?action=log_cash', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ entity: 'personal', balance_gbp: Number(inp.value), note: note.value || null })
-    });
+    const r = await fetch('/api/atlas?action=log_cash', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ entity: 'personal', balance_gbp: Number(inp.value), note: note.value || null }) });
     if (r.ok) { inp.value = ''; note.value = ''; C.toast({ type:'success', message: 'Personal cash logged' }); refresh(); }
     else C.toast({ type: 'error', message: 'Log failed' });
-  }});
+  } });
   wrap.appendChild(el('div', { className: 'row', style: { marginBottom: 'var(--space-5)' } }, inp, note, logBtn));
-
-  // Table
   const tableWrap = el('div', {});
   wrap.appendChild(tableWrap);
-
   async function refresh() {
-    try {
-      const r = await fetch('/api/supabase-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ table: 'personal_cash_log', op: 'select' })
-      });
-      const rows = r.ok ? await r.json() : [];
-      tableWrap.innerHTML = '';
-      if (!Array.isArray(rows) || !rows.length) {
-        tableWrap.appendChild(emptyState({ icon: '💷', title: 'No entries yet', body: 'Log your current balance above.' }));
-        return;
-      }
-      rows.sort((a,b) => new Date(b.logged_at) - new Date(a.logged_at));
-      const tbl = el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' } });
-      tbl.appendChild(el('thead', {}, el('tr', {},
-        ...['Date', 'Balance', 'Source', 'Note'].map(h => el('th', { style: { textAlign:'left', padding: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' } }, h))
-      )));
-      const tbody = el('tbody', {});
-      rows.slice(0, 30).forEach(r => {
-        tbody.appendChild(el('tr', {},
-          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' } }, new Date(r.logged_at).toLocaleDateString('en-GB') + ' ' + new Date(r.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})),
-          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', fontFamily: 'var(--font-mono)' } }, '£' + Number(r.balance_gbp).toLocaleString('en-GB', { minimumFractionDigits: 2 })),
-          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, r.source || 'manual'),
-          el('td', { style: { padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' } }, r.note || ''),
-        ));
-      });
-      tbl.appendChild(tbody);
-      tableWrap.appendChild(tbl);
-    } catch(e) { tableWrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed' })); }
+    const rows = await proxy('personal_cash_log', 'select') || [];
+    rows.sort((a,b) => b.logged_at > a.logged_at ? 1 : -1);
+    tableWrap.innerHTML = '';
+    if (!rows.length) { tableWrap.appendChild(emptyState({ icon: '💷', title: 'No entries yet' })); return; }
+    tableWrap.appendChild(logTable(rows.slice(0,30), [
+      { label: 'Date', render: r => new Date(r.logged_at).toLocaleString('en-GB') },
+      { label: 'Balance', render: r => fmtGbp(r.balance_gbp) },
+      { label: 'Note', key: 'note' },
+    ]));
   }
   refresh();
   return wrap;
 }
 
+// ── Portal config ─────────────────────────────────────────────────────────────
 const BEN_PORTAL = {
   id: 'ben',
   name: 'BEN',
   emoji: '💪',
-  tagline: 'Wellness · Finance · Legal · Ops',
+  tagline: 'Personal command. Wellness. Legal. Family.',
   access: ['ben'],
   liveStatFetcher: async () => {
     try {
       const r = await fetch('/api/briefing-data'); const j = await r.json();
       const cash = j.data?.cash_personal?.balance_gbp;
       const day = j.data?.built_dad_day;
-      return '£' + (cash ?? '—') + ' · day ' + (day ?? '—');
+      return (cash != null ? '£' + Number(cash).toLocaleString() : '—') + ' · day ' + (day ?? '—');
     } catch { return '—'; }
   },
   sections: [
-    { id: 'dashboard',      group: 'OVERVIEW',  label: 'Dashboard',     emoji: '📊', render: renderBenDashboard, default: true },
-    // Wellness — all legacy iframes (sec-routine, sec-training, etc all depend on legacy globals)
-    { id: 'routine',        group: 'WELLNESS',  label: 'Daily Routine', emoji: '💪', iframeHash: '#sec-routine' },
-    { id: 'training',       group: 'WELLNESS',  label: 'Training',      emoji: '🏋️', iframeHash: '#sec-training' },
-    { id: 'nutrition',      group: 'WELLNESS',  label: 'Nutrition',     emoji: '🥗', iframeHash: '#sec-nutrition' },
-    { id: 'mindset',        group: 'WELLNESS',  label: 'Mindset',       emoji: '🧠', iframeHash: '#sec-mindset' },
-    { id: 'sleep',          group: 'WELLNESS',  label: 'Sleep',         emoji: '😴', iframeHash: '#sec-sleep' },
-    { id: 'bestself',       group: 'WELLNESS',  label: 'Best Self',     emoji: '✨', iframeHash: '#sec-bestself' },
-    { id: 'dojo',           group: 'WELLNESS',  label: 'Learning Dojo', emoji: '🥋', iframeHash: '#sec-dojo' },
-    // Goals
-    { id: 'goals',          group: 'GOALS',     label: 'Today Goals',   emoji: '🎯', iframeHash: '#sec-goals' },
-    { id: 'wins',           group: 'GOALS',     label: 'Wins',          emoji: '🏆', iframeHash: '#sec-wins' },
-    { id: 'gates',          group: 'GOALS',     label: 'Three Gates',   emoji: '🚪', iframeHash: '#sec-gates' },
-    // Reflection — native
-    { id: 'reflection',     group: 'GOALS',     label: 'Evening Reflection', emoji: '🌙', render: renderEveningReflection },
-    // Finance — personal cash native, rest iframe
-    { id: 'personal-cash',  group: 'FINANCE',   label: 'Personal Cash', emoji: '💵', render: renderPersonalCashLog },
-    { id: 'moneymeeting',   group: 'FINANCE',   label: 'Money Meeting', emoji: '💰', iframeHash: '#sec-moneymeeting' },
-    { id: 'financial-plan', group: 'FINANCE',   label: 'Financial Plan', emoji: '📈', iframeHash: '#sec-financial-plan' },
-    { id: 'budget',         group: 'FINANCE',   label: 'Budget',        emoji: '📊', iframeHash: '#sec-budget' },
-    { id: 'cashflow',       group: 'FINANCE',   label: 'Cash Flow',     emoji: '💸', iframeHash: '#sec-finance' },
-    // Legal
-    { id: 'legal',          group: 'LEGAL',     label: 'Legal Structure', emoji: '⚖️', iframeHash: '#sec-legalstructure' },
-    { id: 'amine',          group: 'LEGAL',     label: 'Amine Framework', emoji: '🧩', iframeHash: '#sec-aminedecisions' },
-    // Admin
-    { id: 'planner',        group: 'ADMIN',     label: 'Planner',       emoji: '📅', iframeHash: '#sec-planner' },
-    { id: 'calendar',       group: 'ADMIN',     label: 'Calendar',      emoji: '🗓', iframeHash: '#sec-calendar' },
-    { id: 'tasks',          group: 'ADMIN',     label: 'Tasks',         emoji: '✅', iframeHash: '#sec-tasks' },
-    { id: 'notes',          group: 'ADMIN',     label: 'Notes',         emoji: '📝', iframeHash: '#sec-notes' },
-    { id: 'crm',            group: 'ADMIN',     label: 'CRM',           emoji: '👥', iframeHash: '#sec-crm' },
-    { id: 'registry',       group: 'ADMIN',     label: 'Tool Registry', emoji: '🛠', iframeHash: '#sec-registry' },
+    // DASHBOARD
+    { id: 'today',          group: 'DASHBOARD',    label: 'Today',              emoji: '📋', render: renderToday, default: true },
+    { id: 'goals',          group: 'DASHBOARD',    label: 'Goals',              emoji: '🎯', render: renderGoals },
+    { id: 'daily-brief',    group: 'DASHBOARD',    label: 'Daily Brief',        emoji: '📊', render: renderDailyBrief },
+    // WELLNESS
+    { id: 'wellness',       group: 'WELLNESS',     label: 'Wellness',           emoji: '💪', render: () => Promise.resolve(renderWellness()) },
+    // WORK
+    { id: 'tasks',          group: 'WORK',         label: 'Tasks',              emoji: '✅', render: renderTasks },
+    { id: 'notes',          group: 'WORK',         label: 'Notes',              emoji: '📝', render: renderNotes },
+    { id: 'calendar',       group: 'WORK',         label: 'Calendar',           emoji: '🗓', render: () => Promise.resolve(emptyState({ icon: '🗓', title: 'Calendar', body: 'Google Calendar embed available via MCP. Connect in settings.' })) },
+    { id: 'planner',        group: 'WORK',         label: 'Planner',            emoji: '📅', render: () => Promise.resolve(emptyState({ icon: '📅', title: 'Week Planner', body: 'Week-view aggregator coming — shows Ben + Sarah + kids events.' })) },
+    // GROWTH
+    { id: 'mindset',        group: 'GROWTH',       label: 'Mindset',            emoji: '🧠', render: () => Promise.resolve(renderMindset()) },
+    { id: 'relationship',   group: 'GROWTH',       label: 'Relationship',       emoji: '💑', render: () => Promise.resolve(renderRelationship()) },
+    { id: 'registry',       group: 'GROWTH',       label: 'Tool Registry',      emoji: '🛠', render: renderRegistry },
+    // LEGAL & DEBT
+    { id: 'colab',          group: 'LEGAL & DEBT', label: 'Co-Lab',             emoji: '⚖️', render: renderColab },
+    { id: 'dro',            group: 'LEGAL & DEBT', label: 'DRO / StepChange',   emoji: '📋', render: renderDro },
+    { id: 'nate-log',       group: 'LEGAL & DEBT', label: 'Nate Log',           emoji: '🤝', render: renderNateLog },
+    // FAMILY
+    { id: 'sons',           group: 'FAMILY',       label: 'Hudson + Benson',    emoji: '👦', render: renderSons },
+    { id: 'peanut',         group: 'FAMILY',       label: 'Peanut',             emoji: '🐕', render: renderPeanut },
+    { id: 'family-health',  group: 'FAMILY',       label: 'Family Health',      emoji: '❤️', render: renderFamilyHealth },
+    // CONTENT
+    { id: 'skills',         group: 'CONTENT',      label: 'Skills',             emoji: '🎓', render: renderRegistry },
+    { id: 'voice-studio',   group: 'CONTENT',      label: 'Voice Studio',       emoji: '🎙', render: () => Promise.resolve(emptyState({ icon: '🎙', title: 'Voice Studio', body: 'Voice recording + ElevenLabs cloning. Requires OpenAI Whisper key to be set.' })) },
+    // FINANCE
+    { id: 'personal-cash',  group: 'FINANCE',      label: 'Personal Cash',      emoji: '💵', render: renderPersonalCashLog },
+    { id: 'reflection',     group: 'FINANCE',      label: 'Evening Reflection', emoji: '🌙', render: renderEveningReflection },
+    // DELEGATION
+    { id: 'delegation',     group: 'ADMIN',        label: 'Delegation Framework', emoji: '🧩', render: () => Promise.resolve(el('div', {},
+      el('div', { className: 'section-note' }, 'Historical reference — repurpose when hiring next team member.'),
+      card({ children: el('div', {},
+        el('div', { className: 'ds-caption', style: { marginBottom: 'var(--space-3)' } }, 'FRAMEWORK'),
+        el('div', { style: { fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 'var(--leading-loose)' } },
+          'When hiring: define the role clearly before the hire. Delegate outcomes not tasks. Review weekly for first 3 months. Never delegate without a written SOP. Trust is earned through specificity — vague instructions produce vague results.')
+      ) })
+    )) },
+    { id: 'crm',            group: 'CONTACTS',     label: 'Contacts',             emoji: '👥', render: () => window.CRM_UI.renderContacts('personal') },
+    { id: 'sops',           group: 'SOPs',         label: 'SOPs',                 emoji: '📋', render: () => window.SOPS_UI.renderSopSection('ben') },
   ],
 };
 
