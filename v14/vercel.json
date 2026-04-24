@@ -3,8 +3,9 @@
   "public": true,
   "outputDirectory": "public",
   "crons": [
-    { "path": "/api/cron-morning-brief", "schedule": "0 6 * * *" },
-    { "path": "/api/cron-backup",        "schedule": "0 3 * * *" }
+    { "path": "/api/cron-morning-brief",    "schedule": "0 6 * * *"  },
+    { "path": "/api/cron-evening-debrief",  "schedule": "0 21 * * *" },
+    { "path": "/api/cron-backup",           "schedule": "0 3 * * *"  }
   ],
   "headers": [
     {

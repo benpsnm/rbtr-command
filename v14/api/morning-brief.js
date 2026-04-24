@@ -20,7 +20,7 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const STORAGE_BUCKET = 'daily-briefs';
 
 // Voice config — Daniel free-tier as fallback if Ben's chosen voice needs paid plan
-const PREFERRED_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'jccKWdITZiywXGZfLmCo';
+const PREFERRED_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'M7ya1YbaeFaPXljg9BpK'; // Hannah
 const FALLBACK_VOICE_ID  = 'onwK4e9ZLuTAKqWW03F9';   // Daniel (British, free-tier)
 const TTS_MODEL_ID       = 'eleven_multilingual_v2';
 
@@ -154,13 +154,14 @@ async function gatherAllData() {
     sbSelect('bills', `due_date=gte.${today()}&due_date=lte.${new Date(Date.now()+7*86400000).toISOString().slice(0,10)}&select=name,amount,due_date`).then(r => r ?? null),
     (async () => {
       try {
-        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ROTHERHAM.lat}&longitude=${ROTHERHAM.lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe/London`);
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ROTHERHAM.lat}&longitude=${ROTHERHAM.lon}&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FLondon&forecast_days=1`);
         const j = await r.json();
+        const c = j.current || {};
         return {
-          now_temp: j.current_weather?.temperature,
-          high: j.daily?.temperature_2m_max?.[0],
-          low: j.daily?.temperature_2m_min?.[0],
-          rain: j.daily?.precipitation_probability_max?.[0],
+          now_temp: c.temperature_2m ?? null,
+          high: j.daily?.temperature_2m_max?.[0] ?? null,
+          low: j.daily?.temperature_2m_min?.[0] ?? null,
+          rain: j.daily?.precipitation_probability_max?.[0] ?? null,
         };
       } catch { return null; }
     })(),

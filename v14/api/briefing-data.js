@@ -263,12 +263,13 @@ async function getBillsDueThisWeek() {
 // Weather (Open-Meteo, no key)
 async function getWeather() {
   try {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ROTHERHAM.lat}&longitude=${ROTHERHAM.lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe/London`);
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ROTHERHAM.lat}&longitude=${ROTHERHAM.lon}&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FLondon&forecast_days=1`);
     const j = await r.json();
+    const c = j.current || {};
     return {
-      now_temp: j.current_weather?.temperature ?? null,
-      now_wind: j.current_weather?.windspeed ?? null,
-      now_code: j.current_weather?.weathercode ?? null,
+      now_temp: c.temperature_2m ?? null,
+      now_wind: c.wind_speed_10m ?? null,
+      now_code: c.weather_code ?? null,
       high: j.daily?.temperature_2m_max?.[0] ?? null,
       low: j.daily?.temperature_2m_min?.[0] ?? null,
       rain_probability: j.daily?.precipitation_probability_max?.[0] ?? null,
