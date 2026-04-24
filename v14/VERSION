@@ -1,15 +1,34 @@
-v3.4-portal-interiors-complete
-Tagged: 2026-04-22 (same day as v3.3)
+v3.7-commercial-engine-live
+Tagged: 2026-04-25
 Deployed: https://rbtr-jarvis.vercel.app
 
-Phase 1.5 — proper portal interiors (supersedes Phase 2.6 shells).
+Phase 1.7 — Commercial Engine (PSNM)
 
 Delivered:
-- Design system: /css/design-system.css (tokens), /js/components.js (10 components)
-- Portal framework: /js/portal-framework.js + /js/state.js
-- 7 native portals (PSNM, BEN, FINANCIALS fully, RBTR/HOUSE/SARAH/ETERNAL scaffolded)
-- Floating ROCKO orb on every portal + right-side chat panel
-- Legacy /index.html banner pointing to /landing.html
-- Iframe escape hatch for legacy-global-dependent sections
+- Canonical pricing locked in psnm_offer_config v2 (single source of truth):
+  1-49 pallets £3.95/wk · 50-149 £3.45/wk · 150+ £2.95/wk
+  Handling £3.50 in / £3.50 out · Onboarding £50 waived at 50+ pallets
+  Min 5 pallets / 4 weeks / 30-day notice after minimum term
+  Both T&C clauses (self-insurance, fire separation) stored in config
+- Rewrote renderQuoteGenerator: tiered calc from config, full line-item output
+  (storage / goods-in / goods-out / onboarding), period + monthly + annual totals,
+  mandatory T&C clauses on every generated quote. Zero hardcoded prices.
+- New /public/quote.html: public self-serve quote + booking widget.
+  Live price calc as visitor types, mandatory T&C tickboxes, submits to
+  /api/atlas?action=book, creates psnm_enquiries + contacts CRM record,
+  fires Telegram notification to Ben, shows success screen with reference ID.
+- New atlas.js actions: offer_config (GET, public) and book (POST, public)
+- Updated DB: call scripts, email templates, voicemail — all £6 references replaced
+- Bookings: stored in psnm_enquiries with source=self_serve_quote until
+  dedicated bookings table can be migrated (needs Supabase Management API token)
 
-Ben: test at https://rbtr-jarvis.vercel.app/login.html?r=/landing.html
+Phase 1.6 (prior) also complete:
+- Full portal interiors: CRM + SOPs in all 5 portals
+- Morning/evening brief (ElevenLabs Hannah, Vercel Cron)
+- Telegram notification bell/drawer in all portals
+- Weather integration (Open-Meteo)
+- 205 PSNM prospects seeded · ATLAS v2 daily call queue engine
+- Supabase migrations 32–35 applied to production
+
+Quote widget: https://rbtr-jarvis.vercel.app/quote.html
+Embed: <iframe src="https://rbtr-jarvis.vercel.app/quote.html" width="100%" height="900" frameborder="0"></iframe>
