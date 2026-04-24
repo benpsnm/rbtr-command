@@ -41,6 +41,22 @@ const ALLOWED_TABLES = new Set([
   // ── Phase 2.6 (migrations 29 + 30) ──
   'user_profiles','sarah_goals','sarah_reflections',
   'financial_transactions','bank_connections','house_cash_log',
+  // ── Phase 1.6 Workstream A (migration 32) ──
+  // Ben portal tables
+  'ben_goals','ben_mood_log','ben_notes','ben_nate_conversations',
+  'ben_colab_events','ben_dro_status','ben_tasks',
+  'family_sons','family_sons_events','family_peanut','family_peanut_events',
+  // RBTR tables
+  'rbtr_guy_martin_pathway','rbtr_build_log','rbtr_route_phases',
+  'rbtr_audience_snapshots','rbtr_account_resurrection',
+  // Eternal tables
+  'eternal_hours_log','eternal_estimates','eternal_invoices',
+  'eternal_builds','eternal_shareholder_payments',
+  // House portal tables
+  'house_suppliers','house_job_supplier_assignments','house_costs',
+  'house_bookings','house_inventory','house_compliance','house_message_templates',
+  // Sarah portal tables
+  'sarah_today_log','sarah_pilates_progress','sarah_wellness_log','sarah_content_calendar',
 ]);
 
 // Classification-aware blocks. AUTH never goes through the browser proxy.

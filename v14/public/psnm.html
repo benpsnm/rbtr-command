@@ -274,19 +274,19 @@ const PSNM_PORTAL = {
   sections: [
     { id: 'dashboard',    group: 'OVERVIEW',   label: 'Dashboard',      emoji: '📊', render: renderPsnmDashboard, default: true },
     { id: 'warm-leads',   group: 'ATLAS',      label: 'Warm Leads',     emoji: '🔥', badge: { label: 'NEW', variant: 'new' }, render: renderWarmLeads },
-    { id: 'atlas-today',  group: 'ATLAS',      label: "Today's Actions", emoji: '📞', iframeHash: '#sec-atlas' },
+    { id: 'atlas-today',  group: 'ATLAS',      label: "Today's Actions", emoji: '📞', render: () => { const w = el('div', {}); w.appendChild(emptyState({ icon: '📞', title: 'Priority engine — Workstream B', body: 'Atlas priority call queue builds in Chunk 3. Will show ranked daily call list with scripts, last-contact dates, and one-tap log.' })); return w; } },
     { id: 'pipeline',     group: 'ATLAS',      label: 'Pipeline',       emoji: '📈', render: () => emptyState({ icon: '📈', title: 'Pipeline Kanban coming', body: 'Next-pass: Kanban view of psnm_enquiries by status with drag-to-move.' }) },
     { id: 'performance',  group: 'ATLAS',      label: 'Performance',    emoji: '🏆', render: () => emptyState({ icon: '🏆', title: 'Performance charts coming', body: 'Touches / contact rate / conversion rate over 7+30 days.' }) },
     { id: 'templates',    group: 'ATLAS',      label: 'Templates',      emoji: '📝', render: () => emptyState({ icon: '📝', title: 'Templates library coming', body: 'Saved outbound templates — pre-fill warm-lead emails.' }) },
     { id: 'offer-config', group: 'ATLAS',      label: 'Offer Config',   emoji: '💰', render: renderOfferConfig },
-    { id: 'enquiries',    group: 'OPERATIONS', label: 'Enquiries',      emoji: '📬', iframeHash: '#sec-psnm' },
+    { id: 'enquiries',    group: 'OPERATIONS', label: 'Enquiries',      emoji: '📬', render: () => renderList('psnm_enquiries', { empty: 'No enquiries yet.' }) },
     { id: 'customers',    group: 'OPERATIONS', label: 'Customers',      emoji: '👥', render: () => renderList('psnm_customers', { empty: 'No customers yet. First signed contract creates one.' }) },
     { id: 'quotes',       group: 'OPERATIONS', label: 'Quotes',         emoji: '📄', render: () => renderList('psnm_quotes',    { empty: 'No quotes sent yet. Send via Warm Leads or Enquiries.' }) },
-    { id: 'occupancy',    group: 'OPERATIONS', label: 'Occupancy',      emoji: '📦', iframeHash: '#sec-psnm' },
+    { id: 'occupancy',    group: 'OPERATIONS', label: 'Occupancy',      emoji: '📦', render: () => renderList('psnm_occupancy_snapshots', { empty: 'No occupancy snapshots logged. Log from dashboard.' }) },
     { id: 'invoices',     group: 'OPERATIONS', label: 'Invoices',       emoji: '💷', render: () => renderList('psnm_invoices', { empty: 'No invoices yet.' }) },
     { id: 'targets',      group: 'OUTREACH',   label: 'Targets',        emoji: '🎯', render: () => renderList('psnm_outreach_targets', { empty: 'No targets yet.' }) },
     { id: 'touches',      group: 'OUTREACH',   label: 'Touches',        emoji: '📡', render: () => renderList('psnm_outreach_touches',  { empty: 'No touches logged yet.' }) },
-    { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', iframeHash: '#sec-atlas' },
+    { id: 'scripts',      group: 'OUTREACH',   label: 'Call Scripts',   emoji: '📋', render: () => renderList('psnm_call_scripts', { empty: '6 call scripts seeded in Workstream B (Chunk 3).' }) },
   ],
 };
 
