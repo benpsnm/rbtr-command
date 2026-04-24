@@ -525,112 +525,203 @@ async function renderPsnmTemplates() {
   return wrap;
 }
 
+// ── Canonical pricing calculator — reads from offer_json, no hardcoded prices ─
+function calcPsnmQuote(pallets, durationWeeks, turnsPerYear, offer) {
+  const tiers = offer.rate_tiers || [];
+  const handlingIn = Number(offer.handling_in_rate) || 3.50;
+  const handlingOut = Number(offer.handling_out_rate) || 3.50;
+  const onboardingFee = Number(offer.onboarding_fee) || 50;
+  const waiverAt = Number(offer.onboarding_waiver_threshold) || 50;
+  const minPallets = Number(offer.min_pallets) || 5;
+  const minWeeks = Number(offer.min_weeks) || 4;
+
+  const billedPallets = Math.max(pallets, minPallets);
+  const billedWeeks = Math.max(durationWeeks, minWeeks);
+
+  let storageRate = tiers.length ? tiers[tiers.length - 1].rate_per_pallet_week : 3.95;
+  let tierLabel = '';
+  for (const t of tiers) {
+    if (t.range_max === null || billedPallets <= t.range_max) {
+      storageRate = Number(t.rate_per_pallet_week);
+      tierLabel = t.label || '';
+      break;
+    }
+  }
+
+  const storageWeekly = billedPallets * storageRate;
+  const storagePeriod = storageWeekly * billedWeeks;
+  const periodFraction = billedWeeks / 52;
+  const annualMoves = billedPallets * turnsPerYear;
+  const inMoves = Math.ceil(annualMoves * periodFraction);
+  const outMoves = Math.ceil(annualMoves * periodFraction);
+  const handlingPeriod = (inMoves * handlingIn) + (outMoves * handlingOut);
+  const handlingAnnual = (annualMoves * handlingIn) + (annualMoves * handlingOut);
+  const onboarding = billedPallets >= waiverAt ? 0 : onboardingFee;
+  const totalPeriod = storagePeriod + handlingPeriod + onboarding;
+  const monthlyEstimate = (storagePeriod / billedWeeks) * 4.33;
+  const annualTotal = storageWeekly * 52 + handlingAnnual + onboarding;
+
+  return {
+    billedPallets, billedWeeks, storageRate, tierLabel,
+    storageWeekly, storagePeriod,
+    inMoves, outMoves, handlingIn, handlingOut, handlingPeriod,
+    onboarding, totalPeriod, monthlyEstimate, annualTotal,
+    minimumPalletApplied: pallets < minPallets,
+    minimumWeekApplied: durationWeeks < minWeeks,
+  };
+}
+
 async function renderQuoteGenerator() {
   const wrap = el('div', {});
   const C = window.RBTR_Components;
 
-  wrap.appendChild(el('p', { style: { fontSize:'var(--text-xs)', color:'var(--text-secondary)', padding:'var(--space-2) var(--space-3)', background:'var(--bg-secondary)', borderLeft:'2px solid var(--border-subtle)', marginBottom:'var(--space-4)' } },
-    'Generate a branded quote. Saves to psnm_quotes. PDF output stub — full PDF generation in Phase 1.7.'));
+  let offer = null;
+  try {
+    const cfgR = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'psnm_offer_config', op: 'select' }),
+    });
+    offer = ((await cfgR.json()) || []).find(r => r.active)?.offer_json || null;
+  } catch(e) {}
+  if (!offer) {
+    wrap.appendChild(C.emptyState({ icon: '⚠', title: 'Offer config not loaded', body: 'Check psnm_offer_config in Supabase.' }));
+    return wrap;
+  }
 
   let leads = [];
   try { leads = await proxyPsnm('psnm_warm_leads', 'select', { order: { column: 'company' } }); } catch(e) {}
   if (!Array.isArray(leads)) leads = [];
 
+  const iCss = 'width:100%;box-sizing:border-box;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)';
+  const lCss = 'display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;margin-top:var(--space-2)';
+  const mkField = (lbl, inp) => { const d = el('div', { style:'flex:1;min-width:90px' }); d.append(el('label', { style:lCss }, lbl), inp); return d; };
+
   const formCard = C.card({ children: el('div', {}) });
   const fb = formCard.querySelector('div');
-  fb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-3)' } }, 'QUOTE GENERATOR'));
+  fb.appendChild(el('div', { className: 'ds-caption', style: { marginBottom:'var(--space-2)' } }, 'QUOTE GENERATOR'));
 
-  const leadSel = el('select');
-  leadSel.appendChild(el('option', { value: '' }, '— Select lead or type manually —'));
-  leads.forEach(l => leadSel.appendChild(el('option', { value: l.id, 'data-pallets': l.pallets_count || '' }, l.company || l.contact_name || l.id)));
+  const leadSel = el('select', { style: iCss + ';margin-bottom:var(--space-2)' });
+  leadSel.append(el('option', { value:'' }, '— Select warm lead or enter manually —'));
+  leads.forEach(l => leadSel.appendChild(el('option', { value:l.id }, l.company || l.contact_name || l.id)));
+  fb.appendChild(leadSel);
 
-  const companyIn = el('input', { type:'text', placeholder:'Company name' });
-  const contactIn = el('input', { type:'text', placeholder:'Contact name' });
-  const palletIn = el('input', { type:'number', min:'1', placeholder:'Pallet count' });
-  const rateIn = el('input', { type:'number', step:'0.01', value:'6.00', placeholder:'Rate £/pallet/week' });
-  const durationIn = el('input', { type:'number', min:'1', placeholder:'Duration (weeks, optional)' });
-  const termsIn = el('input', { type:'text', placeholder:'Special terms (optional)' });
+  const companyIn = el('input', { type:'text', placeholder:'Company name', style: iCss });
+  const contactIn = el('input', { type:'text', placeholder:'Contact name', style: iCss });
+  const r1 = el('div', { style:'display:flex;gap:var(--space-2);margin-bottom:var(--space-1);flex-wrap:wrap' });
+  r1.append(mkField('COMPANY', companyIn), mkField('CONTACT', contactIn));
+  fb.appendChild(r1);
+
+  const palletIn = el('input', { type:'number', min:'1', placeholder:'e.g. 20', style: iCss });
+  const durationIn = el('input', { type:'number', min:'1', value:'12', style: iCss });
+  const turnsIn = el('input', { type:'number', min:'0.5', step:'0.5', value:'4', style: iCss });
+  const termsIn = el('input', { type:'text', placeholder:'Special terms (optional)', style: iCss });
+  const r2 = el('div', { style:'display:flex;gap:var(--space-2);margin-bottom:var(--space-1);flex-wrap:wrap' });
+  r2.append(mkField('PALLETS', palletIn), mkField('DURATION (WKS)', durationIn), mkField('TURNS/YEAR', turnsIn));
+  fb.appendChild(r2);
+  fb.appendChild(el('label', { style:lCss }, 'SPECIAL TERMS (OPTIONAL)'));
+  fb.appendChild(termsIn);
 
   leadSel.addEventListener('change', () => {
     const sel = leads.find(l => l.id === leadSel.value);
-    if (sel) {
-      companyIn.value = sel.company || '';
-      contactIn.value = sel.contact_name || '';
-      palletIn.value = sel.pallets_count || '';
-    }
+    if (sel) { companyIn.value = sel.company || ''; contactIn.value = sel.contact_name || ''; palletIn.value = sel.pallets_count || ''; }
   });
 
-  const r0 = el('div', { style: { marginBottom:'var(--space-2)' } }); r0.appendChild(leadSel);
-  const r1 = el('div', { style: { display:'flex', gap:'var(--space-2)', marginBottom:'var(--space-2)', flexWrap:'wrap' } });
-  [companyIn, contactIn].forEach(i => { i.style.cssText='flex:1;min-width:140px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r1.appendChild(i); });
-  const r2 = el('div', { style: { display:'flex', gap:'var(--space-2)', marginBottom:'var(--space-2)', flexWrap:'wrap' } });
-  [palletIn, rateIn, durationIn].forEach(i => { i.style.cssText='flex:1;min-width:80px;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r2.appendChild(i); });
-  const r3 = el('div', { style: { marginBottom:'var(--space-3)' } }); termsIn.style.cssText='width:100%;box-sizing:border-box;padding:var(--space-2);background:var(--bg-secondary);border:1px solid var(--border-subtle);color:var(--text-primary);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:var(--text-sm)'; r3.appendChild(termsIn);
-
-  fb.appendChild(r0); fb.appendChild(r1); fb.appendChild(r2); fb.appendChild(r3);
-
-  const previewEl = el('div', { id: 'quote-preview', style: { display:'none', background:'var(--bg-secondary)', padding:'var(--space-4)', borderRadius:'var(--radius-sm)', marginBottom:'var(--space-3)', fontFamily:'var(--font-mono)', fontSize:'var(--text-sm)', whiteSpace:'pre-wrap', lineHeight:'1.6' } });
+  const previewEl = el('div', { style:'display:none;background:var(--bg-secondary);padding:var(--space-4);border-radius:var(--radius-sm);margin-top:var(--space-3);font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;line-height:1.65;border:1px solid var(--border-subtle)' });
   fb.appendChild(previewEl);
 
-  const previewBtn = C.button({ label: 'Preview quote', size: 'sm', variant: 'secondary', onClick: () => {
+  function buildQuoteText() {
     const pallets = parseInt(palletIn.value) || 0;
-    const rate = parseFloat(rateIn.value) || 6;
-    const weeks = parseInt(durationIn.value) || null;
-    const weekly = pallets * rate;
-    const text = `PALLET STORAGE QUOTATION
-Pallet Storage Near Me
-Unit 3C Denaby Way, Hellaby Industrial Estate, Rotherham S66 8HR
+    const weeks = parseInt(durationIn.value) || 4;
+    const turns = parseFloat(turnsIn.value) || 4;
+    if (!pallets) return null;
+    const q = calcPsnmQuote(pallets, weeks, turns, offer);
+    const tierLines = (offer.rate_tiers || []).map(t => `  ${t.label}: £${Number(t.rate_per_pallet_week).toFixed(2)}/pallet/week`).join('\n');
+    const d = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+    return {
+      text: `PALLET STORAGE QUOTATION
+Pallet Storage Near Me · Unit 3C Denaby Way, Hellaby S66 8HR
 palletstoragenearme.co.uk · 07506 255033
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Prepared for: ${companyIn.value || '—'} / ${contactIn.value || '—'}
-Date: ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}
+Date: ${d}  ·  Valid 30 days
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Pallets: ${pallets}
-Rate: £${rate.toFixed(2)} / pallet / week
-Weekly total: £${weekly.toFixed(2)} + VAT
-${weeks ? 'Duration: ' + weeks + ' weeks\nTotal: £' + (weekly * weeks).toFixed(2) + ' + VAT\n' : ''}${termsIn.value ? 'Special terms: ' + termsIn.value + '\n' : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STORAGE
+  Pallets: ${pallets}${q.minimumPalletApplied ? ' (5 pallet minimum applied)' : ''}
+  Tier: ${q.tierLabel} → £${q.storageRate.toFixed(2)}/pallet/week
+  Duration: ${q.billedWeeks} weeks${q.minimumWeekApplied ? ' (4 week minimum applied)' : ''}
+  Weekly: £${q.storageWeekly.toFixed(2)} + VAT
+  Period storage total: £${q.storagePeriod.toFixed(2)} + VAT
+
+HANDLING (${turns} turns/year estimated)
+  Goods-in: ${q.inMoves} movements × £${q.handlingIn.toFixed(2)} = £${(q.inMoves * q.handlingIn).toFixed(2)} + VAT
+  Goods-out: ${q.outMoves} movements × £${q.handlingOut.toFixed(2)} = £${(q.outMoves * q.handlingOut).toFixed(2)} + VAT
+  Period handling total: £${q.handlingPeriod.toFixed(2)} + VAT
+
+ONBOARDING
+  ${q.onboarding > 0 ? `One-time fee: £${q.onboarding.toFixed(2)} (waived at 50+ pallets)` : `Waived (${pallets} pallets ≥ 50 threshold)`}
+${termsIn.value ? '\nSPECIAL TERMS\n  ' + termsIn.value : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY
+  Period total (${q.billedWeeks} wks): £${q.totalPeriod.toFixed(2)} + VAT
+  Monthly estimate:              £${q.monthlyEstimate.toFixed(2)} + VAT
+  Annual estimate:               £${q.annualTotal.toFixed(2)} + VAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WHAT'S INCLUDED
 · 24/7 access with personal code
 · Secure, CCTV-monitored warehouse
-· 700-pallet capacity facility
-· Monthly invoicing, 30-day terms
-· No minimum contract period
+· Monthly invoicing, net 30 days
+· No long-term contract (4-week minimum term, 30 days notice after)
 · £6M public liability insurance
 
-This quotation is valid for 30 days.
-Ben Greenwood · ben@palletstoragenearme.co.uk`;
-    previewEl.textContent = text;
+RATE TIERS
+${tierLines}
+
+TERMS & CONDITIONS — CUSTOMER MUST ACKNOWLEDGE BOTH
+1. ${offer.tc_self_insurance}
+
+2. ${offer.tc_fire_separation}
+
+Ben Greenwood · ben@palletstoragenearme.co.uk · 07506 255033`,
+      q,
+    };
+  }
+
+  const previewBtn = C.button({ label: 'Preview quote', size: 'sm', variant: 'secondary', onClick: () => {
+    const result = buildQuoteText();
+    if (!result) { C.toast({ message: 'Enter pallet count first', type: 'error' }); return; }
+    previewEl.textContent = result.text;
     previewEl.style.display = '';
   }});
 
-  const saveBtn = C.button({ label: 'Save quote', onClick: async () => {
+  const saveBtn = C.button({ label: 'Save to psnm_quotes', onClick: async () => {
     const pallets = parseInt(palletIn.value) || 0;
-    const rate = parseFloat(rateIn.value) || 6;
     if (!pallets) { C.toast({ message: 'Enter pallet count', type: 'error' }); return; }
-    const record = {
-      lead_id: leadSel.value || null,
-      company: companyIn.value,
-      contact_name: contactIn.value,
-      pallets,
-      rate_per_pallet_per_week: rate,
-      weekly_total: pallets * rate,
-      duration_weeks: parseInt(durationIn.value) || null,
-      special_terms: termsIn.value || null,
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-    };
+    const result = buildQuoteText();
+    if (!result) return;
+    const { q } = result;
     try {
-      await proxyPsnm('psnm_quotes', 'insert', { record });
-      C.toast({ message: 'Quote saved to psnm_quotes', type: 'success' });
-      [companyIn, contactIn, palletIn, durationIn, termsIn].forEach(i => { i.value = ''; });
-      rateIn.value = '6.00';
+      await proxyPsnm('psnm_quotes', 'insert', { record: {
+        company: companyIn.value,
+        contact_name: contactIn.value,
+        pallets_quoted: q.billedPallets,
+        monthly_rate_gbp: parseFloat(q.monthlyEstimate.toFixed(2)),
+        total_quote_gbp: parseFloat(q.totalPeriod.toFixed(2)),
+        duration_months: Math.ceil(q.billedWeeks / 4.33),
+        quote_date: new Date().toISOString().slice(0, 10),
+        first_month_free: true,
+        notes: JSON.stringify({ turns_per_year: parseFloat(turnsIn.value)||4, handling_period: q.handlingPeriod, onboarding: q.onboarding, tier: q.tierLabel, storage_rate: q.storageRate }),
+        special_terms: termsIn.value || null,
+        status: 'sent',
+      }});
+      C.toast({ message: 'Quote saved', type: 'success' });
+      [companyIn, contactIn, palletIn, termsIn].forEach(i => { i.value = ''; });
+      durationIn.value = '12'; turnsIn.value = '4';
       previewEl.style.display = 'none';
-    } catch(e) { C.toast({ message: 'Save failed', type: 'error' }); }
+    } catch(e) { C.toast({ message: 'Save failed: ' + e.message, type: 'error' }); }
   }});
 
-  const btnRow = el('div', { style: { display:'flex', gap:'var(--space-2)' } });
-  btnRow.appendChild(previewBtn); btnRow.appendChild(saveBtn);
-  fb.appendChild(btnRow);
+  const btnRow = el('div', { style:'display:flex;gap:var(--space-2);margin-top:var(--space-3)' });
+  btnRow.append(previewBtn, saveBtn); fb.appendChild(btnRow);
   wrap.appendChild(formCard);
   return wrap;
 }
@@ -857,34 +948,63 @@ async function renderList(table, { empty } = {}) {
   return wrap;
 }
 
-// ── Offer config render ─────────────────────────────────────────────────────
+// ── Offer config render — shows full canonical pricing ──────────────────────
 async function renderOfferConfig() {
   const wrap = el('div', {});
-  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Grand Slam Offer'));
-  wrap.appendChild(el('p', { className: 'text-muted', style: { marginBottom: 'var(--space-5)' } },
-    'Read-only. Edit by pasting an updated config row in the SQL editor for now.'));
+  const C = window.RBTR_Components;
+  wrap.appendChild(el('h2', { className: 'ds-h2' }, 'Canonical Pricing & Offer Config'));
   try {
     const r = await fetch('/api/supabase-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'psnm_offer_config', op: 'select' })
+      body: JSON.stringify({ table: 'psnm_offer_config', op: 'select' }),
     });
     const rows = await r.json();
     const active = (rows || []).find(r => r.active) || (rows || [])[0];
-    if (!active) { wrap.appendChild(emptyState({ icon: '💰', title: 'No offer config yet', body: 'Seed data expected from migration 27. Check Supabase.' })); return wrap; }
-    const offer = active.offer_json || {};
-    const row = (k, v) => el('div', { className: 'row', style: { borderBottom: '1px solid var(--border-subtle)', padding: 'var(--space-3) 0' } },
-      el('div', { style: { width: '180px', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', letterSpacing: 'var(--track-wide)', textTransform: 'uppercase' } }, k),
-      el('div', { className: 'grow' }, v || '—'),
-    );
-    wrap.appendChild(card({ children: el('div', {},
-      row('HEADLINE', offer.headline),
-      row('DREAM OUTCOME', offer.dream_outcome),
-      row('RISK REVERSAL', offer.risk_reversal),
-      row('TIME / EFFORT', offer.time_effort),
-      row('VERSION', 'v' + (active.version || 1)),
-    )}));
+    if (!active) { wrap.appendChild(C.emptyState({ icon: '💰', title: 'No offer config', body: 'Check psnm_offer_config.' })); return wrap; }
+    const o = active.offer_json || {};
+    const row = (k, v) => {
+      const d = el('div', { style:'display:flex;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);align-items:flex-start' });
+      d.append(
+        el('div', { style:'width:200px;flex-shrink:0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);padding-top:2px' }, k),
+        el('div', { style:'flex:1;font-size:var(--text-sm)' }, v || '—'),
+      );
+      return d;
+    };
+    const sec = (title) => el('div', { className:'ds-caption', style:'margin:var(--space-4) 0 var(--space-2)' }, title);
+    const body = el('div', {});
+
+    // Storage tiers
+    body.appendChild(sec('STORAGE RATES'));
+    (o.rate_tiers || []).forEach(t => body.appendChild(row(t.label, `£${Number(t.rate_per_pallet_week).toFixed(2)} / pallet / week`)));
+
+    // Handling
+    body.appendChild(sec('HANDLING FEES'));
+    body.appendChild(row('GOODS-IN', `£${Number(o.handling_in_rate||3.50).toFixed(2)} per pallet`));
+    body.appendChild(row('GOODS-OUT', `£${Number(o.handling_out_rate||3.50).toFixed(2)} per pallet`));
+
+    // Admin
+    body.appendChild(sec('ADMIN'));
+    body.appendChild(row('ONBOARDING FEE', `£${Number(o.onboarding_fee||50).toFixed(2)} — waived when pallets ≥ ${o.onboarding_waiver_threshold||50}`));
+    body.appendChild(row('MINIMUM PALLETS', String(o.min_pallets || 5)));
+    body.appendChild(row('MINIMUM TERM', `${o.min_weeks || 4} weeks billed minimum`));
+    body.appendChild(row('NOTICE PERIOD', `${o.notice_period_days || 30} days after minimum term`));
+    body.appendChild(row('PAYMENT TERMS', o.payment_terms || 'net_30'));
+
+    // Offer positioning
+    body.appendChild(sec('OFFER POSITIONING'));
+    body.appendChild(row('HEADLINE', o.headline));
+    body.appendChild(row('DREAM OUTCOME', o.dream_outcome));
+    body.appendChild(row('RISK REVERSAL', o.risk_reversal));
+
+    // T&Cs
+    body.appendChild(sec('T&C CLAUSES (MANDATORY ON EVERY QUOTE)'));
+    body.appendChild(row('SELF-INSURANCE', o.tc_self_insurance));
+    body.appendChild(row('FIRE SEPARATION', o.tc_fire_separation));
+
+    body.appendChild(el('div', { style:'font-size:10px;color:var(--text-tertiary);margin-top:var(--space-3)' }, `Config v${active.version || 1} — single source of truth for all pricing`));
+    wrap.appendChild(C.card({ children: body }));
   } catch(e) {
-    wrap.appendChild(emptyState({ icon: '⚠', title: 'Load failed', body: String(e.message || e) }));
+    wrap.appendChild(C.emptyState({ icon: '⚠', title: 'Load failed', body: String(e.message || e) }));
   }
   return wrap;
 }

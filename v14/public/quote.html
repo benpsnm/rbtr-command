@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get a Quote — Pallet Storage Near Me</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #666666;
+    --border: #e0e0e0;
+    --accent: #1a1a1a;
+    --accent-light: #f5f5f5;
+    --green: #16a34a;
+    --red: #dc2626;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--fg); font-family: var(--font); min-height: 100vh; }
+  body { padding: 24px 16px 48px; }
+
+  .page { max-width: 600px; margin: 0 auto; }
+  .logo { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  h1 { font-size: 26px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; }
+  .sub { font-size: 15px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+  .card-title { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 16px; }
+
+  label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; color: var(--fg); margin-bottom: 5px; }
+  label .hint { font-weight: 400; color: var(--muted); margin-left: 4px; }
+  input[type="text"], input[type="email"], input[type="tel"], input[type="number"], textarea {
+    width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 6px; font-size: 15px;
+    font-family: var(--font); background: var(--bg); color: var(--fg); transition: border-color .15s;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 72px; }
+  .field { margin-bottom: 16px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media(max-width: 480px) { .row2, .row3 { grid-template-columns: 1fr; } }
+
+  /* Live quote */
+  .quote-live { background: var(--accent-light); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; min-height: 80px; transition: opacity .2s; }
+  .quote-live.loading { opacity: .5; }
+  .q-line { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+  .q-line:last-child { border-bottom: none; }
+  .q-label { color: var(--muted); }
+  .q-val { font-family: var(--mono); font-weight: 600; }
+  .q-total { font-size: 18px; font-weight: 800; padding-top: 10px; }
+  .q-tier { display: inline-block; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; margin-bottom: 12px; }
+  .q-placeholder { color: var(--muted); font-size: 14px; }
+
+  /* T&Cs */
+  .tc-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 6px; padding: 14px 16px; margin-bottom: 12px; }
+  .tc-box p { font-size: 13px; line-height: 1.6; color: #78350f; margin-top: 6px; }
+  .tc-check { display: flex; gap: 10px; align-items: flex-start; }
+  .tc-check input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+  .tc-check label { font-size: 13px; font-weight: 600; color: #78350f; cursor: pointer; line-height: 1.5; }
+
+  /* Button */
+  .btn-submit { width: 100%; padding: 15px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: opacity .15s; margin-top: 8px; }
+  .btn-submit:hover { opacity: .85; }
+  .btn-submit:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Success */
+  .success { display: none; text-align: center; padding: 40px 24px; }
+  .success.on { display: block; }
+  .success-icon { font-size: 48px; margin-bottom: 16px; }
+  .success h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .success p { color: var(--muted); font-size: 15px; line-height: 1.6; }
+
+  /* Error */
+  .err-msg { display: none; color: var(--red); font-size: 13px; margin-top: 8px; padding: 10px 12px; background: #fef2f2; border-radius: 6px; }
+  .err-msg.on { display: block; }
+
+  /* Trust bar */
+  .trust { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+  .trust-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .trust-item span { font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="logo">Pallet Storage Near Me</div>
+  <h1>Get an instant quote</h1>
+  <p class="sub">700 spaces · Hellaby, Rotherham S66 8HR · 24/7 access · No long-term contract</p>
+
+  <div class="trust">
+    <div class="trust-item"><span>✓</span> First month free</div>
+    <div class="trust-item"><span>✓</span> No deposit</div>
+    <div class="trust-item"><span>✓</span> 24/7 access with personal code</div>
+    <div class="trust-item"><span>✓</span> Monthly invoicing, net 30</div>
+  </div>
+
+  <div id="form-section">
+    <!-- Storage requirements -->
+    <div class="card">
+      <div class="card-title">Storage requirements</div>
+      <div class="row3">
+        <div class="field">
+          <label>Pallets <span class="hint">(min 5)</span></label>
+          <input type="number" id="pallets" min="5" placeholder="e.g. 20" oninput="updateQuote()">
+        </div>
+        <div class="field">
+          <label>Duration <span class="hint">(weeks)</span></label>
+          <input type="number" id="duration" min="4" value="12" placeholder="e.g. 12" oninput="updateQuote()">
+        </div>
+        <div class="field">
+          <label>Goods-in / yr</label>
+          <input type="number" id="in_per_year" min="0" value="0" placeholder="e.g. 50" oninput="updateQuote()">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Goods-out / yr</label>
+          <input type="number" id="out_per_year" min="0" value="0" placeholder="e.g. 50" oninput="updateQuote()">
+        </div>
+        <div class="field">
+          <label>Type of goods</label>
+          <input type="text" id="goods_description" placeholder="e.g. Palletised FMCG goods">
+        </div>
+      </div>
+    </div>
+
+    <!-- Live quote -->
+    <div class="quote-live" id="quote-live">
+      <p class="q-placeholder">Enter your pallet count and duration above to see your quote.</p>
+    </div>
+
+    <!-- Contact details -->
+    <div class="card">
+      <div class="card-title">Your details</div>
+      <div class="row2">
+        <div class="field">
+          <label>Company name</label>
+          <input type="text" id="company" placeholder="Acme Logistics Ltd">
+        </div>
+        <div class="field">
+          <label>Your name</label>
+          <input type="text" id="contact_name" placeholder="John Smith">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Email address</label>
+          <input type="email" id="email" placeholder="john@company.co.uk">
+        </div>
+        <div class="field">
+          <label>Phone <span class="hint">(optional)</span></label>
+          <input type="tel" id="phone" placeholder="07700 000000">
+        </div>
+      </div>
+    </div>
+
+    <!-- T&Cs -->
+    <div class="card">
+      <div class="card-title">Terms & conditions — both required</div>
+      <div class="tc-box" style="margin-bottom:12px">
+        <div class="tc-check">
+          <input type="checkbox" id="tc1" onchange="checkReady()">
+          <label for="tc1">Self-insurance acknowledgement</label>
+        </div>
+        <p id="tc1-text">Loading...</p>
+      </div>
+      <div class="tc-box">
+        <div class="tc-check">
+          <input type="checkbox" id="tc2" onchange="checkReady()">
+          <label for="tc2">Fire separation disclosure</label>
+        </div>
+        <p id="tc2-text">Loading...</p>
+      </div>
+    </div>
+
+    <div class="err-msg" id="err-msg"></div>
+    <button class="btn-submit" id="submit-btn" disabled onclick="submitBooking()">Request storage — we'll confirm within 2 hours</button>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px">No payment taken now. We'll contact you to confirm your booking.</p>
+  </div>
+
+  <div class="success" id="success">
+    <div class="success-icon">✅</div>
+    <h2 id="success-name">Thanks, we'll be in touch shortly</h2>
+    <p id="success-body">Your request has been received. We'll confirm your booking within 2 hours during business hours (Mon–Fri 8am–6pm).</p>
+    <p style="margin-top:16px;font-size:13px;color:var(--muted)">Questions? Call Ben on <strong>07506 255033</strong> or email <strong>ben@palletstoragenearme.co.uk</strong></p>
+  </div>
+</div>
+
+<script>
+let offerConfig = null;
+
+async function loadOffer() {
+  try {
+    const r = await fetch('/api/atlas?action=offer_config');
+    const data = await r.json();
+    if (data.ok) {
+      offerConfig = data.offer;
+      document.getElementById('tc1-text').textContent = offerConfig.tc_self_insurance || '';
+      document.getElementById('tc2-text').textContent = offerConfig.tc_fire_separation || '';
+    }
+  } catch(e) {
+    document.getElementById('tc1-text').textContent = 'Customer self-insurance required. You keep your own cover and your own claim history — your premiums never rise because of an incident on our site.';
+    document.getElementById('tc2-text').textContent = 'Our facility shares a fire-separation wall with a neighbouring light-industrial tenant. Full disclosure of the building\'s layout is provided at booking. All storage customers acknowledge this configuration.';
+  }
+}
+
+function calcQuote(pallets, durationWeeks, inPerYear, outPerYear, offer) {
+  if (!offer) return null;
+  const tiers = offer.rate_tiers || [];
+  const handlingIn = Number(offer.handling_in_rate) || 3.50;
+  const handlingOut = Number(offer.handling_out_rate) || 3.50;
+  const onboardingFee = Number(offer.onboarding_fee) || 50;
+  const waiverAt = Number(offer.onboarding_waiver_threshold) || 50;
+
+  let storageRate = tiers.length ? tiers[tiers.length-1].rate_per_pallet_week : 3.95;
+  let tierLabel = '';
+  for (const t of tiers) {
+    if (t.range_max === null || pallets <= t.range_max) { storageRate = Number(t.rate_per_pallet_week); tierLabel = t.label || ''; break; }
+  }
+
+  const frac = durationWeeks / 52;
+  const inMoves = Math.ceil((inPerYear||0) * frac);
+  const outMoves = Math.ceil((outPerYear||0) * frac);
+  const storagePeriod = pallets * storageRate * durationWeeks;
+  const handlingPeriod = (inMoves * handlingIn) + (outMoves * handlingOut);
+  const onboarding = pallets >= waiverAt ? 0 : onboardingFee;
+  const totalPeriod = storagePeriod + handlingPeriod + onboarding;
+  const monthlyEstimate = (storagePeriod / durationWeeks) * 4.33;
+  const annualTotal = pallets * storageRate * 52 + (inPerYear||0) * handlingIn + (outPerYear||0) * handlingOut + onboarding;
+
+  return { storageRate, tierLabel, storagePeriod, inMoves, outMoves, handlingPeriod, onboarding, totalPeriod, monthlyEstimate, annualTotal, handlingIn, handlingOut };
+}
+
+function fmt(n) { return '£' + Number(n).toFixed(2); }
+
+function updateQuote() {
+  const pallets = parseInt(document.getElementById('pallets').value) || 0;
+  const duration = parseInt(document.getElementById('duration').value) || 4;
+  const inY = parseInt(document.getElementById('in_per_year').value) || 0;
+  const outY = parseInt(document.getElementById('out_per_year').value) || 0;
+  const el = document.getElementById('quote-live');
+
+  if (!pallets || pallets < 5) {
+    el.innerHTML = '<p class="q-placeholder">Enter at least 5 pallets to see your quote.</p>';
+    checkReady(); return;
+  }
+  if (!offerConfig) {
+    el.innerHTML = '<p class="q-placeholder">Loading pricing...</p>';
+    checkReady(); return;
+  }
+
+  const q = calcQuote(pallets, Math.max(duration, 4), inY, outY, offerConfig);
+  if (!q) { checkReady(); return; }
+
+  let html = `<div class="q-tier">${q.tierLabel}</div>`;
+  html += `<div class="q-line"><span class="q-label">Storage (${pallets} pallets × ${fmt(q.storageRate)}/wk × ${Math.max(duration,4)} wks)</span><span class="q-val">${fmt(q.storagePeriod)}</span></div>`;
+  if (q.inMoves > 0) html += `<div class="q-line"><span class="q-label">Goods-in (${q.inMoves} movements × ${fmt(q.handlingIn)})</span><span class="q-val">${fmt(q.inMoves * q.handlingIn)}</span></div>`;
+  if (q.outMoves > 0) html += `<div class="q-line"><span class="q-label">Goods-out (${q.outMoves} movements × ${fmt(q.handlingOut)})</span><span class="q-val">${fmt(q.outMoves * q.handlingOut)}</span></div>`;
+  if (q.onboarding > 0) html += `<div class="q-line"><span class="q-label">Onboarding fee (one-time, waived at 50+ pallets)</span><span class="q-val">${fmt(q.onboarding)}</span></div>`;
+  else html += `<div class="q-line"><span class="q-label">Onboarding fee</span><span class="q-val" style="color:var(--green)">Waived ✓</span></div>`;
+  html += `<div class="q-line q-total"><span class="q-label" style="font-weight:700">Period total (${Math.max(duration,4)} weeks) + VAT</span><span class="q-val">${fmt(q.totalPeriod)}</span></div>`;
+  html += `<div class="q-line" style="font-size:13px;color:var(--muted)"><span>Monthly estimate</span><span>${fmt(q.monthlyEstimate)}/mo + VAT</span></div>`;
+  html += `<div class="q-line" style="font-size:13px;color:var(--muted)"><span>Annual estimate</span><span>${fmt(q.annualTotal)}/yr + VAT</span></div>`;
+  if (duration < 4) html += `<p style="font-size:12px;color:var(--muted);margin-top:8px">4-week minimum applied.</p>`;
+  el.innerHTML = html;
+  checkReady();
+}
+
+function checkReady() {
+  const pallets = parseInt(document.getElementById('pallets').value) || 0;
+  const duration = parseInt(document.getElementById('duration').value) || 0;
+  const company = document.getElementById('company').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const tc1 = document.getElementById('tc1').checked;
+  const tc2 = document.getElementById('tc2').checked;
+  const ready = pallets >= 5 && duration >= 4 && company && email && tc1 && tc2;
+  document.getElementById('submit-btn').disabled = !ready;
+}
+
+async function submitBooking() {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending request...';
+  document.getElementById('err-msg').classList.remove('on');
+
+  const data = {
+    pallets: parseInt(document.getElementById('pallets').value),
+    duration_weeks: Math.max(parseInt(document.getElementById('duration').value)||4, 4),
+    in_per_year: parseInt(document.getElementById('in_per_year').value)||0,
+    out_per_year: parseInt(document.getElementById('out_per_year').value)||0,
+    goods_description: document.getElementById('goods_description').value.trim(),
+    company: document.getElementById('company').value.trim(),
+    contact_name: document.getElementById('contact_name').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    phone: document.getElementById('phone').value.trim(),
+    tc_self_insurance: document.getElementById('tc1').checked,
+    tc_fire_separation: document.getElementById('tc2').checked,
+  };
+
+  try {
+    const r = await fetch('/api/atlas?action=book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await r.json();
+    if (!r.ok || !result.ok) throw new Error(result.error || 'Submission failed. Please call us on 07506 255033.');
+    document.getElementById('form-section').style.display = 'none';
+    const suc = document.getElementById('success');
+    suc.classList.add('on');
+    document.getElementById('success-name').textContent = `Thanks${data.contact_name ? ', ' + data.contact_name.split(' ')[0] : ''} — we'll be in touch shortly`;
+    document.getElementById('success-body').textContent = `Your request for ${data.pallets} pallets has been received. We'll confirm your booking within 2 hours during business hours (Mon–Fri 8am–6pm). Reference: ${result.enquiry_id ? result.enquiry_id.slice(0,8).toUpperCase() : 'pending'}`;
+  } catch(e) {
+    const err = document.getElementById('err-msg');
+    err.textContent = e.message;
+    err.classList.add('on');
+    btn.disabled = false;
+    btn.textContent = 'Request storage — we\'ll confirm within 2 hours';
+  }
+}
+
+// Init
+loadOffer();
+document.getElementById('pallets').addEventListener('input', checkReady);
+document.getElementById('duration').addEventListener('input', checkReady);
+document.getElementById('company').addEventListener('input', checkReady);
+document.getElementById('email').addEventListener('input', checkReady);
+</script>
+</body>
+</html>

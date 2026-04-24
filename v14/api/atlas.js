@@ -378,6 +378,70 @@ async function getScorecard() {
   };
 }
 
+// ── getOfferConfig · public pricing read ────────────────────────────────────
+async function getOfferConfig() {
+  const rows = await sbSelect('psnm_offer_config', 'active=eq.true&limit=1');
+  if (!rows || !rows.length) return { ok: false, error: 'no active offer config' };
+  return { ok: true, offer: rows[0].offer_json, version: rows[0].version };
+}
+
+// ── bookEnquiry · self-serve quote widget submission ─────────────────────────
+// Uses psnm_enquiries (source='self_serve_quote') — no separate bookings table needed.
+// Email confirmation stub: sends Telegram to Ben, logs email_sent:false until Mailgun configured.
+async function bookEnquiry(body) {
+  const { pallets, duration_weeks, in_per_year, out_per_year, company, contact_name, email, phone, goods_description, tc_self_insurance, tc_fire_separation } = body || {};
+  if (!company || !email) return { ok: false, error: 'company and email required' };
+  if (!tc_self_insurance || !tc_fire_separation) return { ok: false, error: 'both T&C acknowledgements required' };
+  if (!pallets || pallets < 5) return { ok: false, error: 'minimum 5 pallets' };
+  if (!duration_weeks || duration_weeks < 4) return { ok: false, error: 'minimum 4 weeks' };
+
+  const cfgRows = await sbSelect('psnm_offer_config', 'active=eq.true&limit=1');
+  const offer = cfgRows?.[0]?.offer_json || {};
+  const tiers = offer.rate_tiers || [];
+  const handlingIn = Number(offer.handling_in_rate) || 3.50;
+  const handlingOut = Number(offer.handling_out_rate) || 3.50;
+  const waiverAt = Number(offer.onboarding_waiver_threshold) || 50;
+  const onboardingFee = Number(offer.onboarding_fee) || 50;
+
+  let storageRate = tiers.length ? tiers[tiers.length - 1].rate_per_pallet_week : 3.95;
+  let tierLabel = '';
+  for (const t of tiers) {
+    if (t.range_max === null || pallets <= t.range_max) { storageRate = Number(t.rate_per_pallet_week); tierLabel = t.label || ''; break; }
+  }
+  const frac = duration_weeks / 52;
+  const inMoves = Math.ceil((in_per_year || 0) * frac);
+  const outMoves = Math.ceil((out_per_year || 0) * frac);
+  const storagePeriod = pallets * storageRate * duration_weeks;
+  const handlingPeriod = (inMoves * handlingIn) + (outMoves * handlingOut);
+  const onboarding = pallets >= waiverAt ? 0 : onboardingFee;
+  const totalPeriod = storagePeriod + handlingPeriod + onboarding;
+  const monthlyEstimate = (storagePeriod / duration_weeks) * 4.33;
+
+  const enquiry = await sbInsert('psnm_enquiries', [{
+    company, contact_name, contact_email: email, contact_phone: phone || null,
+    source: 'self_serve_quote', pallets, duration_weeks,
+    notes: JSON.stringify({ in_per_year, out_per_year, goods_description, tc_self_insurance: true, tc_fire_separation: true, storage_rate: storageRate, tier: tierLabel, handling_period: handlingPeriod, onboarding, total_period: totalPeriod, monthly_estimate: monthlyEstimate }),
+    status: 'new', priority_score: 80,
+  }]);
+  if (enquiry?.error) return { ok: false, error: 'enquiry insert failed', detail: enquiry };
+  const enquiryId = Array.isArray(enquiry) ? enquiry[0]?.id : enquiry?.id;
+
+  const nameParts = (contact_name || '').trim().split(' ');
+  await sbInsert('contacts', [{ first_name: nameParts[0] || null, last_name: nameParts.slice(1).join(' ') || null, company, emails: email ? [email] : [], phones: phone ? [phone] : [], entities: ['psnm'], relationship_type: 'prospect', notes: `Self-serve quote. ${pallets} pallets, ${duration_weeks} wks. ${goods_description||''}`.trim() }]).catch(() => null);
+
+  let tgOk = false;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (process.env.TELEGRAM_BOT_TOKEN && chatId) {
+    try {
+      const msg = `🚨 *NEW BOOKING REQUEST*\n*${company}* — ${contact_name||'no name'}\n📧 ${email}${phone?' · 📞 '+phone:''}\n📦 ${pallets} pallets · ${duration_weeks} wks · ${tierLabel}\n💷 Period: £${totalPeriod.toFixed(2)} · Monthly: £${monthlyEstimate.toFixed(2)}\nGoods: ${goods_description||'not specified'}\nStatus: pending_review`;
+      const tg = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ chat_id:chatId, text:msg, parse_mode:'Markdown' }) });
+      tgOk = (await tg.json()).ok;
+    } catch(e) {}
+  }
+
+  return { ok: true, enquiry_id: enquiryId, quote: { total_period: parseFloat(totalPeriod.toFixed(2)), monthly_estimate: parseFloat(monthlyEstimate.toFixed(2)), tier: tierLabel, storage_rate: storageRate, onboarding }, telegram_sent: tgOk, email_sent: false, email_note: 'Mailgun not configured — set MAILGUN_API_KEY + MAILGUN_DOMAIN in Vercel env to enable email confirmation.' };
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -385,12 +449,16 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  const auth = checkAuth(req);
-  if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }
-
+  // offer_config is public — no auth needed (it's marketing pricing)
   const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
   const action = url.searchParams.get('action');
+  if (action === 'offer_config' && req.method === 'GET') return res.status(200).json(await getOfferConfig());
+  // book is public — submitted by external visitors
   const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})) : {};
+  if (action === 'book' && req.method === 'POST') return res.status(201).json(await bookEnquiry(body));
+
+  const auth = checkAuth(req);
+  if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }
 
   try {
     if (action === 'queue' && req.method === 'GET')        return res.status(200).json(await getQueue());
@@ -403,7 +471,7 @@ module.exports = async function handler(req, res) {
     if (action === 'rank_targets' && req.method === 'POST') {
       return res.status(202).json({ ok: false, deferred: true, reason: 'Use rank_one_target in a client loop (Vercel 10s per-call cap).' });
     }
-    res.status(400).json({ error: 'action required: queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets' });
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });
