@@ -87,16 +87,27 @@
 // Ben sets the real password via Vercel env WMS_STAFF_PASSWORD and this code compares to it at runtime
 // via a pre-fetch to /api/supabase-proxy action='wms_check' (TODO next commit).
 
-// Quick client-side gate using a placeholder. TODO before hiring staff: wire to env-based check.
-const PLACEHOLDER_PASSWORD = 'change-before-hiring-staff';
-
-function checkPwd() {
+async function checkPwd() {
   const input = document.getElementById('pwd').value;
-  if (input === PLACEHOLDER_PASSWORD) {
-    try { localStorage.setItem('wms_ok', '1'); } catch(e) {}
-    showWMS();
-  } else {
+  if (!input) return;
+  document.getElementById('go').disabled = true;
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'wms_check', password: input }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      try { localStorage.setItem('wms_ok', '1'); } catch(e) {}
+      showWMS();
+    } else {
+      document.getElementById('err').classList.add('on');
+      document.getElementById('go').disabled = false;
+    }
+  } catch(e) {
+    document.getElementById('err').textContent = 'Auth error — try again.';
     document.getElementById('err').classList.add('on');
+    document.getElementById('go').disabled = false;
   }
 }
 document.getElementById('go').addEventListener('click', checkPwd);

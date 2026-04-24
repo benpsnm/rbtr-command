@@ -141,6 +141,15 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
 
+  // WMS staff passcode check — no auth token required, isolated action
+  const rawBody = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  if (rawBody.action === 'wms_check') {
+    const expected = process.env.PSNM_STAFF_PASSCODE;
+    if (!expected) { res.status(500).json({ ok: false, error: 'PSNM_STAFF_PASSCODE not set' }); return; }
+    res.status(200).json({ ok: rawBody.password === expected });
+    return;
+  }
+
   if (!SUPABASE_URL || !SUPABASE_KEY) { res.status(500).json({ error: 'Supabase env vars not set.' }); return; }
 
   // Phase 1 (v3.0): perimeter guard. Require x-rbtr-auth for cross-origin /
