@@ -57,6 +57,15 @@ const ALLOWED_TABLES = new Set([
   'house_bookings','house_inventory','house_compliance','house_message_templates',
   // Sarah portal tables
   'sarah_today_log','sarah_pilates_progress','sarah_wellness_log','sarah_content_calendar',
+  // RBTR portal tables (additional)
+  'rbtr_gates','rbtr_predeparture_checklist','rbtr_sponsor_proposals',
+  'rbtr_sponsor_intelligence','rbtr_sponsor_touches',
+  // Phase 1.6 Workstream B (migration 32_psnm_templates)
+  'psnm_warm_leads','psnm_email_templates','psnm_touch_schedule',
+  // Phase 1.6 Workstream C+D (migrations 33+34)
+  'contacts','contact_interactions','sops','sop_executions',
+  // Phase 1.6 Workstream E (migration 35)
+  'notifications',
 ]);
 
 // Classification-aware blocks. AUTH never goes through the browser proxy.
