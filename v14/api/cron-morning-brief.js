@@ -15,11 +15,32 @@ const BEN_WHATSAPP = process.env.BEN_WHATSAPP || 'whatsapp:+447506255033';
 const BEN_PHONE    = process.env.BEN_PHONE || '+447506255033';
 
 module.exports = async function handler(req, res) {
-  // Vercel Cron calls via GET with a Bearer token matching process.env.CRON_SECRET
-  // (only if you set CRON_SECRET; otherwise any GET works).
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers?.authorization !== `Bearer ${secret}`) {
     res.status(401).send('unauthorized');
+    return;
+  }
+
+  // ?mode=evening → trigger evening debrief instead of morning brief
+  const url = new URL(req.url, `https://${req.headers?.host || 'x'}`);
+  if (url.searchParams.get('mode') === 'evening') {
+    const origin = `https://${req.headers?.host || 'rbtr-jarvis.vercel.app'}`;
+    const r = await fetch(`${origin}/api/morning-brief?mode=evening`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const result = await r.json();
+    const out = { steps: [{ step: 'evening-debrief', ok: r.ok, audio_url: result.audio_url }] };
+    if (r.ok && result.audio_url && process.env.TELEGRAM_BOT_TOKEN) {
+      try {
+        const chatId = process.env.TELEGRAM_CHAT_ID;
+        if (chatId) {
+          const tg = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendAudio`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, audio: result.audio_url, caption: `🌙 Evening debrief · ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`, title: 'ROCKO · Evening debrief', performer: 'ROCKO' }),
+          });
+          out.steps.push({ step: 'telegram', ok: tg.ok });
+        }
+      } catch (e) { out.steps.push({ step: 'telegram', ok: false, error: e.message }); }
+    }
+    res.status(200).json({ ok: r.ok, ...out });
     return;
   }
 

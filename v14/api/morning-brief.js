@@ -424,11 +424,57 @@ function validateScript(s) {
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
+// ── Evening debrief handler (merged from evening-debrief.js) ────────────────
+async function handleEveningDebrief(req, res) {
+  if (!ANTHROPIC_API_KEY) { res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' }); return; }
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [mood, tasks, calls, goals] = await Promise.all([
+    sbSelect('ben_mood_log', `date=eq.${todayStr}&select=mood,energy,sleep_hours,notes&limit=1`).then(r => r?.[0] || null),
+    sbSelect('ben_tasks', `due_date=eq.${todayStr}&select=title,status`).then(r => r || []),
+    sbSelect('psnm_outreach_touches', `created_at=gte.${todayStr}T00:00:00&select=company,outcome`).then(r => r || []),
+    sbSelect('ben_goals', `tier=eq.today&status=eq.open&select=title&order=priority.asc&limit=3`).then(r => r || []),
+  ]);
+  const data = {
+    date: todayStr,
+    weekday: new Date().toLocaleDateString('en-GB', { weekday: 'long' }),
+    mood_score: mood?.mood ?? null,
+    energy_score: mood?.energy ?? null,
+    tasks_completed: tasks.filter(t => t.status === 'done' || t.status === 'complete').length,
+    tasks_total: tasks.length,
+    calls_logged: calls.length,
+    calls_won: calls.filter(c => c.outcome === 'won' || c.outcome === 'booked').length,
+    top3_tomorrow: goals.map(g => g.title),
+  };
+  const prompt = `You are generating Ben Greenwood's 9pm evening debrief. Spoken via ElevenLabs TTS.
+TARGET: 100–150 words (45–60 seconds).
+DATA: ${JSON.stringify(data)}
+PATTERN: "Ben. Evening. Today you [factual summary]. [One win if genuine.] [One honest note on what was hard, if material.] Tomorrow's Top 3 start with [first from top3_tomorrow or 'nothing set yet']. Sleep well."
+TONE: Direct. No filler. No "great job". Acknowledge real data.
+BANNED: leverage, synergy, passionate, ecosystem, robust, unlock, value-add, circle back, bandwidth, holistic, empower, reach out
+OUTPUT: Script text only. Start "Ben. Evening." End "Sleep well."`;
+  const script = await callClaude(prompt);
+  let audioUrl = null;
+  if (ELEVENLABS_API_KEY) {
+    const tts = await renderAudio(script);
+    if (tts.ok) {
+      const upload = await uploadToStorage(`debrief-${todayStr}.mp3`, tts.audio);
+      if (upload.ok) audioUrl = upload.public_url;
+    }
+  }
+  res.status(200).json({ ok: true, script, audio_url: audioUrl, data, generated_at: new Date().toISOString() });
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+
+  // ?mode=evening → evening debrief
+  const url = new URL(req.url, `https://${req.headers?.host || 'x'}`);
+  if (url.searchParams.get('mode') === 'evening') {
+    return handleEveningDebrief(req, res);
+  }
 
   if (!ANTHROPIC_API_KEY) {
     res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });

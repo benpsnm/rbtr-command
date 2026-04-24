@@ -82,6 +82,39 @@ module.exports = async function handler(req, res) {
     let body;
     try { body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); }
     catch { res.status(400).json({ error: 'invalid json' }); return; }
+
+    // action=notify — write notification to DB + push text message
+    if (action === 'notify') {
+      const { type = 'rocko_proactive', severity = 'normal', title, body: bodyText, data } = body;
+      const EMOJI = { critical: '🚨', high: '⚠️', normal: '💬', low: 'ℹ️' };
+      const channelDelivered = ['portal'];
+      const chatId = await getStoredChatId();
+      let tgResult = { ok: false };
+      if (chatId) {
+        const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: `${EMOJI[severity] || '💬'} *${title || type}*\n${bodyText || ''}`, parse_mode: 'Markdown' }),
+        });
+        tgResult = await tg.json();
+        if (tgResult.ok) channelDelivered.push('telegram');
+      }
+      let notifId = null;
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        try {
+          const headers = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+          if (SUPABASE_KEY?.startsWith('eyJ')) headers['Authorization'] = `Bearer ${SUPABASE_KEY}`;
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ type, severity, title, body: bodyText, data: data || null, channel_delivered: channelDelivered }),
+          });
+          const rows = await r.json();
+          notifId = Array.isArray(rows) ? rows[0]?.id : rows?.id;
+        } catch {}
+      }
+      res.status(201).json({ ok: true, id: notifId, telegram: tgResult, channels: channelDelivered });
+      return;
+    }
+
     const { audio_url, caption } = body;
     if (!audio_url) { res.status(400).json({ error: 'audio_url required' }); return; }
     const chatId = await getStoredChatId();
@@ -91,5 +124,5 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  res.status(405).json({ error: 'GET ?action=chat-id or POST {audio_url}' });
+  res.status(405).json({ error: 'GET ?action=chat-id or POST {audio_url} or POST ?action=notify' });
 };
