@@ -469,6 +469,289 @@ async function bookEnquiry(body) {
   return { ok: true, enquiry_id: enquiryId, quote: { total_period: parseFloat(totalPeriod.toFixed(2)), monthly_estimate: parseFloat(monthlyEstimate.toFixed(2)), tier: tierLabel, storage_rate: storageRate, onboarding }, telegram_sent: tgOk, email_sent: emailOk, email_note: emailOk ? null : emailNote };
 }
 
+// ── Atlas v2 · generate_drafts ───────────────────────────────────────────────
+// POST /api/atlas?action=generate_drafts
+// Pulls top prospects, calls Anthropic for each, inserts psnm_atlas_drafts rows.
+const fs = require('fs');
+const path = require('path');
+
+async function getAtlasConfig() {
+  const rows = await sbSelect('psnm_atlas_config', 'id=eq.main&limit=1');
+  return rows?.[0] || { daily_send_limit: 50, paused: false, tone_mix: 'balanced', framework_weights: {} };
+}
+
+async function generateDrafts(body) {
+  const batchSize = Math.min(Number(body?.batch_size) || 5, 20);
+  const prospectIds = body?.prospect_ids || null;
+
+  const cfg = await getAtlasConfig();
+  if (cfg.paused) return { ok: false, error: 'Atlas is paused — toggle in Settings to resume' };
+
+  const offerRows = await sbSelect('psnm_offer_config', 'active=eq.true&limit=1');
+  if (!offerRows?.length) return { ok: false, error: 'No active offer config' };
+  const offer = offerRows[0].offer_json;
+
+  const tiers = offer.rate_tiers || [];
+  const rateSmall = tiers.find(t => t.range_min === 1)?.rate_per_pallet_week || 3.95;
+  const rateMid   = tiers.find(t => t.range_min === 50)?.rate_per_pallet_week || 3.45;
+  const rateBulk  = tiers.find(t => t.range_min === 150)?.rate_per_pallet_week || 2.95;
+
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+  let prospectQuery;
+  if (prospectIds?.length) {
+    prospectQuery = `id=in.(${prospectIds.join(',')})&select=id,company,city,industry,priority_score,is_dream20,decision_maker_name,decision_maker_role,estimated_pallet_need,current_touch_count,status&limit=${batchSize}`;
+  } else {
+    prospectQuery = `select=id,company,city,industry,priority_score,is_dream20,decision_maker_name,decision_maker_role,estimated_pallet_need,current_touch_count,status&order=priority_score.desc&limit=${batchSize}&or=(last_touched_at.is.null,last_touched_at.lt.${cutoff})&status=not.eq.do_not_contact`;
+  }
+
+  const prospects = await sbSelect('psnm_outreach_targets', prospectQuery);
+  if (!prospects?.length) return { ok: true, generated: 0, draft_ids: [], reason: 'No eligible prospects found' };
+
+  const promptTemplate = (() => {
+    try { return fs.readFileSync(path.join(__dirname, '_atlas_system_prompt.md'), 'utf8'); }
+    catch { return null; }
+  })();
+  if (!promptTemplate) return { ok: false, error: '_atlas_system_prompt.md not found' };
+
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+
+  const draftIds = [];
+  const errors = [];
+
+  for (const p of prospects) {
+    try {
+      const firstName = (p.decision_maker_name || p.company || '').split(' ')[0];
+      const prompt = promptTemplate
+        .replace(/\{\{company\}\}/g, p.company || 'the company')
+        .replace(/\{\{contact_name\}\}/g, p.decision_maker_name || 'the team')
+        .replace(/\{\{contact_first_name\}\}/g, firstName)
+        .replace(/\{\{industry\}\}/g, p.industry || 'manufacturing/distribution')
+        .replace(/\{\{city\}\}/g, p.city || 'South Yorkshire')
+        .replace(/\{\{estimated_pallet_need\}\}/g, p.estimated_pallet_need || '10–50')
+        .replace(/\{\{priority_score\}\}/g, p.priority_score || 70)
+        .replace(/\{\{dream_outcome\}\}/g, offer.dream_outcome || '')
+        .replace(/\{\{perceived_likelihood\}\}/g, offer.perceived_likelihood || '')
+        .replace(/\{\{time_effort\}\}/g, offer.time_effort || '')
+        .replace(/\{\{risk_reversal\}\}/g, offer.risk_reversal || '')
+        .replace(/\{\{rate_small\}\}/g, rateSmall)
+        .replace(/\{\{rate_mid\}\}/g, rateMid)
+        .replace(/\{\{rate_bulk\}\}/g, rateBulk)
+        .replace(/\{\{headline\}\}/g, offer.headline || '')
+        .replace(/\{\{touch_number\}\}/g, (p.current_touch_count || 0) + 1)
+        .replace(/\{\{tone_mix\}\}/g, cfg.tone_mix || 'balanced');
+
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: process.env.ANTHROPIC_MODEL_DEFAULT || 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          system: prompt,
+          messages: [{ role: 'user', content: `Generate a cold outreach email for ${p.company} (${p.industry || 'manufacturer/distributor'}) in ${p.city || 'South Yorkshire'}. Apply all six frameworks. Return only valid JSON as specified.` }],
+        }),
+      });
+
+      if (!aiRes.ok) {
+        const errText = await aiRes.text();
+        errors.push({ prospect_id: p.id, company: p.company, error: `Anthropic ${aiRes.status}: ${errText.slice(0,200)}` });
+        continue;
+      }
+
+      const aiJson = await aiRes.json();
+      const rawContent = aiJson?.content?.[0]?.text || '';
+
+      let parsed;
+      try {
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch?.[0] || rawContent);
+      } catch (e) {
+        errors.push({ prospect_id: p.id, company: p.company, error: 'JSON parse failed: ' + rawContent.slice(0, 200) });
+        continue;
+      }
+
+      if (!parsed.subject || !parsed.body) {
+        errors.push({ prospect_id: p.id, company: p.company, error: 'Missing subject or body in AI response' });
+        continue;
+      }
+
+      const touchNum = (p.current_touch_count || 0) + 1;
+      const inserted = await sbInsert('psnm_atlas_drafts', [{
+        prospect_id: p.id,
+        touch_number: touchNum,
+        subject: parsed.subject,
+        body: parsed.body,
+        framework_annotations: parsed.framework_annotations || [],
+        confidence_score: parsed.confidence_score || null,
+        status: 'pending_approval',
+      }]);
+
+      if (inserted?.error || !Array.isArray(inserted)) {
+        errors.push({ prospect_id: p.id, company: p.company, error: 'DB insert failed: ' + JSON.stringify(inserted).slice(0,200) });
+        continue;
+      }
+
+      draftIds.push({ id: inserted[0]?.id, company: p.company, subject: parsed.subject, confidence: parsed.confidence_score });
+    } catch (e) {
+      errors.push({ prospect_id: p.id, company: p.company || 'unknown', error: e.message });
+    }
+  }
+
+  return {
+    ok: true,
+    generated: draftIds.length,
+    draft_ids: draftIds,
+    errors,
+    batch_size: batchSize,
+    prospects_queried: prospects.length,
+  };
+}
+
+// ── Atlas v2 · dispatch_approved ─────────────────────────────────────────────
+// POST /api/atlas?action=dispatch_approved
+async function dispatchApproved(body) {
+  const cfg = await getAtlasConfig();
+  if (cfg.paused) return { ok: false, error: 'Atlas is paused — toggle in Settings to resume' };
+
+  const approved = await sbSelect('psnm_atlas_drafts',
+    'status=eq.approved&select=id,prospect_id,touch_number,subject,body&order=approved_at.asc&limit=50');
+  if (!approved?.length) return { ok: true, sent: 0, failed: 0, message: 'No approved drafts to send' };
+
+  const dailyLimit = cfg.daily_send_limit || 50;
+  const toSend = approved.slice(0, dailyLimit);
+
+  const sentCount = [], failedCount = [];
+
+  for (const draft of toSend) {
+    try {
+      const prospect = await sbSelect('psnm_outreach_targets',
+        `id=eq.${draft.prospect_id}&select=company,decision_maker_name,email&limit=1`);
+      const p = prospect?.[0];
+      if (!p?.email) {
+        failedCount.push({ id: draft.id, error: 'No email on prospect record' });
+        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'failed', send_result: { error: 'no_email', at: new Date().toISOString() } });
+        continue;
+      }
+
+      let sendOk = false, sendResult = {};
+      if (SENDGRID_API_KEY) {
+        const sgRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: p.email, name: p.decision_maker_name || p.company }] }],
+            from: { email: EMAIL_FROM, name: EMAIL_FROM_NAME },
+            subject: draft.subject,
+            content: [{ type: 'text/plain', value: draft.body }],
+          }),
+        });
+        sendOk = sgRes.status === 202;
+        sendResult = { status: sgRes.status, at: new Date().toISOString() };
+        if (!sendOk) sendResult.error = await sgRes.text().catch(() => 'unknown');
+      } else {
+        sendOk = false;
+        sendResult = { error: 'SENDGRID_API_KEY not set', at: new Date().toISOString() };
+      }
+
+      const now = new Date().toISOString();
+      if (sendOk) {
+        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult });
+        await sbInsert('psnm_outreach_touches', [{
+          target_id: draft.prospect_id,
+          channel: 'email',
+          direction: 'outbound',
+          touched_at: now,
+          template: `atlas_v2_touch_${draft.touch_number}`,
+          subject: draft.subject,
+          body_excerpt: draft.body.slice(0, 200),
+          outcome: 'sent',
+          notes: `Atlas v2 Touch ${draft.touch_number}`,
+        }]);
+        await sbUpdate('psnm_outreach_targets', { id: draft.prospect_id }, {
+          last_touched_at: now,
+          current_touch_count: (await sbSelect('psnm_outreach_targets', `id=eq.${draft.prospect_id}&select=current_touch_count`))?.[0]?.current_touch_count + 1 || 1,
+        });
+        sentCount.push({ id: draft.id, company: p.company });
+      } else {
+        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'failed', send_result: sendResult });
+        failedCount.push({ id: draft.id, company: p.company, error: sendResult.error });
+      }
+    } catch (e) {
+      failedCount.push({ id: draft.id, error: e.message });
+      await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'failed', send_result: { error: e.message, at: new Date().toISOString() } }).catch(() => null);
+    }
+  }
+
+  const queued = approved.length - toSend.length;
+  return {
+    ok: true,
+    sent: sentCount.length,
+    failed: failedCount.length,
+    queued_for_tomorrow: queued,
+    results: { sent: sentCount, failed: failedCount },
+  };
+}
+
+// ── Atlas v2 · update_draft ─────────────────────────────────────────────────
+// POST /api/atlas?action=update_draft  { id, status, subject, body, approved_by }
+async function updateDraft(body) {
+  const { id, status, subject, body: emailBody, approved_by } = body || {};
+  if (!id) return { ok: false, error: 'id required' };
+  const patch = {};
+  if (status) patch.status = status;
+  if (subject) patch.subject = subject;
+  if (emailBody) patch.body = emailBody;
+  if (status === 'approved') {
+    patch.approved_at = new Date().toISOString();
+    patch.approved_by = approved_by || 'ben';
+  }
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_atlas_drafts?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) return { ok: false, error: await r.text() };
+  return { ok: true, updated: (await r.json())?.[0] };
+}
+
+// ── Atlas v2 · get_drafts ────────────────────────────────────────────────────
+// GET /api/atlas?action=get_drafts&status=pending_approval
+async function getDrafts(req) {
+  const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
+  const status = url.searchParams.get('status') || 'pending_approval';
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200);
+  const rows = await sbSelect('psnm_atlas_drafts',
+    `status=eq.${status}&order=created_at.desc&limit=${limit}&select=id,prospect_id,touch_number,subject,body,framework_annotations,confidence_score,status,created_at,approved_at,sent_at`);
+  const counts = await Promise.all(['pending_approval','approved','rejected','sent','failed'].map(async s => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_atlas_drafts?status=eq.${s}&select=id`, {
+      headers: { ...sbHeaders(), Prefer: 'count=exact' },
+      method: 'HEAD',
+    });
+    const cr = r.headers.get('content-range') || '';
+    return [s, parseInt(cr.split('/')[1]) || 0];
+  }));
+  return { ok: true, drafts: rows || [], counts: Object.fromEntries(counts) };
+}
+
+// ── Atlas v2 · get_config / update_config ───────────────────────────────────
+async function updateAtlasConfig(body) {
+  const allowed = ['daily_send_limit','paused','tone_mix','territory_filter','service_excludes','framework_weights'];
+  const patch = {};
+  for (const k of allowed) if (body?.[k] !== undefined) patch[k] = body[k];
+  patch.updated_at = new Date().toISOString();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_atlas_config?id=eq.main`, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) return { ok: false, error: await r.text() };
+  return { ok: true, config: (await r.json())?.[0] };
+}
+
 // ── social posts · manual trigger + Make.com webhook target ─────────────────
 // GET  /api/atlas?action=social_due  — returns posts scheduled for today (status=scheduled)
 // POST /api/atlas?action=social_post — marks a post as posted (Make.com calls this after posting)
@@ -529,7 +812,14 @@ module.exports = async function handler(req, res) {
     }
     if (action === 'social_post' && req.method === 'POST') return res.status(200).json(await triggerSocialPost(body));
     if (action === 'social_due' && req.method === 'GET')   return res.status(200).json(await getSocialDue());
-    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due' });
+    // Atlas v2
+    if (action === 'generate_drafts' && req.method === 'POST')  return res.status(200).json(await generateDrafts(body));
+    if (action === 'dispatch_approved' && req.method === 'POST') return res.status(200).json(await dispatchApproved(body));
+    if (action === 'update_draft' && req.method === 'POST')      return res.status(200).json(await updateDraft(body));
+    if (action === 'get_drafts' && req.method === 'GET')         return res.status(200).json(await getDrafts(req));
+    if (action === 'get_atlas_config' && req.method === 'GET')   return res.status(200).json({ ok: true, config: await getAtlasConfig() });
+    if (action === 'update_atlas_config' && req.method === 'POST') return res.status(200).json(await updateAtlasConfig(body));
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });
