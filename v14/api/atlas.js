@@ -508,7 +508,7 @@ async function generateDrafts(body) {
   if (!prospects?.length) return { ok: true, generated: 0, draft_ids: [], reason: 'No eligible prospects found' };
 
   const promptTemplate = (() => {
-    try { return fs.readFileSync(path.join(__dirname, '_atlas_system_prompt.md'), 'utf8'); }
+    try { return fs.readFileSync(path.join(__dirname, 'docs/_atlas_system_prompt.md'), 'utf8'); }
     catch { return null; }
   })();
   if (!promptTemplate) return { ok: false, error: '_atlas_system_prompt.md not found' };
@@ -783,9 +783,9 @@ async function triggerSocialPost(body) {
 
 // ── Strategy Doc (absorbed from strategy-doc.js to stay within 12-fn limit) ─
 const STRATEGY_DOC_MAP = {
-  locked_plan:   path.join(__dirname, '../../PSNM_LOCKED_PLAN_v1.md'),
-  atlas_v2:      path.join(__dirname, '../../ATLAS_V2_FRAMEWORK.md'),
-  system_prompt: path.join(__dirname, '_atlas_system_prompt.md'),
+  locked_plan:   path.join(__dirname, 'docs/PSNM_LOCKED_PLAN_v1.md'),
+  atlas_v2:      path.join(__dirname, 'docs/ATLAS_V2_FRAMEWORK.md'),
+  system_prompt: path.join(__dirname, 'docs/_atlas_system_prompt.md'),
 };
 async function getStrategyDoc(req) {
   const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
