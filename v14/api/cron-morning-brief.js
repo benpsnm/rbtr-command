@@ -14,6 +14,74 @@ const TWILIO_SMS_FROM = process.env.TWILIO_SMS_FROM;        // e.g. '+1415523888
 const BEN_WHATSAPP = process.env.BEN_WHATSAPP || 'whatsapp:+447506255033';
 const BEN_PHONE    = process.env.BEN_PHONE || '+447506255033';
 
+const SUPA_URL = process.env.SUPABASE_URL;
+const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+async function sbGet(table, qs = '') {
+  if (!SUPA_URL || !SUPA_KEY) return null;
+  const h = { apikey: SUPA_KEY, 'Content-Type': 'application/json' };
+  if (SUPA_KEY.startsWith('eyJ')) h['Authorization'] = `Bearer ${SUPA_KEY}`;
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}${qs ? '?' + qs : ''}`, { headers: h });
+  return r.ok ? r.json() : null;
+}
+
+async function sendPsnmBrief() {
+  const CAPACITY = 1602;
+  const BREAKEVEN = 912;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!chatId || !token) return { ok: false, reason: 'TELEGRAM_CHAT_ID or TELEGRAM_BOT_TOKEN not set' };
+
+  const now = new Date();
+  const yesterday = new Date(now - 86400000).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
+  // Occupancy
+  const snapshots = await sbGet('psnm_occupancy_snapshots', 'order=date.desc&limit=1&select=pallets_count,date');
+  const pallets = snapshots?.[0]?.pallets_count ?? null;
+  const pctFull = pallets != null ? Math.round((pallets / CAPACITY) * 100) : null;
+  const toBreakeven = pallets != null ? Math.max(0, BREAKEVEN - pallets) : null;
+
+  // Yesterday outreach touches
+  const touches = await sbGet('psnm_outreach_touches', `sent_date=eq.${yesterday}&select=id,status`);
+  const touchCount = Array.isArray(touches) ? touches.length : '?';
+  const replyCount = Array.isArray(touches) ? touches.filter(t => t.status === 'replied').length : '?';
+
+  // New enquiries last 24h
+  const since = new Date(now - 86400000).toISOString();
+  const enquiries = await sbGet('psnm_enquiries', `created_at=gte.${since}&select=id,company,source`);
+  const newEnquiries = Array.isArray(enquiries) ? enquiries.length : '?';
+
+  // Format message
+  const palletsLine = pallets != null
+    ? `📦 *${pallets}* pallets stored (${pctFull}% of ${CAPACITY.toLocaleString()})\n🎯 *${toBreakeven}* to break-even (target: ${BREAKEVEN})`
+    : `📦 No occupancy snapshot logged yet — log one via the PSNM portal`;
+
+  const msg = [
+    `🏭 *PSNM Daily Brief — ${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}*`,
+    ``,
+    palletsLine,
+    ``,
+    `📬 *Outreach yesterday (${yesterday})*`,
+    `  Sent: ${touchCount} · Replies: ${replyCount}`,
+    ``,
+    `🔥 *New enquiries (last 24h)*: ${newEnquiries}`,
+    newEnquiries > 0 && Array.isArray(enquiries)
+      ? enquiries.slice(0, 3).map(e => `  — ${e.company || 'unknown'} (${e.source || '—'})`).join('\n')
+      : null,
+    ``,
+    `_rbtr-jarvis.vercel.app/psnm_`,
+  ].filter(l => l !== null).join('\n');
+
+  const tg = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'Markdown' }),
+  });
+  const tgJson = await tg.json().catch(() => ({}));
+  return { ok: tgJson.ok, pallets, toBreakeven, touchCount, replyCount, newEnquiries };
+}
+
 module.exports = async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers?.authorization !== `Bearer ${secret}`) {
@@ -21,8 +89,15 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // ?mode=evening → trigger evening debrief instead of morning brief
+  // ?mode=psnm-brief → send PSNM data card to Telegram
   const url = new URL(req.url, `https://${req.headers?.host || 'x'}`);
+  if (url.searchParams.get('mode') === 'psnm-brief') {
+    const result = await sendPsnmBrief();
+    res.status(result.ok ? 200 : 502).json(result);
+    return;
+  }
+
+  // ?mode=evening → trigger evening debrief instead of morning brief
   if (url.searchParams.get('mode') === 'evening') {
     const origin = `https://${req.headers?.host || 'rbtr-jarvis.vercel.app'}`;
     const r = await fetch(`${origin}/api/morning-brief?mode=evening`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
