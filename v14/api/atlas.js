@@ -5,7 +5,7 @@
 //   POST /api/atlas?action=seed_day1        — populate today's queue from top targets
 //   POST /api/atlas?action=complete_action  — mark action done + auto-schedule follow-up
 //   POST /api/atlas?action=log_cash         — log PSNM/personal/RBTR balance
-//   POST /api/atlas?action=send_email       — stubbed until MAILGUN_API_KEY is set
+//   POST /api/atlas?action=send_email       — SendGrid (active when SENDGRID_API_KEY set)
 //   POST /api/atlas?action=rank_targets     — DEFERRED (needs web_search budget approval)
 //   GET  /api/atlas?action=queue            — return today's queue for UI render
 //   GET  /api/atlas?action=scorecard        — pipeline + performance metrics
@@ -17,9 +17,9 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RBTR_AUTH_TOKEN = process.env.RBTR_AUTH_TOKEN;
-const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
-const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN;
-const MAILGUN_FROM = process.env.MAILGUN_FROM || 'Ben @ Pallet Storage Near Me <sales@palletstoragenearme.co.uk>';
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM || 'sales@palletstoragenearme.co.uk';
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Near Me';
 
 function sbHeaders(extra = {}) {
   const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...extra };
@@ -299,36 +299,54 @@ Score 90-100 = ideal fit + decision maker found + overflow signals. 70-89 = stro
   };
 }
 
-// ── send_email · stubbed until MAILGUN_API_KEY is set ───────────────────────
+// ── send_email · SendGrid REST API (no npm dependency) ───────────────────────
 async function sendEmail(body) {
-  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN) {
+  if (!SENDGRID_API_KEY) {
     return {
       ok: false,
       stub: true,
-      error: 'MAILGUN_API_KEY + MAILGUN_DOMAIN not configured',
-      hint: 'Set MAILGUN_API_KEY and MAILGUN_DOMAIN in Vercel env to enable email sending. Ben: sign up at mailgun.com, verify domain, paste the sending API key.',
+      error: 'SENDGRID_API_KEY not configured',
+      hint: 'Set SENDGRID_API_KEY in Vercel env. See BEN_TODO.md for SendGrid setup steps.',
     };
   }
-  const { to, subject, text, html, from } = body || {};
+  const { to, subject, text, html, from, from_name } = body || {};
   if (!to || !subject || !(text || html)) return { ok: false, error: 'to + subject + text|html required' };
-  const url = `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`;
-  const creds = Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64');
-  const form = new URLSearchParams();
-  form.set('from', from || MAILGUN_FROM);
-  form.set('to', to);
-  form.set('subject', subject);
-  if (text) form.set('text', text);
-  if (html) form.set('html', html);
-  form.set('o:tracking', 'yes');
-  form.set('o:tracking-opens', 'yes');
-  const r = await fetch(url, {
+  const payload = {
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: from || EMAIL_FROM, name: from_name || EMAIL_FROM_NAME },
+    subject,
+    content: [],
+  };
+  if (text) payload.content.push({ type: 'text/plain', value: text });
+  if (html) payload.content.push({ type: 'text/html', value: html });
+  const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
-    headers: { Authorization: `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form.toString(),
+    headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) { const t = await r.text(); return { ok: false, error: 'mailgun failed', status: r.status, detail: t.slice(0, 300) }; }
-  const j = await r.json();
-  return { ok: true, message_id: j.id, mailgun_message: j.message };
+  if (!r.ok) { const t = await r.text(); return { ok: false, error: 'sendgrid failed', status: r.status, detail: t.slice(0, 300) }; }
+  return { ok: true, message_id: r.headers.get('X-Message-Id') };
+}
+
+// ── sendBookingConfirmation · customer email for quote widget bookings ────────
+async function sendBookingConfirmation({ to, company, contact_name, pallets, duration_weeks, tierLabel, totalPeriod, enquiryId }) {
+  return sendEmail({
+    to,
+    subject: `Your PSNM storage booking — ref ${enquiryId.slice(0, 8).toUpperCase()}`,
+    html: `<p>Hi ${contact_name || 'there'},</p>
+<p>Thanks for your booking request at <strong>Pallet Storage Near Me</strong>.</p>
+<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Company</td><td style="padding:4px 0"><strong>${company}</strong></td></tr>
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Pallets</td><td style="padding:4px 0">${pallets} (${tierLabel})</td></tr>
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Duration</td><td style="padding:4px 0">${duration_weeks} weeks</td></tr>
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Estimated total</td><td style="padding:4px 0"><strong>£${totalPeriod.toFixed(2)}</strong></td></tr>
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Reference</td><td style="padding:4px 0"><code>${enquiryId.slice(0, 8).toUpperCase()}</code></td></tr>
+</table>
+<p>Ben will be in touch within one working day to confirm your start date and arrange access.</p>
+<p>Questions? Call or WhatsApp: <a href="tel:+447506255033">07506 255033</a></p>
+<p style="color:#666;font-size:12px">Pallet Storage Near Me · Unit 3C Hellaby Industrial Estate · Rotherham S66 8HR</p>`,
+    text: `Hi ${contact_name || 'there'},\n\nThanks for your booking request at Pallet Storage Near Me.\n\nCompany: ${company}\nPallets: ${pallets} (${tierLabel})\nDuration: ${duration_weeks} weeks\nEstimated total: £${totalPeriod.toFixed(2)}\nReference: ${enquiryId.slice(0, 8).toUpperCase()}\n\nBen will be in touch within one working day.\n\nQuestions? 07506 255033\n\nPallet Storage Near Me · Unit 3C Hellaby Industrial Estate · Rotherham S66 8HR`,
+  });
 }
 
 // ── queue · today's actions for UI render ───────────────────────────────────
@@ -439,7 +457,15 @@ async function bookEnquiry(body) {
     } catch(e) {}
   }
 
-  return { ok: true, enquiry_id: enquiryId, quote: { total_period: parseFloat(totalPeriod.toFixed(2)), monthly_estimate: parseFloat(monthlyEstimate.toFixed(2)), tier: tierLabel, storage_rate: storageRate, onboarding }, telegram_sent: tgOk, email_sent: false, email_note: 'Mailgun not configured — set MAILGUN_API_KEY + MAILGUN_DOMAIN in Vercel env to enable email confirmation.' };
+  let emailOk = false, emailNote = 'SENDGRID_API_KEY not set — add to Vercel env (see BEN_TODO.md)';
+  if (SENDGRID_API_KEY) {
+    try {
+      const er = await sendBookingConfirmation({ to: email, company, contact_name, pallets, duration_weeks, tierLabel, totalPeriod, enquiryId });
+      emailOk = er.ok;
+      if (!er.ok) emailNote = er.error || 'sendgrid error';
+    } catch(e) { emailNote = 'sendgrid exception: ' + e.message; }
+  }
+  return { ok: true, enquiry_id: enquiryId, quote: { total_period: parseFloat(totalPeriod.toFixed(2)), monthly_estimate: parseFloat(monthlyEstimate.toFixed(2)), tier: tierLabel, storage_rate: storageRate, onboarding }, telegram_sent: tgOk, email_sent: emailOk, email_note: emailOk ? null : emailNote };
 }
 
 // ── Dispatcher ──────────────────────────────────────────────────────────────
