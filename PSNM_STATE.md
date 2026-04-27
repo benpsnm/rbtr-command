@@ -145,6 +145,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-28 AM | All 11 smoke tests passed. 10 drafts pre-generated for top prospects. |
 | 2026-04-28 AM | PWA manifest + branded icons (installable as Mac/iPhone app) |
 | 2026-04-28 AM | Daily General's Brief — AI-generated ops brief replacing basic stats (fires 07:00 BST) |
+| 2026-04-28 AM | Test data cleared — clean baseline for launch. Zero occupancy snapshot seeded (1602 capacity, 912 BE). |
 
 ---
 
