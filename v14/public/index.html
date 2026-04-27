@@ -1131,7 +1131,7 @@ label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-fam
   <div class="card" style="padding:12px;cursor:pointer;" onclick="show('psnm')">
     <div style="font-size:10px;color:#666;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:4px;">PSNM SPACES</div>
     <div style="font-family:'Ultra',serif;font-size:28px;color:#1e90ff;" id="dash-psnm">—</div>
-    <div style="font-size:10px;color:#444;">occupied / 700</div>
+    <div style="font-size:10px;color:#444;">occupied / 1,602</div>
   </div>
   <div class="card" style="padding:12px;cursor:pointer;" onclick="show('colab')">
     <div style="font-size:10px;color:#666;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:4px;">DEBT PAID</div>
@@ -2657,9 +2657,9 @@ Ben</div>
 <div class="ph"><svg viewBox="0 0 120 120" style="width:36px;height:36px;flex-shrink:0;"><rect width="120" height="120" rx="6" fill="#000"/><polygon points="20,75 40,42 52,58 60,38 68,58 80,42 100,75" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/><polygon points="57,42 60,38 63,42 61,44 59,44" fill="#fff"/><text x="60" y="50" text-anchor="middle" font-family="Ultra,serif" font-size="7" fill="#fff" letter-spacing="1">of</text><text x="60" y="78" text-anchor="middle" font-family="Ultra,serif" font-size="14" fill="#fff" letter-spacing="-0.5">ROCK BOTTOM</text><line x1="22" y1="83" x2="44" y2="83" stroke="#fff" stroke-width="0.8"/><text x="60" y="86" text-anchor="middle" font-family="Ultra,serif" font-size="7" fill="#fff" letter-spacing="2">to</text><line x1="76" y1="83" x2="98" y2="83" stroke="#fff" stroke-width="0.8"/><text x="60" y="100" text-anchor="middle" font-family="Ultra,serif" font-size="14" fill="#fff" letter-spacing="-0.5">ROAMING</text></svg><div class="ph-titles"><div class="pt">PALLET STORAGE NEAR ME</div><div class="ps">Hellaby Industrial Estate, Rotherham — 07506 255033</div></div></div>
 
 <div class="g4" style="margin-bottom:18px;">
-  <div class="card gb"><div class="ct">Capacity</div><div class="cv" id="psnm-total-capacity">700</div><div class="cs">pallet spaces</div></div>
+  <div class="card gb"><div class="ct">Capacity</div><div class="cv" id="psnm-total-capacity">1,602</div><div class="cs">pallet spaces</div></div>
   <div class="card ab"><div class="ct">Occupied</div><div class="cv" id="psnm-occ">—</div><div class="cs">today</div></div>
-  <div class="card bb"><div class="ct">Break-even gap</div><div class="cv" id="psnm-gap" style="font-size:22px">—</div><div class="cs">to 827 pallets</div></div>
+  <div class="card bb"><div class="ct">Break-even gap</div><div class="cv" id="psnm-gap" style="font-size:22px">—</div><div class="cs">to 912 pallets</div></div>
   <div class="card ambb"><div class="ct">Active customers</div><div class="cv" id="psnm-cust-count">—</div><div class="cs">paying</div></div>
 </div>
 
@@ -2693,7 +2693,7 @@ Ben</div>
     <div class="ct">Key Business Info</div>
     <div class="sr"><span class="sl">Location</span><span class="sv">Hellaby Industrial Estate, Rotherham</span></div>
     <div class="sr"><span class="sl">Phone / WhatsApp</span><span class="sv acc">07506 255033</span></div>
-    <div class="sr"><span class="sl">Total Spaces</span><span class="sv">700 pallet spaces</span></div>
+    <div class="sr"><span class="sl">Total Spaces</span><span class="sv">1,602 pallet spaces</span></div>
     <div class="sr"><span class="sl">Also offers</span><span class="sv">Container storage, forklift ops</span></div>
     <div class="sr"><span class="sl">Security</span><span class="sv">24/7</span></div>
     <div class="sr"><span class="sl">RBTR income share</span><span class="sv up">£2,800/mo projected</span></div>
@@ -6087,14 +6087,14 @@ setTimeout(()=>{
 function calcPSNM(){
   const p=parseInt(document.getElementById('psnm-pallets')?.value)||0;
   const weekly=p*4, monthly=Math.round(weekly*4.33), annual=monthly*12;
-  const pct=p>0?Math.round(p/700*100):0;
+  const pct=p>0?Math.round(p/1602*100):0;
   const el=(id)=>document.getElementById(id);
   if(el('psnm-pct'))el('psnm-pct').textContent=pct+'%';
   if(el('psnm-weekly'))el('psnm-weekly').textContent='£'+weekly.toLocaleString();
   if(el('psnm-monthly'))el('psnm-monthly').textContent='£'+monthly.toLocaleString();
   if(el('psnm-annual'))el('psnm-annual').textContent='£'+annual.toLocaleString();
   if(el('psnm-rev'))el('psnm-rev').textContent='£'+monthly.toLocaleString();
-  if(el('psnm-occ'))el('psnm-occ').textContent=p+'/700';
+  if(el('psnm-occ'))el('psnm-occ').textContent=p+'/1,602';
 }
 
 // ============ PSNM ENQUIRIES ============
@@ -11989,10 +11989,10 @@ Markdown only. 500-800 words. Natural British English, no corporate jargon.`;
         <button class="btn pri sm" onclick="PSNM_addOccupancy()">Log</button>
       </div>
       ${rows.length === 0 ? '<div style="color:var(--muted);padding:16px">No snapshots.</div>' :
-        `<table class="dt"><thead><tr><th>Date</th><th>Pallets</th><th>% of 700</th><th>Break-even gap</th><th>Customers</th><th>Revenue MTD</th></tr></thead><tbody>` +
+        `<table class="dt"><thead><tr><th>Date</th><th>Pallets</th><th>% of 1,602</th><th>Break-even gap</th><th>Customers</th><th>Revenue MTD</th></tr></thead><tbody>` +
         rows.slice(0,30).map(r=>{
-          const pct = Math.round((r.pallets||0)/700*100);
-          const gap = 827 - (r.pallets||0);
+          const pct = Math.round((r.pallets||0)/1602*100);
+          const gap = 912 - (r.pallets||0);
           return `<tr><td>${r.date}</td><td>${r.pallets||0}</td><td>${pct}%</td><td style="color:${gap<=0?'var(--green)':'var(--amber)'}">${gap<=0?'AT BREAK-EVEN':('+'+gap)}</td><td>${r.customer_count??'—'}</td><td>£${Number(r.revenue_mtd_gbp||0).toLocaleString()}</td></tr>`;
         }).join('') + '</tbody></table>'}
     </div>`;

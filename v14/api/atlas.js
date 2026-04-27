@@ -208,7 +208,7 @@ async function rankOneTarget(body) {
 
   const prompt = `You are researching a potential PSNM (Pallet Storage Near Me) customer.
 
-PSNM is a pallet-storage warehouse at Unit 3C Denaby Way, Hellaby, Rotherham S66 8HR. 700 spaces, 24/7 access. Targeting local businesses within 20 miles who might need overflow pallet storage.
+PSNM is a pallet-storage warehouse at Unit 3C Denaby Way, Hellaby, Rotherham S66 8HR. 1,602 spaces, 24/7 access. Targeting local businesses within 20 miles who might need overflow pallet storage.
 
 BUSINESS TO RESEARCH:
 Company: ${t.company}

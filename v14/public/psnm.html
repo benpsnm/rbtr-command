@@ -136,7 +136,7 @@ async function renderPsnmDashboard() {
   const stats = el('div', {
     style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }
   });
-  stats.appendChild(statCard({ emoji: '📦', label: 'Pallets signed', value: '—', sub: '/827 to break-even' }));
+  stats.appendChild(statCard({ emoji: '📦', label: 'Pallets signed', value: '—', sub: '/912 to break-even' }));
   stats.appendChild(statCard({ emoji: '💷', label: 'PSNM cash', value: '—', sub: 'business account' }));
   stats.appendChild(statCard({ emoji: '🔥', label: 'Hot leads', value: '—', sub: 'from warm list' }));
   stats.appendChild(statCard({ emoji: '📞', label: 'Calls today', value: '—', sub: 'Atlas queue' }));
@@ -418,7 +418,7 @@ async function renderPsnmPerformance() {
     { emoji: '🌡', label: 'Warm leads', value: warm.length },
     { emoji: '❄', label: 'Cold leads', value: cold.length },
     { emoji: '✅', label: 'Won (all time)', value: customers.length },
-    { emoji: '📦', label: 'Pallets committed', value: totalPallets + '/827' },
+    { emoji: '📦', label: 'Pallets committed', value: totalPallets + '/912' },
   ].forEach(s => statsGrid.appendChild(C.statCard(s)));
   wrap.appendChild(statsGrid);
 
@@ -808,11 +808,11 @@ async function renderOccupancyLogger() {
 
   const latest = snapshots[0] || {};
   const latestPallets = latest.pallets_count || latest.pallets || 0;
-  const pctFull = Math.round((latestPallets / 700) * 100);
+  const pctFull = Math.round((latestPallets / 1602) * 100);
 
   const stats = el('div', { style: { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:'var(--space-3)', marginBottom:'var(--space-5)' } });
-  stats.appendChild(C.statCard({ emoji: '📦', label: 'Current occupancy', value: latestPallets, sub: latestPallets + '/700 · ' + pctFull + '% full' }));
-  stats.appendChild(C.statCard({ emoji: '🎯', label: 'To break-even', value: Math.max(0, 827 - latestPallets), sub: '827 pallet target' }));
+  stats.appendChild(C.statCard({ emoji: '📦', label: 'Current occupancy', value: latestPallets, sub: latestPallets + '/1,602 · ' + pctFull + '% full' }));
+  stats.appendChild(C.statCard({ emoji: '🎯', label: 'To break-even', value: Math.max(0, 912 - latestPallets), sub: '912 pallet target' }));
   wrap.appendChild(stats);
 
   const logBtn = el('div', { style: { marginBottom:'var(--space-4)' } });
@@ -834,7 +834,7 @@ async function renderOccupancyLogger() {
       // Refresh the count display
       stats.querySelectorAll('.ds-stat .value').forEach((v, i) => {
         if (i === 0) v.textContent = count;
-        if (i === 1) v.textContent = Math.max(0, 827 - count);
+        if (i === 1) v.textContent = Math.max(0, 912 - count);
       });
     } catch(e) { C.toast({ message: 'Log failed', type: 'error' }); }
   }}));
@@ -854,7 +854,7 @@ async function renderOccupancyLogger() {
     tbody.appendChild(el('tr', {},
       el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontFamily:'var(--font-mono)', fontSize:'var(--text-xs)' } }, s.date ? new Date(s.date).toLocaleDateString('en-GB') : '—'),
       el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontFamily:'var(--font-mono)', fontWeight:'600' } }, String(pallets)),
-      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, Math.round((pallets / 700) * 100) + '%'),
+      el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, Math.round((pallets / 1602) * 100) + '%'),
       el('td', { style: { padding:'var(--space-2)', borderBottom:'1px solid var(--border-subtle)', fontSize:'var(--text-xs)', color:'var(--text-secondary)' } }, s.notes || '—'),
     ));
   });
@@ -883,7 +883,7 @@ const PSNM_PORTAL = {
     try {
       const r = await fetch('/api/briefing-data');
       const j = await r.json();
-      return (j.data?.psnm_pallets_current ?? '—') + '/827 pallets';
+      return (j.data?.psnm_pallets_current ?? '—') + '/912 pallets';
     } catch { return '—'; }
   },
   sections: [

@@ -23,7 +23,7 @@
    *   name: 'PSNM',
    *   emoji: '🏭',
    *   tagline: 'Pallet operations. Atlas engine.',
-   *   liveStatFetcher: async () => 'N/827 pallets',
+   *   liveStatFetcher: async () => 'N/912 pallets',
    *   access: ['ben'],              // roles allowed (set on body data-portal too)
    *   sections: [
    *     { id, group, label, emoji, badge?, render: async () => HTMLElement, default?: true,

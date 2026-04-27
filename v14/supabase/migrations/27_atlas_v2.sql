@@ -79,7 +79,7 @@ SELECT 'cold_call_first', 'standard',
     'Is this {{contact_first_name}}?',
     'Ben from Pallet Storage Near Me, Hellaby.',
     'Have you got 30 seconds?',
-    '700 pallet spaces in Hellaby, 24/7 access, first month free.',
+    '1,602 pallet spaces in Hellaby, 24/7 access, first month free.',
     'Twenty minutes from you.',
     'Do you ever run out of warehouse space, or you sorted?'
   ),

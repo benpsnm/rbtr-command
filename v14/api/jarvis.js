@@ -34,7 +34,7 @@ Goal: depart Rotherham 1 July 2027 in a Mercedes Arocs 6x6 for a 45-country 5-ye
 
 == OPERATIONS ==
 
-- PSNM (Pallet Storage Near Me): Unit 3C Denaby Way, Hellaby S66 8HR. 700 capacity. Break-even 827 pallets. Ben runs it solo. 07506 255033.
+- PSNM (Pallet Storage Near Me): Unit 3C Denaby Way, Hellaby S66 8HR. 1,602 capacity. Break-even 912 pallets. Ben runs it solo. 07506 255033.
 - Eternal Kustoms Ltd: Ben external consultant to Sam Moore. £1,000/mo + £40/hr.
 - Axel Brothers Customs Ltd: Ben sole director. Winding up. Creditor status TBC.
 - RBTR expedition brand: pre-launch. Instagram 57k, YouTube 2k from Co-Lab era (owned by Sarah per documented sale).
@@ -280,7 +280,7 @@ async function buildLiveState(origin) {
     const mayRent = new Date('2026-05-08T00:00:00Z');
     const daysToMayRent = Math.max(0, Math.ceil((mayRent - Date.now()) / 86400000));
     L.push('PSNM CASH (business account — stands alone, never subsidised by personal)');
-    if (d.psnm_pallets_current != null) L.push(`  pallets signed: ${d.psnm_pallets_current}/827 break-even (gap ${d.psnm_pallets_to_breakeven})`);
+    if (d.psnm_pallets_current != null) L.push(`  pallets signed: ${d.psnm_pallets_current}/912 break-even (gap ${d.psnm_pallets_to_breakeven})`);
     if (Array.isArray(d.psnm_new_enquiries_24h)) L.push(`  enquiries 24h: ${d.psnm_new_enquiries_24h.length}`);
     if (Array.isArray(d.psnm_urgent_enquiries) && d.psnm_urgent_enquiries.length) L.push(`  urgent: ${d.psnm_urgent_enquiries.map(e=>e.company).join(', ')}`);
     L.push(`  May rent due: £3,000 on 8 May (${daysToMayRent} days)`);

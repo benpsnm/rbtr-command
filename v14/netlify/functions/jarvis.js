@@ -24,7 +24,7 @@ Victron Quattro 24/5000. Fogstar 400Ah LiFePO4. Michelin XZL 365/80 R20 x6. Weba
 
 ## THREE FINANCIAL ENTITIES (keep SEPARATE; never mix)
 1. PERSONAL — PSNM wage + EK retainer (£1,200/mo from May 2026) + Airbnb net surplus (~£590/mo). Bills £3,772/mo. NatWest CC £5,500 at 22%.
-2. PSNM BUSINESS — Unit 3C Hellaby Industrial Estate, Rotherham S66 8HR. Stepped rent Apr £3k → Jul+ £8,333. Break-even 827 pallets. Ben draws a wage. PSNM money ≠ personal money.
+2. PSNM BUSINESS — Unit 3C Hellaby Industrial Estate, Rotherham S66 8HR. Stepped rent Apr £3k → Jul+ £8,333. Break-even 912 pallets. Ben draws a wage. PSNM money ≠ personal money.
 3. CO-LAB / RBTR — £200,000 moral debt. All RBTR cash → repayment fund. Ben gets ZERO cash from RBTR. JMW claim £78,255.85 (LPN/851657C.1) being defended.
 
 ## Assets (ALL Sarah's name)

@@ -233,7 +233,7 @@ async function refresh() {
     const setStat = (key, val) => document.querySelectorAll(`[data-stat="${key}"]`).forEach(el => el.textContent = val);
     setStat('rbtr', days + 'd to depart');
     const pallets = d.psnm_pallets_current;
-    setStat('psnm', (pallets ?? '—') + '/827 pallets');
+    setStat('psnm', (pallets ?? '—') + '/912 pallets');
     setStat('ben', '£' + (d.cash_personal?.balance_gbp ?? '—') + ' · day ' + (d.built_dad_day ?? '—'));
     setStat('sarah', 'Sarah portal');
     setStat('house', (d.house_jobs_remaining ?? '—') + ' jobs');

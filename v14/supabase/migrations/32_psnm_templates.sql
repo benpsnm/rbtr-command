@@ -68,7 +68,7 @@ INSERT INTO psnm_email_templates (name, category, subject, body, variables) VALU
   'Pallet storage in Rotherham — {{company}}',
   'Hi {{first_name}},
 
-Ben here from Pallet Storage Near Me, Hellaby Industrial Estate in Rotherham. We run a 700-pallet warehouse and I noticed {{company}} might have storage needs based on {{reason_for_contact}}.
+Ben here from Pallet Storage Near Me, Hellaby Industrial Estate in Rotherham. We run a 1,602-pallet warehouse and I noticed {{company}} might have storage needs based on {{reason_for_contact}}.
 
 We''re £6/pallet/week all-in, 24/7 access for customers, secure, and we don''t tie you to long contracts.
 
@@ -161,7 +161,7 @@ INSERT INTO psnm_call_scripts (name, category, script_body, objection_handlers) 
   'cold_first',
   'Hi, is that {{contact_name}}?
 
-Good. My name''s Ben, I''m calling from Pallet Storage Near Me in Rotherham — we''ve got a 700-pallet secure warehouse at Hellaby, and I noticed {{company}} does {{reason_for_contact}}.
+Good. My name''s Ben, I''m calling from Pallet Storage Near Me in Rotherham — we''ve got a 1,602-pallet secure warehouse at Hellaby, and I noticed {{company}} does {{reason_for_contact}}.
 
 I won''t take long — one question: is pallet storage something that comes up for you, or is that handled completely in-house?
 
