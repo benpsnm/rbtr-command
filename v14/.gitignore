@@ -1,1 +1,5 @@
 .vercel
+.env.local.check
+.env.production
+.master_credentials
+../.master_credentials

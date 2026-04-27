@@ -46,3 +46,5 @@ prod.env
 
 # Working copies of v14 HTML (duplicates of v14/public/index.html)
 v14/RBTR-Command-Centre-V14.html
+
+.master_credentials
