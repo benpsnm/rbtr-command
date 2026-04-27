@@ -138,4 +138,21 @@ Monday's first job: merge System A and System B into one canonical WMS at one UR
 
 ---
 
+## MERGE PREP COMPLETE — 2026-04-27 PM
+
+Tighten-up Pass 1 executed. System state verified before Monday merge session:
+
+| Check | Result |
+|-------|--------|
+| System A (psnm-wms.netlify.app) | PASS — 200, anon read returns psnm-main row (wms_data: cells, floor, pallets, customers) |
+| psnmwhm_store RLS | DISABLED — anon key reads full row |
+| System B tables (5 total) | PASS — all have anon SELECT policy with USING (true) |
+| Daily cron (cron-morning-brief.js) | PASS — uses SERVICE_ROLE, reads correct tables, sends to TELEGRAM_CHAT_ID |
+| Orphaned code | wms.html (572 lines) stays until merge; wms_check action in supabase-proxy stays until merge |
+| SUPABASE_ANON_KEY | Confirmed in Vercel production (pulled via vercel env pull) |
+
+**Monday session should start with**: read MERGE_PROMPT_MONDAY.md in this same directory.
+
+---
+
 _This file is the canonical source of truth. Update it in the same commit whenever state changes._
