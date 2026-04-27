@@ -781,6 +781,24 @@ async function triggerSocialPost(body) {
   return { ok: true, updated: rows?.[0] || patch };
 }
 
+// ── Strategy Doc (absorbed from strategy-doc.js to stay within 12-fn limit) ─
+const STRATEGY_DOC_MAP = {
+  locked_plan:   path.join(__dirname, '../../PSNM_LOCKED_PLAN_v1.md'),
+  atlas_v2:      path.join(__dirname, '../../ATLAS_V2_FRAMEWORK.md'),
+  system_prompt: path.join(__dirname, '_atlas_system_prompt.md'),
+};
+async function getStrategyDoc(req) {
+  const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
+  const name = url.searchParams.get('name');
+  if (!name || !STRATEGY_DOC_MAP[name]) return { ok: false, error: 'name must be one of: ' + Object.keys(STRATEGY_DOC_MAP).join(', ') };
+  try {
+    const content = fs.readFileSync(STRATEGY_DOC_MAP[name], 'utf8');
+    return { ok: true, name, content };
+  } catch (e) {
+    return { ok: false, error: `Doc not found: ${name}`, detail: e.message };
+  }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -819,7 +837,8 @@ module.exports = async function handler(req, res) {
     if (action === 'get_drafts' && req.method === 'GET')         return res.status(200).json(await getDrafts(req));
     if (action === 'get_atlas_config' && req.method === 'GET')   return res.status(200).json({ ok: true, config: await getAtlasConfig() });
     if (action === 'update_atlas_config' && req.method === 'POST') return res.status(200).json(await updateAtlasConfig(body));
-    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config' });
+    if (action === 'strategy_doc' && req.method === 'GET') return res.status(200).json(await getStrategyDoc(req));
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });

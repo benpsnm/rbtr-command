@@ -4508,7 +4508,7 @@ async function loadStratDoc(name) {
 
   el.innerHTML = '<span style="color:var(--muted);font-size:12px">Loading…</span>';
   try {
-    const r = await fetch(`/api/strategy-doc?name=${name}`);
+    const r = await fetch(`/api/atlas?action=strategy_doc&name=${name}`);
     const d = await r.json();
     if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`; return; }
     const html = typeof marked !== 'undefined'
