@@ -249,7 +249,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const { table, op, row, match } = body;
+  const { table, op, row, match, qs } = body;
   if (BLOCKED_TABLES.has(table)) {
     res.status(403).json({ error: 'blocked: table classified AUTH' });
     return;
@@ -305,7 +305,7 @@ module.exports = async function handler(req, res) {
     let payload;
 
     if (op === 'insert') { method = 'POST'; payload = JSON.stringify(row); }
-    else if (op === 'select') { method = 'GET'; if (match) { url = `${base}?${Object.entries(match).map(([k,v])=>`${k}=eq.${encodeURIComponent(v)}`).join('&')}`; } }
+    else if (op === 'select') { method = 'GET'; if (qs) { url = `${base}?${qs}`; } else if (match) { url = `${base}?${Object.entries(match).map(([k,v])=>`${k}=eq.${encodeURIComponent(v)}`).join('&')}`; } }
     else if (op === 'update') { method = 'PATCH'; url = `${base}?${Object.entries(match||{}).map(([k,v])=>`${k}=eq.${encodeURIComponent(v)}`).join('&')}`; payload = JSON.stringify(row); }
     else if (op === 'delete') { method = 'DELETE'; url = `${base}?${Object.entries(match||{}).map(([k,v])=>`${k}=eq.${encodeURIComponent(v)}`).join('&')}`; }
     else { res.status(400).json({ error: 'op must be insert|select|update|delete' }); return; }

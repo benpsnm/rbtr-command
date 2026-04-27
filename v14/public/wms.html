@@ -5,20 +5,101 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WMS — Staff View</title>
 <style>
-  :root { --bg:#000; --fg:#f5f5f5; --muted:#8a8a8a; --card:#0a0a0a; --border:rgba(255,255,255,0.12); }
-  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+  :root{--bg:#000;--fg:#f5f5f5;--muted:#8a8a8a;--card:#0a0a0a;--border:rgba(255,255,255,0.12);--accent:#ff8a50}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+
+  /* Gate */
   .gate{display:grid;place-items:center;min-height:100vh;padding:24px}
   .gate .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:32px;max-width:340px;width:100%}
   .gate input{width:100%;background:#050505;color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:15px;margin:12px 0}
   .gate button{width:100%;background:var(--fg);color:#000;border:none;border-radius:6px;padding:12px;font-weight:700;cursor:pointer;letter-spacing:1px}
-  .gate .err{margin-top:10px;color:#ff8a50;font-size:13px;display:none}
-  .gate .err.on{display:block}
+  .err{margin-top:10px;color:var(--accent);font-size:13px;display:none}
+  .err.on{display:block}
 
-  .wms{display:none;padding:24px}
+  /* Shell */
+  .wms{display:none;padding:24px;max-width:1280px;margin:0 auto}
   .wms.on{display:block}
-  .wms-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+  .wms-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
   .wms-top h1{font-family:Ultra,Impact,sans-serif;letter-spacing:2px;margin:0;font-size:22px}
-  .wms-top button{background:transparent;border:1px solid var(--border);color:var(--fg);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:2px}
+  .wms-top .lock-btn{background:transparent;border:1px solid var(--border);color:var(--fg);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:2px}
+
+  /* Tabs */
+  .tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px}
+  .tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 18px;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;margin-bottom:-1px;transition:color 0.15s,border-color 0.15s}
+  .tab:hover{color:var(--fg)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+
+  /* KPI strip */
+  .kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:20px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+  .kpi-label{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .kpi-value{font-family:Ultra,Impact,sans-serif;font-size:28px;line-height:1}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:5px}
+  .kpi-sub.good{color:#4caf50}
+  .kpi-sub.warn{color:#f5a623}
+  .kpi-sub.danger{color:#e74c3c}
+  .bar{height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:10px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:2px;transition:width 0.7s ease,background 0.4s}
+
+  /* Sections */
+  .section{margin-bottom:20px}
+  .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .section-title{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--muted)}
+  .section-badge{font-size:10px;color:var(--muted)}
+  .section-body{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .empty{padding:20px 16px;color:var(--muted);font-size:13px}
+
+  /* Data table */
+  .dtable{width:100%;border-collapse:collapse;font-size:13px}
+  .dtable th{color:var(--muted);font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:400;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  .dtable td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:top}
+  .dtable tbody tr:last-child td,.dtable tbody tr:nth-last-child(2) td{border-bottom:none}
+  .dtable tbody tr.clickable{cursor:pointer}
+  .dtable tbody tr.clickable:hover td{background:rgba(255,138,80,0.04)}
+
+  /* Enquiry expand */
+  .enq-expand{padding:12px 16px 14px;font-size:12px;color:var(--muted);background:rgba(255,138,80,0.03);border-top:1px solid var(--border);display:none}
+  .enq-expand.open{display:block}
+  .enq-expand dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 14px}
+  .enq-expand dt{color:var(--muted);font-size:10px;letter-spacing:1px;text-transform:uppercase;padding-top:1px}
+  .enq-expand dd{margin:0;color:var(--fg)}
+
+  /* Status pills */
+  .pill{display:inline-block;font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:20px;font-weight:700;white-space:nowrap}
+  .pill-new{background:rgba(245,166,35,0.15);color:#f5a623}
+  .pill-contacted{background:rgba(30,144,255,0.15);color:#1e90ff}
+  .pill-quoted{background:rgba(155,89,182,0.15);color:#9b59b6}
+  .pill-won{background:rgba(76,175,80,0.15);color:#4caf50}
+  .pill-urgent{background:rgba(231,76,60,0.15);color:#e74c3c}
+  .pill-lost,.pill-on_hold,.pill-complete{background:rgba(138,138,138,0.15);color:#8a8a8a}
+  .pill-not_contacted{background:rgba(138,138,138,0.12);color:#8a8a8a}
+  .pill-queued{background:rgba(30,144,255,0.12);color:#1e90ff}
+  .pill-engaged{background:rgba(76,175,80,0.12);color:#4caf50}
+
+  /* Outreach stat row */
+  .stat-row{display:flex}
+  .stat-cell{flex:1;padding:18px 12px;border-right:1px solid var(--border);text-align:center}
+  .stat-cell:last-child{border-right:none}
+  .stat-n{font-family:Ultra,Impact,sans-serif;font-size:30px;line-height:1;margin-bottom:5px}
+  .stat-lbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+
+  /* Brief */
+  .brief-card{padding:18px;font-size:13px;line-height:1.85;color:var(--muted)}
+  .brief-card strong{color:var(--fg)}
+  .brief-line{padding:1px 0}
+
+  /* Quick actions */
+  .quick-actions{display:flex;flex-wrap:wrap;gap:10px}
+  .qa{background:transparent;border:1px solid var(--border);color:var(--fg);padding:10px 18px;border-radius:6px;font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-block;transition:background 0.15s}
+  .qa:hover{background:rgba(255,255,255,0.05)}
+  .qa.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+  .qa.primary:hover{background:#ff9d6e}
+  .qa:disabled,.qa.dim{opacity:0.5;pointer-events:none}
+
+  /* Warehouse tab (original content) */
   .wms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:24px}
   .wms-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px}
   .wms-card .k{font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
@@ -30,10 +111,21 @@
   .wms-list table{width:100%;border-collapse:collapse;font-size:14px}
   .wms-list th,.wms-list td{text-align:left;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06)}
   .wms-list th{color:var(--muted);font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:400}
+
+  @media(max-width:640px){
+    .wms{padding:14px}
+    .kpi-strip{grid-template-columns:1fr 1fr}
+    .kpi-value{font-size:22px}
+    .stat-row{flex-wrap:wrap}
+    .stat-cell{min-width:50%}
+    .dtable{font-size:12px}
+    .dtable th,.dtable td{padding:7px 8px}
+  }
 </style>
 </head>
 <body>
 
+<!-- ── Auth gate ──────────────────────────────────────────────────────────── -->
 <div class="gate" id="gate">
   <div class="card">
     <h2 style="margin:0 0 4px;font-family:Ultra,Impact,sans-serif;letter-spacing:2px">WMS · STAFF</h2>
@@ -44,66 +136,145 @@
   </div>
 </div>
 
+<!-- ── WMS shell ──────────────────────────────────────────────────────────── -->
 <div class="wms" id="wms">
+
   <div class="wms-top">
     <h1>🏭 PSNM · WMS</h1>
-    <div>
-      <span style="color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-right:12px" id="now-date">—</span>
-      <button onclick="localStorage.removeItem('wms_ok');location.reload()">Lock</button>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase" id="now-date">—</span>
+      <button class="lock-btn" onclick="localStorage.removeItem('wms_ok');location.reload()">Lock</button>
     </div>
   </div>
 
-  <div class="wms-grid">
-    <div class="wms-card">
-      <div class="k">Pallets stored</div>
-      <div class="v" id="w-pallets">—</div>
-    </div>
-    <div class="wms-card">
-      <div class="k">Capacity</div>
-      <div class="v">1,602</div>
-    </div>
-    <div class="wms-card">
-      <div class="k">Customers (active)</div>
-      <div class="v" id="w-customers">—</div>
-    </div>
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button class="tab" onclick="switchTab('warehouse',this)">Warehouse</button>
   </div>
 
-  <div class="wms-actions">
-    <button onclick="logAction('pickup')">📦 Log pickup</button>
-    <button onclick="logAction('delivery')">🚚 Log delivery</button>
-    <button onclick="logAction('damage')">⚠️ Mark damage</button>
-  </div>
+  <!-- ── DASHBOARD TAB ─────────────────────────────────────────────────── -->
+  <div class="tab-content active" id="tab-dashboard">
 
-  <div class="wms-list">
-    <h2>Customers</h2>
-    <div id="w-cust-list">Loading…</div>
-  </div>
-</div>
+    <!-- 1. KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-label">Pallets stored</div>
+        <div class="kpi-value" id="kpi-pallets">—</div>
+        <div class="kpi-sub" id="kpi-pct">— of 1,602</div>
+        <div class="bar"><div class="bar-fill" id="kpi-bar" style="width:0;background:var(--accent)"></div></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">To break-even</div>
+        <div class="kpi-value" id="kpi-be">—</div>
+        <div class="kpi-sub" id="kpi-be-sub">912 pallet target</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Today's revenue</div>
+        <div class="kpi-value" id="kpi-daily">—</div>
+        <div class="kpi-sub">from active contracts</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Monthly projected</div>
+        <div class="kpi-value" id="kpi-monthly">—</div>
+        <div class="kpi-sub" id="kpi-vs-fixed">vs fixed costs</div>
+      </div>
+    </div>
+
+    <!-- 2. Today's enquiries -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Today's enquiries</span>
+        <span class="section-badge" id="enq-badge">—</span>
+      </div>
+      <div class="section-body" id="enq-body"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- 3. Outreach today -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Outreach today</span>
+        <span class="section-badge" id="touch-badge">—</span>
+      </div>
+      <div class="section-body">
+        <div class="stat-row">
+          <div class="stat-cell"><div class="stat-n" id="st-sent">—</div><div class="stat-lbl">Sent</div></div>
+          <div class="stat-cell"><div class="stat-n" id="st-opened">—</div><div class="stat-lbl">Opened</div></div>
+          <div class="stat-cell"><div class="stat-n" id="st-replied">—</div><div class="stat-lbl">Replied</div></div>
+          <div class="stat-cell"><div class="stat-n" id="st-rate">—</div><div class="stat-lbl">Reply rate</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Hot leads -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Hot leads</span>
+        <span class="section-badge">Top 5 by score</span>
+      </div>
+      <div class="section-body" id="leads-body"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- 5. Daily brief -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Daily brief</span>
+        <span class="section-badge" id="brief-ts">—</span>
+      </div>
+      <div class="section-body">
+        <div class="brief-card" id="brief-body">Loading…</div>
+      </div>
+    </div>
+
+    <!-- 6. Quick actions -->
+    <div class="section">
+      <div class="section-head"><span class="section-title">Quick actions</span></div>
+      <div class="quick-actions">
+        <a href="/quote.html" target="_blank" class="qa primary">Open quote widget</a>
+        <button class="qa" onclick="loadAllEnquiries()">View all enquiries</button>
+        <button class="qa" id="brief-btn" onclick="sendBriefNow()">Send brief now</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-dashboard -->
+
+  <!-- ── WAREHOUSE TAB ──────────────────────────────────────────────────── -->
+  <div class="tab-content" id="tab-warehouse">
+    <div class="wms-grid">
+      <div class="wms-card"><div class="k">Pallets stored</div><div class="v" id="w-pallets">—</div></div>
+      <div class="wms-card"><div class="k">Capacity</div><div class="v">1,602</div></div>
+      <div class="wms-card"><div class="k">Customers (active)</div><div class="v" id="w-customers">—</div></div>
+    </div>
+    <div class="wms-actions">
+      <button onclick="logAction('pickup')">📦 Log pickup</button>
+      <button onclick="logAction('delivery')">🚚 Log delivery</button>
+      <button onclick="logAction('damage')">⚠️ Mark damage</button>
+    </div>
+    <div class="wms-list">
+      <h2>Customers</h2>
+      <div id="w-cust-list">Loading…</div>
+    </div>
+  </div><!-- /tab-warehouse -->
+
+</div><!-- /wms -->
 
 <script>
-// Password gate (client-side, env password checked against hash baked in via Vercel at build time)
-// For now, set WMS_STAFF_PASSWORD fetched via fetch to a lightweight endpoint, OR hardcoded default.
-// Per Rule 3 we do NOT commit the password. Placeholder hash below is publicly useless —
-// Ben sets the real password via Vercel env WMS_STAFF_PASSWORD and this code compares to it at runtime
-// via a pre-fetch to /api/supabase-proxy action='wms_check' (TODO next commit).
+const CAPACITY = 1602;
+const BREAKEVEN = 912;
+const FIXED = {3:8280,4:9280,5:10280}; // Apr/May/Jun by JS month index; Jul+ = 13613
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
 async function checkPwd() {
   const input = document.getElementById('pwd').value;
   if (!input) return;
   document.getElementById('go').disabled = true;
   try {
     const r = await fetch('/api/supabase-proxy', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'wms_check', password: input }),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'wms_check', password:input }),
     });
-    const data = await r.json();
-    if (data.ok) {
-      try { localStorage.setItem('wms_ok', '1'); } catch(e) {}
-      showWMS();
-    } else {
-      document.getElementById('err').classList.add('on');
-      document.getElementById('go').disabled = false;
-    }
+    const d = await r.json();
+    if (d.ok) { try { localStorage.setItem('wms_ok','1'); } catch(e) {} showWMS(); }
+    else { document.getElementById('err').classList.add('on'); document.getElementById('go').disabled = false; }
   } catch(e) {
     document.getElementById('err').textContent = 'Auth error — try again.';
     document.getElementById('err').classList.add('on');
@@ -114,43 +285,279 @@ document.getElementById('go').addEventListener('click', checkPwd);
 document.getElementById('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') checkPwd(); });
 if (localStorage.getItem('wms_ok') === '1') showWMS();
 
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Proxy helper ──────────────────────────────────────────────────────────────
+async function proxy(table, qs) {
+  try {
+    const r = await fetch('/api/supabase-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table, op:'select', qs }),
+    });
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch(e) { return []; }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
 function showWMS() {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('wms').classList.add('on');
-  document.getElementById('now-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-  loadData();
+  document.getElementById('now-date').textContent =
+    new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  loadDashboard();
+  loadWarehouse();
 }
 
-async function loadData() {
-  // Latest occupancy
-  try {
-    const r = await fetch('/api/supabase-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'psnm_occupancy_snapshots', op: 'select' })
-    });
-    const rows = await r.json();
-    if (Array.isArray(rows) && rows.length) {
-      const latest = rows.sort((a,b) => new Date(b.date) - new Date(a.date))[0];
-      document.getElementById('w-pallets').textContent = latest.pallets ?? '—';
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00.000Z';
+  const [occ, customers, enquiries, touches, hotLeads] = await Promise.all([
+    proxy('psnm_occupancy_snapshots', 'order=date.desc&limit=1'),
+    proxy('psnm_customers', 'status=eq.active'),
+    proxy('psnm_enquiries', `created_at=gte.${todayStart}&order=created_at.desc`),
+    proxy('psnm_outreach_touches', `touched_at=gte.${todayStart}&order=touched_at.desc`),
+    proxy('psnm_outreach_targets', 'status=neq.do_not_contact&order=priority_score.desc&limit=5'),
+  ]);
+  renderKPIs(occ, customers);
+  renderEnquiries(enquiries, false);
+  renderOutreach(touches);
+  renderHotLeads(hotLeads);
+  renderBrief(occ, enquiries, touches);
+}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+function renderKPIs(occ, customers) {
+  const pallets = occ[0]?.pallets ?? null;
+  const pct     = pallets != null ? Math.round((pallets / CAPACITY) * 100) : null;
+  const toBreak = pallets != null ? Math.max(0, BREAKEVEN - pallets) : null;
+
+  // Revenue from active customer contracts
+  const weeklyRev = customers.reduce((sum, c) => {
+    const p = c.pallets_live || 0;
+    let rate = Number(c.rate_gbp_week);
+    if (!rate || isNaN(rate)) rate = p >= 150 ? 2.95 : p >= 50 ? 3.45 : 3.95;
+    return sum + p * rate;
+  }, 0);
+  const dailyRev  = weeklyRev / 7;
+  const monthly   = weeklyRev * 4.33;
+  const fixed     = FIXED[new Date().getMonth()] ?? 13613;
+  const margin    = monthly - fixed;
+
+  // Pallets card
+  if (pallets != null) {
+    document.getElementById('kpi-pallets').textContent = pallets.toLocaleString();
+    document.getElementById('kpi-pct').textContent = `${pct}% of 1,602`;
+    const fill = document.getElementById('kpi-bar');
+    fill.style.width = Math.min(pct, 100) + '%';
+    fill.style.background = pct >= 57 ? '#4caf50' : pct >= 30 ? 'var(--accent)' : '#e74c3c';
+  } else {
+    document.getElementById('kpi-pallets').textContent = 'No data';
+    document.getElementById('kpi-pct').textContent = 'No snapshot recorded yet';
+  }
+
+  // Break-even card
+  if (toBreak != null) {
+    const beEl  = document.getElementById('kpi-be');
+    const beSubEl = document.getElementById('kpi-be-sub');
+    if (toBreak === 0) {
+      beEl.textContent = '✓ Done';
+      beSubEl.textContent = 'Break-even reached';
+      beSubEl.className = 'kpi-sub good';
+    } else {
+      beEl.textContent = toBreak.toLocaleString();
+      beSubEl.textContent = `more pallets needed`;
+      beSubEl.className = 'kpi-sub ' + (toBreak > 600 ? 'danger' : toBreak > 300 ? 'warn' : 'good');
     }
-  } catch(e) {}
-  // Customer list
+  }
+
+  // Revenue cards
+  document.getElementById('kpi-daily').textContent   = weeklyRev ? '£' + dailyRev.toFixed(0) : '£0';
+  document.getElementById('kpi-monthly').textContent = weeklyRev ? '£' + Math.round(monthly).toLocaleString() : '£0';
+  const vsEl = document.getElementById('kpi-vs-fixed');
+  vsEl.textContent = `vs £${fixed.toLocaleString()} fixed · ${margin >= 0 ? '+' : ''}£${Math.round(margin).toLocaleString()}`;
+  vsEl.className   = 'kpi-sub ' + (margin >= 0 ? 'good' : 'danger');
+}
+
+// ── Enquiries ─────────────────────────────────────────────────────────────────
+function pillClass(status) {
+  const safe = (status||'new').toLowerCase().replace(/[^a-z_]/g,'');
+  return 'pill pill-' + safe;
+}
+
+function parseNotes(notes) {
+  try { return JSON.parse(notes || '{}'); } catch { return {}; }
+}
+
+function renderEnquiries(rows, allTime) {
+  const badge = document.getElementById('enq-badge');
+  const body  = document.getElementById('enq-body');
+  badge.textContent = rows.length + (allTime ? ' total' : rows.length === 1 ? ' enquiry' : ' enquiries');
+
+  if (!rows.length) {
+    body.innerHTML = `<div class="empty">${allTime ? 'No enquiries found.' : 'No enquiries today yet.'}</div>`;
+    return;
+  }
+
+  const trs = rows.map(e => {
+    const n     = parseNotes(e.notes);
+    const time  = new Date(e.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    const quote = n.total_period ? '£' + Number(n.total_period).toFixed(0) : '—';
+    const detail = [
+      ['Email',        esc(e.contact_email || '—')],
+      ['Phone',        esc(e.contact_phone || '—')],
+      ['Source',       esc(e.source || '—')],
+      ['Goods',        esc(n.goods_description || '—')],
+      ['Rate',         n.storage_rate ? `£${n.storage_rate}/pallet/wk${n.tier?' ('+n.tier+')':''}` : '—'],
+      ['Onboarding',   n.onboarding != null ? (n.onboarding === 0 ? 'Waived' : '£'+n.onboarding) : '—'],
+      ['Quote total',  n.total_period ? '£' + Number(n.total_period).toFixed(2) : '—'],
+      ['Monthly est.', n.monthly_estimate ? '£' + Number(n.monthly_estimate).toFixed(2) + '/mo' : '—'],
+      ['ID',           e.id],
+    ];
+    const dl = detail.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    return `<tr class="clickable" onclick="toggleExpand('enq-${e.id}')">
+      <td style="color:var(--muted);white-space:nowrap;font-size:12px">${time}</td>
+      <td><strong>${esc(e.company||'Unknown')}</strong></td>
+      <td style="color:var(--muted)">${esc(e.contact_name||'—')}</td>
+      <td>${e.pallets??'—'}</td>
+      <td style="color:var(--muted)">${e.duration_weeks??'—'}w</td>
+      <td>${quote}</td>
+      <td><span class="${pillClass(e.status)}">${e.status||'new'}</span></td>
+    </tr>
+    <tr style="background:none"><td colspan="7" style="padding:0;border:none">
+      <div class="enq-expand" id="enq-${e.id}"><dl>${dl}</dl></div>
+    </td></tr>`;
+  }).join('');
+
+  body.innerHTML = `<table class="dtable">
+    <thead><tr><th>Time</th><th>Company</th><th>Contact</th><th>Pallets</th><th>Duration</th><th>Quote</th><th>Status</th></tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+
+function toggleExpand(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+async function loadAllEnquiries() {
+  document.getElementById('enq-badge').textContent = 'Loading…';
+  document.getElementById('enq-body').innerHTML = '<div class="empty">Loading…</div>';
+  const all = await proxy('psnm_enquiries', 'order=created_at.desc&limit=200');
+  renderEnquiries(all, true);
+  // Scroll to enquiries section
+  document.getElementById('enq-body').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Outreach ──────────────────────────────────────────────────────────────────
+function renderOutreach(touches) {
+  const sent    = touches.length;
+  const opened  = touches.filter(t => ['delivered','opened'].includes(t.outcome)).length;
+  const replied = touches.filter(t => t.outcome === 'replied').length;
+  const rate    = sent > 0 ? Math.round((replied / sent) * 100) : 0;
+  document.getElementById('touch-badge').textContent = sent + ' touches';
+  document.getElementById('st-sent').textContent    = sent;
+  document.getElementById('st-opened').textContent  = opened;
+  document.getElementById('st-replied').textContent = replied;
+  document.getElementById('st-rate').textContent    = rate + '%';
+}
+
+// ── Hot leads ─────────────────────────────────────────────────────────────────
+function renderHotLeads(leads) {
+  const body = document.getElementById('leads-body');
+  if (!leads.length) {
+    body.innerHTML = '<div class="empty">No outreach targets found.</div>';
+    return;
+  }
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—';
+  const rows = leads.map(l => `<tr>
+    <td>
+      <strong>${esc(l.company)}</strong>
+      ${l.city ? `<br><span style="color:var(--muted);font-size:11px">${esc(l.city)}</span>` : ''}
+    </td>
+    <td style="color:var(--muted)">${esc(l.industry||'—')}</td>
+    <td style="text-align:center;font-family:Ultra,Impact,sans-serif;font-size:18px">${l.priority_score??'—'}</td>
+    <td><span class="${pillClass(l.status)}">${(l.status||'').replace(/_/g,' ')}</span></td>
+    <td style="color:var(--muted);white-space:nowrap;font-size:12px">${fmt(l.last_touched_at)}</td>
+    <td style="color:var(--muted);white-space:nowrap;font-size:12px">${fmt(l.next_touch_at)}</td>
+  </tr>`).join('');
+  body.innerHTML = `<table class="dtable">
+    <thead><tr><th>Company</th><th>Industry</th><th>Score</th><th>Status</th><th>Last touch</th><th>Next touch</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Daily brief card ──────────────────────────────────────────────────────────
+function renderBrief(occ, enquiries, touches) {
+  const pallets = occ[0]?.pallets ?? null;
+  const pct     = pallets != null ? Math.round((pallets / CAPACITY) * 100) : null;
+  const toBreak = pallets != null ? Math.max(0, BREAKEVEN - pallets) : null;
+  const replied = touches.filter(t => t.outcome === 'replied').length;
+  const now     = new Date();
+
+  document.getElementById('brief-ts').textContent =
+    'Updated ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  const lines = [
+    `<div class="brief-line">📅 <strong>${now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</strong></div>`,
+    `<div class="brief-line">🏭 <strong>Occupancy:</strong> ${pallets != null ? `${pallets.toLocaleString()} pallets · ${pct}% full` : 'No snapshot recorded'}</div>`,
+    toBreak != null ? `<div class="brief-line">📈 <strong>Break-even gap:</strong> ${toBreak === 0 ? '✅ Reached' : `${toBreak.toLocaleString()} pallets to go`}</div>` : '',
+    `<div class="brief-line">📬 <strong>Enquiries today:</strong> ${enquiries.length}</div>`,
+    enquiries.length ? `<div class="brief-line" style="padding-left:18px;font-size:12px">${enquiries.map(e=>`${esc(e.company||'Unknown')} (${e.pallets??'?'} pallets)`).join(' · ')}</div>` : '',
+    `<div class="brief-line">📣 <strong>Outreach today:</strong> ${touches.length} sent · ${replied} replies</div>`,
+    `<div class="brief-line" style="margin-top:10px;font-size:11px">↳ Tap <em>Send brief now</em> to push this to Telegram.</div>`,
+  ].filter(Boolean).join('');
+
+  document.getElementById('brief-body').innerHTML = lines;
+}
+
+// ── Send brief ────────────────────────────────────────────────────────────────
+async function sendBriefNow() {
+  const btn = document.getElementById('brief-btn');
+  btn.textContent = 'Sending…';
+  btn.classList.add('dim');
   try {
-    const r = await fetch('/api/supabase-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ table: 'psnm_customers', op: 'select' })
-    });
-    const rows = await r.json();
-    if (Array.isArray(rows)) {
-      document.getElementById('w-customers').textContent = rows.filter(c => c.status === 'active').length;
-      const active = rows.filter(c => c.status === 'active');
-      const html = active.length ? `<table>
-        <thead><tr><th>Company</th><th>Pallets</th></tr></thead>
-        <tbody>${active.map(c => `<tr><td>${(c.company_name||'').replace(/</g,'&lt;')}</td><td>${c.pallet_count_current ?? '—'}</td></tr>`).join('')}</tbody>
-      </table>` : '<p style="color:var(--muted)">No active customers yet.</p>';
-      document.getElementById('w-cust-list').innerHTML = html;
-    }
-  } catch(e) {}
+    const r = await fetch('/api/cron-morning-brief?mode=psnm-brief');
+    const d = await r.json().catch(() => ({}));
+    btn.textContent = (d.ok !== false && r.ok) ? 'Brief sent ✓' : 'Sent (check Telegram)';
+  } catch {
+    btn.textContent = 'Error — retry';
+  }
+  setTimeout(() => { btn.textContent = 'Send brief now'; btn.classList.remove('dim'); }, 3500);
+}
+
+// ── Warehouse tab ─────────────────────────────────────────────────────────────
+async function loadWarehouse() {
+  const [occ, customers] = await Promise.all([
+    proxy('psnm_occupancy_snapshots', 'order=date.desc&limit=1'),
+    proxy('psnm_customers', 'status=eq.active'),
+  ]);
+
+  const pallets = occ[0]?.pallets;
+  if (pallets != null) document.getElementById('w-pallets').textContent = pallets.toLocaleString();
+  document.getElementById('w-customers').textContent = customers.length;
+
+  const html = customers.length
+    ? `<table>
+        <thead><tr><th>Company</th><th>Pallets</th><th>Rate/wk</th></tr></thead>
+        <tbody>${customers.map(c => `<tr>
+          <td>${esc(c.company||'')}</td>
+          <td>${c.pallets_live??'—'}</td>
+          <td>${c.rate_gbp_week ? '£'+Number(c.rate_gbp_week).toFixed(2) : '—'}</td>
+        </tr>`).join('')}</tbody>
+       </table>`
+    : '<p style="color:var(--muted);margin:0">No active customers yet.</p>';
+  document.getElementById('w-cust-list').innerHTML = html;
 }
 
 function logAction(kind) {
@@ -158,10 +565,8 @@ function logAction(kind) {
   if (!ref) return;
   const qty = prompt('Pallet count:');
   if (!qty) return;
-  // TODO: write to psnm_occupancy_snapshots + update psnm_customers
   alert('Logged (TODO: wire to DB) — ' + kind + ' · ' + ref + ' · ' + qty + ' pallets');
 }
 </script>
-
 </body>
 </html>
