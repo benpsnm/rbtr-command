@@ -224,7 +224,7 @@ USE web_search to find:
 - Recent growth signals (expansion, hiring, new contracts, seasonal overflow pressure)
 - Whether company still trades
 
-Then score 0-100 likelihood they sign a PSNM contract in next 30 days. Consider: distance from Hellaby S66 8HR, business type fit (3PL/distributor/manufacturer with stock/ecommerce fulfilment = high; pure retail = low), company size (20-200 employees = sweet spot), named DM present, overflow signals.
+Then score 0-100 likelihood they sign a PSNM contract in next 30 days. Consider: distance from Hellaby S66 8HR (S Yorkshire/DN postcodes = strong positive), business type fit (3PL/distributor/manufacturer with stock/ecommerce fulfilment/builders merchant = high; pure retail, food, pharma, hazmat, temperature-sensitive = exclude with score 0), company size (20-200 employees = sweet spot), named DM present, overflow signals. Do NOT boost score based on pallet volume — all sizes are equally welcome at 1,602-pallet capacity. Score 0 if business handles food, pharmaceuticals, hazardous goods, or temperature-sensitive products.
 
 Return ONLY this JSON, no preamble:
 {

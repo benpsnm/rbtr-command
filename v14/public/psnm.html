@@ -266,6 +266,11 @@ function proxyPsnm(table, op, extra = {}) {
 }
 
 // Priority scoring engine
+// S Yorkshire postcodes that get proximity boost
+const S_YORKSHIRE_PREFIXES = ['S6','S61','S62','S63','S64','S65','S66','S7','S71','S72','S73','S74','S75','DN1','DN2','DN3','DN4','DN5','DN6','DN7','DN8','DN9','DN10','DN11','DN12'];
+// Industries excluded: food (contamination), hazmat (regulations), temp-sensitive (no cold-store)
+const EXCLUDED_INDUSTRIES = ['food','foodstuff','frozen','chilled','cold chain','temperature sensitive','pharmaceutical','pharma','hazmat','hazardous','chemical','cosmetic','fmcg','explosive'];
+
 function scoreLeads(leads) {
   return leads.map(lead => {
     let score = 0;
@@ -273,14 +278,27 @@ function scoreLeads(leads) {
     const lastContact = lead.last_contact_date ? new Date(lead.last_contact_date) : null;
     const daysSince = lastContact ? Math.floor((now - lastContact) / 86400000) : 999;
 
+    // Hard exclusion: food/hazmat/temp-sensitive — we don't take them
+    const industry = (lead.industry || lead.goods_description || lead.company || '').toLowerCase();
+    if (EXCLUDED_INDUSTRIES.some(kw => industry.includes(kw))) {
+      return { ...lead, score: -1000, excluded: true };
+    }
+
+    // Engagement signals
     if (lead.status === 'quote_opened_no_reply') score += 40;
     if (lead.temperature === 'hot' && daysSince > 3) score += 35;
     if (lead.temperature === 'warm' && daysSince > 5) score += 25;
     if (lead.temperature === 'cold' && lead.source === 'whichwarehouse') score += 15;
-    if ((lead.pallets_count || 0) > 100) score = Math.floor(score * 1.5);
     if (daysSince < 7 && lead.status === 'replied') score += 50;
     if (lead.last_contact_type === 'voicemail') score += 30;
     if (!lead.last_contact_date && (lead.tier === 1 || lead.tier === 2)) score += 20;
+
+    // Geographic proximity: S Yorkshire postcodes (within ~20 miles of Hellaby)
+    const postcode = (lead.postcode || lead.post_code || '').toUpperCase().replace(/\s/g, '');
+    if (S_YORKSHIRE_PREFIXES.some(p => postcode.startsWith(p))) score += 20;
+
+    // Pallet count: neutral weighting — no size tier discrimination
+    // (removed 1.5x bulk boost; capacity 1,602 accommodates all sizes equally)
 
     return { ...lead, score };
   }).sort((a, b) => b.score - a.score);
