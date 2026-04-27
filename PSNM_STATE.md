@@ -1,46 +1,49 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-27 (Pass 2 — WMS Merge Complete)
+# Last updated: 2026-04-27 (single-host consolidation — Vercel only)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
 
-## ✅ MERGE COMPLETE — 2026-04-27
+## CANONICAL ARCHITECTURE
 
-The two-system confusion is resolved. There is now **one canonical WMS**.
+**One host. One URL. One source repo.**
 
----
+| Layer | Detail |
+|-------|--------|
+| **Host** | Vercel (rbtr-jarvis.vercel.app) |
+| **Repo** | github.com/benpsnm/rbtr-command → `v14/` subdirectory |
+| **Deploy** | `vercel deploy --prod` from `v14/` OR push to main (auto-deploy) |
+| **Database** | Supabase `mpxgyobotiqcawmqlhbf` — shared between WMS and customer-facing |
+| **WMS source** | `v14/public/wms.html` (4,077 lines — rich WMS + Intelligence tab) |
+| **WMS auth** | PSNM_STAFF_PASSCODE env var, checked via `/api/supabase-proxy?action=wms_check` |
 
-## ONE SYSTEM — THE CANONICAL WMS
-
-### The WMS — psnm-wms.netlify.app
-- **URL**: https://psnm-wms.netlify.app
-- **Source file**: `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` (single self-contained HTML, 4,078 lines)
-- **Hosting**: Netlify (drag-and-drop deploy — no git, no CI)
-- **Deploy method**: drag `PSNM_v14_LIVE.html` onto Netlify dashboard
-- **Databases**:
-  - `psnmwhm_store` — warehouse operational state (cells, pallets, customers, movements). RLS disabled, anon key read/write.
-  - `psnm_enquiries`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_occupancy_snapshots` — Intelligence tab live data (anon SELECT via USING(true) policies)
-- **Tabs**: Map, Goods In, Goods Out, Stock, Log, Customers, Rates, Dashboard, Tasks, CRM, Scripts, Revenue, Compliance, Links, Invoicing, Statements, Suppliers, **🧠 Intelligence** (new)
-- **Intelligence tab sections**: KPI strip (warehouse + pipeline), Enquiries Pipeline, Hot Leads, Outreach Summary, Occupancy Trend
-- **Who uses it**: Ben daily for all warehouse operations + pipeline view
-
-### Customer-Facing Engine — rbtr-jarvis.vercel.app
-- **URL**: https://rbtr-jarvis.vercel.app
-- **Source**: `~/Desktop/rbtr-command/v14/`
-- **Hosting**: Vercel (git-based, auto-deploy on push to main)
-- **Contains**: Quote widget (/quote.html), booking API (/api/atlas), T&Cs (/terms.html), Atlas priority engine, daily brief cron, social posts pipeline
-- **/wms.html**: Now a redirect → https://psnm-wms.netlify.app
-- **Who uses it**: Customers (quote), Make.com (social), Telegram (briefs + alerts)
-- **Deploy method**: `vercel deploy --prod` from `v14/` directory
+**Netlify abandoned** — credit limit pause triggered 2026-04-27. Local backups retained at `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` and `PSNM_v14.html`. Do not attempt to redeploy to Netlify.
 
 ---
 
-## WHAT NOT TO DO
+## URLs
 
-- **Do NOT edit PSNM_v14.html** (3,136 lines, outdated). The live source is `PSNM_v14_LIVE.html` (4,078 lines).
-- **Do NOT deploy the WMS via Vercel** — WMS is on Netlify, drag-and-drop only.
-- **Do NOT use the service role key in client-side code** — anon key only in PSNM_v14_LIVE.html.
-- **Do NOT use the old System A / System B terminology** — the merge is done. One WMS.
+| Route | Purpose |
+|-------|---------|
+| `/wms.html` | Rich operational WMS — Ben's daily tool |
+| `/quote.html` | Customer quote widget |
+| `/terms.html` | T&Cs |
+| `/api/atlas` | Booking, Atlas priority engine, social pipeline |
+| `/api/cron-morning-brief` | Daily 7am Telegram brief |
+| `/api/supabase-proxy` | Auth + DB proxy |
+
+---
+
+## WMS Tabs (at /wms.html)
+
+Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard · Tasks · CRM · Scripts · Revenue · Compliance · Links · Invoicing · Statements · Suppliers · **🧠 Intelligence**
+
+**Intelligence tab** reads live from Supabase:
+- KPI strip: warehouse occupancy (from S state) + pipeline stats
+- Enquiries Pipeline (psnm_enquiries)
+- Hot Leads (psnm_outreach_targets, ordered by priority_score)
+- Outreach Summary (psnm_outreach_touches)
+- Occupancy Trend (psnm_occupancy_snapshots, last 7)
 
 ---
 
@@ -71,32 +74,7 @@ The two-system confusion is resolved. There is now **one canonical WMS**.
 | June 2026 | £10,280 |
 | July 2026+ | £13,613 |
 
-## Infrastructure
-
-| System | URL | Hosting | Source | Deploy method |
-|--------|-----|---------|--------|---------------|
-| WMS (canonical) | psnm-wms.netlify.app | Netlify | `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` | Drag-and-drop to Netlify |
-| Customer engine | rbtr-jarvis.vercel.app | Vercel | `~/Desktop/rbtr-command/v14/` | `vercel deploy --prod` |
-| Supabase DB | mpxgyobotiqcawmqlhbf | Supabase | — | Management API / SQL editor |
-
-## Deployed Features
-
-| Feature | Where |
-|---------|-------|
-| Warehouse map (Aisles A–J) | psnm-wms.netlify.app → Map tab |
-| Goods In / Out / Stock / Log | psnm-wms.netlify.app → respective tabs |
-| WMS operational KPI strip | psnm-wms.netlify.app → top bar |
-| Dashboard (warehouse KPIs) | psnm-wms.netlify.app → Dashboard tab |
-| 🧠 Intelligence tab | psnm-wms.netlify.app → Intelligence tab |
-| Quote widget | rbtr-jarvis.vercel.app/quote.html |
-| Booking API | rbtr-jarvis.vercel.app/api/atlas?action=book |
-| T&Cs page | rbtr-jarvis.vercel.app/terms.html |
-| Atlas priority engine | rbtr-jarvis.vercel.app/api/atlas |
-| Daily 7am Telegram brief | cron: /api/cron-morning-brief |
-| Booking email confirmations | SendGrid via /api/atlas |
-| Booking Telegram alerts | /api/atlas → Telegram |
-| Social posts pipeline | /api/atlas?action=social_due/post |
-| /wms.html | Redirect → psnm-wms.netlify.app |
+---
 
 ## Supabase Project
 
@@ -105,33 +83,46 @@ The two-system confusion is resolved. There is now **one canonical WMS**.
 - **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`
 - **All pipeline tables**: anon SELECT policy `USING (true)` active
 
+## Vercel Environment Variables (production)
+
+| Var | Purpose |
+|-----|---------|
+| SUPABASE_URL | Supabase project URL |
+| SUPABASE_SERVICE_ROLE | Service role key (server-side only) |
+| SUPABASE_ANON_KEY | Anon key (used by wms.html client-side via proxy) |
+| PSNM_STAFF_PASSCODE | WMS login gate |
+| SENDGRID_API_KEY | Booking confirmation emails |
+| TELEGRAM_BOT_TOKEN | Booking alerts + daily brief |
+| TELEGRAM_CHAT_ID | 8669062243 |
+| RBTR_AUTH_TOKEN | Atlas API auth |
+| ANTHROPIC_API_KEY | AI features |
+| ELEVENLABS_API_KEY | Voice (rotation pending — sk_2932... exposed) |
+
 ## Integrations (live as of 2026-04-27)
 
-- **SendGrid**: SENDGRID_API_KEY in Vercel prod — booking confirmations fire automatically
-- **Telegram booking alerts**: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID=8669062243 — fires on every booking
-- **Daily 7am brief**: cron-morning-brief.js mode=psnm-brief → Telegram (bot token rotation pending)
-- **Social posts**: 12 posts seeded, Make.com scenario not yet wired
-
-## TODO (Ben actions only)
-
-1. **Deploy merged WMS to Netlify**: drag `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` onto the Netlify dashboard for psnm-wms.netlify.app. This activates the Intelligence tab live. (5 min)
-2. ElevenLabs key rotation (sk_2932... exposed — see BEN_TODO.md)
-3. Telegram bot token rotation (@Rbtr_rocko_bot exposed — see BEN_TODO.md)
-4. Wire Make.com social scenario (see BEN_TODO.md)
+- **SendGrid**: booking confirmation emails fire on every booking
+- **Telegram**: booking alerts + daily 7am brief → TELEGRAM_CHAT_ID=8669062243
+- **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
 
 ---
 
-## MERGE COMPLETE — 2026-04-27 Pass 2
+## TODO (Ben actions only)
 
-| Check | Result |
-|-------|--------|
-| Intelligence tab injected | ✅ 3-point injection into PSNM_v14_LIVE.html |
-| All 4 Supabase queries | ✅ PASS (column names verified via Management API) |
-| showPane hook | ✅ `loadIntelligence()` wired |
-| Vercel /wms.html | ✅ Replaced with meta-redirect → psnm-wms.netlify.app |
-| Vercel deploy | ✅ Deployed (meta redirect confirmed live) |
-| Netlify deploy | ⏳ **Ben action** — drag PSNM_v14_LIVE.html onto Netlify dashboard |
-| Source file | `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` (4,078 lines) |
+1. ElevenLabs key rotation (sk_2932... exposed — see BEN_TODO.md)
+2. Telegram bot token rotation (@Rbtr_rocko_bot — see BEN_TODO.md)
+3. Wire Make.com social scenario (see BEN_TODO.md)
+
+---
+
+## MERGE / CONSOLIDATION HISTORY
+
+| Date | Action |
+|------|--------|
+| 2026-04-27 AM | System B (Vercel) built: quote, booking API, Atlas, Telegram, SendGrid |
+| 2026-04-27 PM | Pass 1: RLS opened on all B-side tables, psnmwhm_store fixed |
+| 2026-04-27 PM | Pass 2: Intelligence tab merged into PSNM_v14_LIVE.html |
+| 2026-04-27 PM | Netlify paused (credit limit) — WMS moved to Vercel /wms.html |
+| 2026-04-27 PM | ✅ Single canonical host. One URL. One repo. |
 
 ---
 
