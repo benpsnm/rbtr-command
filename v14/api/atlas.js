@@ -468,6 +468,35 @@ async function bookEnquiry(body) {
   return { ok: true, enquiry_id: enquiryId, quote: { total_period: parseFloat(totalPeriod.toFixed(2)), monthly_estimate: parseFloat(monthlyEstimate.toFixed(2)), tier: tierLabel, storage_rate: storageRate, onboarding }, telegram_sent: tgOk, email_sent: emailOk, email_note: emailOk ? null : emailNote };
 }
 
+// ── social posts · manual trigger + Make.com webhook target ─────────────────
+// GET  /api/atlas?action=social_due  — returns posts scheduled for today (status=scheduled)
+// POST /api/atlas?action=social_post — marks a post as posted (Make.com calls this after posting)
+// Make.com scenario: GET social_due → iterate rows → post to LinkedIn/IG/FB → POST social_post with id + post_url
+async function getSocialDue() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = await sbSelect('psnm_social_posts',
+    `scheduled_for=gte.${today}T00:00:00Z&scheduled_for=lte.${today}T23:59:59Z&status=eq.scheduled&order=scheduled_for.asc`);
+  return { ok: true, posts: rows || [], count: rows ? rows.length : 0, date: today };
+}
+
+async function triggerSocialPost(body) {
+  const { id, post_url, status, error_detail } = body || {};
+  if (!id) return { ok: false, error: 'id required' };
+  const newStatus = status || (post_url ? 'posted' : 'failed');
+  const patch = { status: newStatus };
+  if (post_url) patch.post_url = post_url;
+  if (newStatus === 'posted') patch.posted_at = new Date().toISOString();
+  if (error_detail) patch.error_detail = error_detail;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_social_posts?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) { const t = await r.text(); return { ok: false, error: t.slice(0, 200) }; }
+  const rows = await r.json();
+  return { ok: true, updated: rows?.[0] || patch };
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -497,7 +526,9 @@ module.exports = async function handler(req, res) {
     if (action === 'rank_targets' && req.method === 'POST') {
       return res.status(202).json({ ok: false, deferred: true, reason: 'Use rank_one_target in a client loop (Vercel 10s per-call cap).' });
     }
-    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets' });
+    if (action === 'social_post' && req.method === 'POST') return res.status(200).json(await triggerSocialPost(body));
+    if (action === 'social_due' && req.method === 'GET')   return res.status(200).json(await getSocialDue());
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });
