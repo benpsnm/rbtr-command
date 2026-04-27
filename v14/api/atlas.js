@@ -451,8 +451,9 @@ async function bookEnquiry(body) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (process.env.TELEGRAM_BOT_TOKEN && chatId) {
     try {
-      const msg = `🚨 *NEW BOOKING REQUEST*\n*${company}* — ${contact_name||'no name'}\n📧 ${email}${phone?' · 📞 '+phone:''}\n📦 ${pallets} pallets · ${duration_weeks} wks · ${tierLabel}\n💷 Period: £${totalPeriod.toFixed(2)} · Monthly: £${monthlyEstimate.toFixed(2)}\nGoods: ${goods_description||'not specified'}\nStatus: pending_review`;
-      const tg = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ chat_id:chatId, text:msg, parse_mode:'Markdown' }) });
+      const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const msg = `🚨 <b>NEW BOOKING REQUEST</b>\n<b>${esc(company)}</b> — ${esc(contact_name)||'no name'}\n📧 ${esc(email)}${phone?' · 📞 '+esc(phone):''}\n📦 ${pallets} pallets · ${duration_weeks} wks · ${esc(tierLabel)}\n💷 Period: £${totalPeriod.toFixed(2)} · Monthly: £${monthlyEstimate.toFixed(2)}\nGoods: ${esc(goods_description)||'not specified'}\nStatus: pending_review`;
+      const tg = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ chat_id:chatId, text:msg, parse_mode:'HTML' }) });
       tgOk = (await tg.json()).ok;
     } catch(e) {}
   }

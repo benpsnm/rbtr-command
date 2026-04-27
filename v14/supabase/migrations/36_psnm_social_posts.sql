@@ -31,7 +31,7 @@ INSERT INTO psnm_social_posts (scheduled_for, platform, content, hashtags, statu
 
 -- Week 1 (Apr 28 – May 1)
 ('2026-04-28T08:00:00Z', 'all',
-'If you're running out of warehouse space, you don't need a new building. You need a flexible storage partner.
+'If you''re running out of warehouse space, you don''t need a new building. You need a flexible storage partner.
 
 We run a 1,602-pallet racked facility at Hellaby Industrial Estate in Rotherham — 24/7 access, forklift handling included, no long-term tie-ins.
 
@@ -46,7 +46,7 @@ From 5 pallets upward. Weekly or monthly billing. Start this week.
 
 We can usually onboard within 48 hours. No complicated contracts. No minimum lock-in beyond 4 weeks.
 
-If you've got pallets stacking up and nowhere to put them — give us a call.
+If you''ve got pallets stacking up and nowhere to put them — give us a call.
 
 📦 Pallet Storage Near Me · Hellaby, Rotherham S66 8HR
 📞 07506 255033',
@@ -66,9 +66,9 @@ No hidden extras. No surprises on the invoice.
 
 -- Week 2 (May 4 – May 8)
 ('2026-05-04T08:00:00Z', 'all',
-'We're based at Hellaby Industrial Estate, Rotherham — about 10 minutes from J1 of the M18 and 15 minutes from the M1/M62 interchange.
+'We''re based at Hellaby Industrial Estate, Rotherham — about 10 minutes from J1 of the M18 and 15 minutes from the M1/M62 interchange.
 
-If you're moving goods across Yorkshire, the Humber, or the East Midlands, we're in a useful spot.
+If you''re moving goods across Yorkshire, the Humber, or the East Midlands, we''re in a useful spot.
 
 1,602 pallet spaces. Available now.
 
@@ -95,9 +95,9 @@ Ask for a quote: 07506 255033',
 ('2026-05-08T08:00:00Z', 'all',
 'Small businesses often assume pallet storage is only for big distribution operations.
 
-It isn't.
+It isn''t.
 
-We store from 5 pallets upward. If you've got 10 pallets of stock that are living in your van, your garage, or your MD's house — we can fix that.
+We store from 5 pallets upward. If you''ve got 10 pallets of stock that are living in your van, your garage, or your MD''s house — we can fix that.
 
 Proper racked storage. 24/7 access for your drivers. Insured site.
 
@@ -118,7 +118,7 @@ Hellaby Industrial Estate, Rotherham S66 8HR.
 'scheduled'),
 
 ('2026-05-13T08:00:00Z', 'all',
-'Racked storage vs floor storage — what's the difference for your goods?
+'Racked storage vs floor storage — what''s the difference for your goods?
 
 🏗 Racked: each pallet has its own bay, accessible by forklift without moving others. Faster goods-in/out. Better for high-turnover stock.
 
@@ -133,7 +133,7 @@ We offer both. Quote is based on your actual requirements.
 ('2026-05-15T08:00:00Z', 'all',
 'Pricing transparency matters.
 
-We don't give vague "call for a quote" answers. Our rates are:
+We don''t give vague "call for a quote" answers. Our rates are:
 
 • 1–49 pallets: £3.95/pallet/week
 • 50–149 pallets: £3.45/pallet/week
@@ -167,11 +167,11 @@ No commitment beyond your agreed term.
 'scheduled'),
 
 ('2026-05-22T08:00:00Z', 'all',
-'We're not a national 3PL. We're one site, run by one person, focused on getting South Yorkshire businesses sorted with pallet storage.
+'We''re not a national 3PL. We''re one site, run by one person, focused on getting South Yorkshire businesses sorted with pallet storage.
 
 That means you can reach us directly, get decisions fast, and not get lost in a call centre.
 
-If you've had frustrating experiences with larger storage operators, we're the alternative.
+If you''ve had frustrating experiences with larger storage operators, we''re the alternative.
 
 📞 07506 255033',
 '#PalletStorage #LocalBusiness #SouthYorkshire #Rotherham #SME #Warehousing',
