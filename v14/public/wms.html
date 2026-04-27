@@ -464,6 +464,7 @@ body.cbm .aJ .cell.occupied { background:#E69F00!important; filter:brightness(0.
       <button class="tab" onclick="showPane('statements',this)">📄 Statements</button>
       <button class="tab" onclick="showPane('suppliers',this)">🚛 Suppliers</button>
   <button class="tab" onclick="showPane('intelligence',this)">🧠 Intelligence</button>
+  <button class="tab" onclick="showPane('strategy',this)">📋 Strategy</button>
 </div>
 
 <!-- ═══ MAP ═══ -->
@@ -2079,6 +2080,7 @@ function showPane(id,btn){
   if(id==='movements')renderMovements();
   if(id==='customers')renderCustomers();
   if(id==='intelligence')loadIntelligence();
+  if(id==='strategy')loadStrategy();
 }
 
 // ═══ MULTI-SELECT ═══
@@ -3767,33 +3769,142 @@ Pallet Storage Near Me
 
 <!-- ═══ INTELLIGENCE ═══ -->
 <div id="pane-intelligence" class="pane">
+  <!-- Header -->
   <div class="flex" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-    <div><div class="st">Intelligence</div><div class="ss">Pipeline · leads · outreach — live from enquiries &amp; CRM</div></div>
-    <div class="flex mla" style="gap:6px">
+    <div>
+      <div class="st">Intelligence</div>
+      <div class="ss">Atlas v2 · pipeline · leads · outreach</div>
+    </div>
+    <div class="flex mla" style="gap:6px;flex-wrap:wrap">
       <span id="intel-ts" style="font-family:var(--mono);font-size:9px;color:var(--muted);align-self:center"></span>
       <button class="btn sm bghost" onclick="loadIntelligence()">↻ Refresh</button>
     </div>
   </div>
+
+  <!-- KPI strip -->
   <div class="kpig" id="intel-kpis"></div>
+
+  <!-- Atlas v2 Outreach Queue -->
+  <div class="card" id="atlas-queue-card">
+    <div class="ct">
+      📨 Outreach Queue
+      <span class="bdg bg2" id="atlas-pending-count" style="margin-left:4px"></span>
+      <span class="bdg bgr" id="atlas-approved-count" style="margin-left:4px"></span>
+      <span class="bdg bgr" id="atlas-sent-today-count" style="margin-left:4px"></span>
+      <div class="flex mla" style="gap:6px">
+        <button class="btn sm bg" onclick="atlasGenerate()">⚡ Generate Drafts</button>
+        <button class="btn sm bgreen" onclick="atlasDispatch()">▶ Dispatch Approved</button>
+      </div>
+    </div>
+    <div id="atlas-queue"></div>
+  </div>
+
+  <!-- Enquiries Pipeline -->
   <div class="card">
     <div class="ct">📬 Enquiries Pipeline</div>
     <div id="intel-enquiries"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   </div>
-  <div class="g2">
-    <div class="card">
-      <div class="ct">🔥 Hot Leads <span class="bdg bbl" id="intel-lead-count"></span></div>
-      <div id="intel-leads"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+
+  <!-- Leads Browser -->
+  <div class="card">
+    <div class="ct">
+      🎯 Leads Browser
+      <span class="bdg bbl" id="intel-lead-count"></span>
+      <div class="flex mla" style="gap:6px">
+        <input id="leads-search" class="inp" style="width:160px;padding:4px 8px;font-size:11px" placeholder="Search…" oninput="filterLeads()">
+        <select id="leads-status-filter" class="inp" style="width:120px;padding:4px 8px;font-size:11px" onchange="filterLeads()">
+          <option value="">All statuses</option>
+          <option value="not_contacted">Not contacted</option>
+          <option value="in_progress">In progress</option>
+          <option value="warm">Warm</option>
+          <option value="converted">Converted</option>
+          <option value="do_not_contact">DNC</option>
+        </select>
+      </div>
     </div>
+    <div id="intel-leads" style="overflow-x:auto"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+    <div id="leads-side-panel" style="display:none;margin-top:12px;background:var(--bg3);border-radius:6px;padding:14px"></div>
+  </div>
+
+  <!-- Outreach + Occupancy row -->
+  <div class="g2">
     <div class="card">
       <div class="ct">📡 Outreach Summary</div>
       <div id="intel-outreach"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
     </div>
+    <div class="card">
+      <div class="ct">📈 Occupancy Trend <span style="font-family:var(--mono);font-size:9px;color:var(--muted);font-weight:400;text-transform:none">last 7 snapshots</span></div>
+      <div id="intel-occ"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+    </div>
   </div>
+
+  <!-- Atlas Settings (collapsible) -->
   <div class="card">
-    <div class="ct">📈 Occupancy Trend <span style="font-family:var(--mono);font-size:9px;color:var(--muted);font-weight:400;text-transform:none">last 7 snapshots</span></div>
-    <div id="intel-occ"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+    <div class="ct" style="cursor:pointer" onclick="toggleAtlasSettings()">
+      ⚙️ Atlas Settings
+      <span id="atlas-settings-toggle" style="margin-left:auto;font-size:11px;color:var(--muted)">▼ expand</span>
+    </div>
+    <div id="atlas-settings-panel" style="display:none">
+      <div class="g2" style="margin-top:10px">
+        <div class="fg">
+          <label class="fl">Daily send limit</label>
+          <input class="inp" id="cfg-daily-limit" type="number" min="1" max="200" value="50">
+        </div>
+        <div class="fg">
+          <label class="fl">Tone mix</label>
+          <select class="inp" id="cfg-tone">
+            <option value="warm">Warm</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="direct">Direct</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg" style="margin-top:8px">
+        <label class="fl">Territory filter (comma-separated)</label>
+        <input class="inp" id="cfg-territory" value="S Yorkshire,W Yorkshire,Derbyshire,Notts">
+      </div>
+      <div class="flex" style="gap:8px;margin-top:12px;align-items:center">
+        <button class="btn bg sm" onclick="saveAtlasConfig()">Save Settings</button>
+        <button id="atlas-pause-btn" class="btn bred sm" onclick="toggleAtlasPause()">⏸ Pause Atlas</button>
+        <span id="atlas-config-msg" style="font-family:var(--mono);font-size:9px;color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Draft Edit Modal -->
+  <div id="draft-modal" class="mo">
+    <div class="md" style="max-width:640px">
+      <button class="mc" onclick="closeDraftModal()">✕</button>
+      <div class="mt">Edit Draft</div>
+      <div class="ms" id="draft-modal-company"></div>
+      <div class="fg"><label class="fl">Subject</label><input class="inp" id="dm-subject"></div>
+      <div class="fg" style="margin-top:8px"><label class="fl">Body</label><textarea class="inp" id="dm-body" rows="14" style="resize:vertical;font-family:var(--mono);font-size:11px"></textarea></div>
+      <div class="flex" style="gap:8px;margin-top:12px">
+        <button class="btn bg" onclick="saveDraftEdit()">Save Changes</button>
+        <button class="btn bghost" onclick="closeDraftModal()">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
+
+<!-- ═══ STRATEGY ═══ -->
+<div id="pane-strategy" class="pane">
+  <div class="st">Strategy</div>
+  <div class="ss">Locked plan · Atlas v2 framework · system prompt</div>
+
+  <!-- Sub-nav -->
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="btn sm bg" id="strat-btn-locked_plan" onclick="loadStratDoc('locked_plan')">📌 Locked Plan</button>
+    <button class="btn sm bghost" id="strat-btn-atlas_v2" onclick="loadStratDoc('atlas_v2')">🧠 Atlas v2 Framework</button>
+    <button class="btn sm bghost" id="strat-btn-system_prompt" onclick="loadStratDoc('system_prompt')">⚙️ System Prompt</button>
+  </div>
+
+  <div id="strat-content" class="card">
+    <span style="color:var(--muted);font-size:12px">Loading…</span>
+  </div>
+</div>
+
 
 
 <!-- BULK ASSIGN PANEL -->
@@ -4073,6 +4184,366 @@ function renderIntelOcc(snaps) {
     <thead><tr><th>Date</th><th>Pallets</th><th>% Full</th><th>Trend</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+// ═══ ATLAS v2 FRONTEND ═══════════════════════════════════════════════════════
+
+const ATLAS_BASE = '/api/atlas';
+let allLeads = [];
+let currentDraftId = null;
+let atlasConfig = {};
+
+// ── Draft queue ────────────────────────────────────────────────────────────
+async function loadAtlasQueue() {
+  const r = await fetch(`${ATLAS_BASE}?action=get_drafts&status=pending_approval`);
+  const d = await r.json();
+  const counts = d.counts || {};
+
+  const pendEl = document.getElementById('atlas-pending-count');
+  const appEl = document.getElementById('atlas-approved-count');
+  if (pendEl) pendEl.textContent = (counts.pending_approval || 0) + ' pending';
+  if (appEl) appEl.textContent = (counts.approved || 0) + ' approved';
+
+  const el = document.getElementById('atlas-queue');
+  if (!el) return;
+  const drafts = d.drafts || [];
+  if (!drafts.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:12px">No drafts pending approval. Click ⚡ Generate Drafts to create new ones.</span>';
+    return;
+  }
+
+  // Load prospect names for display
+  const ids = [...new Set(drafts.map(dr => dr.prospect_id).filter(Boolean))];
+  let prospectMap = {};
+  if (ids.length) {
+    const pr = await fetch(`${SUPABASE_URL}/rest/v1/psnm_outreach_targets?id=in.(${ids.join(',')})&select=id,company,decision_maker_name,priority_score`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+    const pl = await pr.json();
+    if (Array.isArray(pl)) pl.forEach(p => { prospectMap[p.id] = p; });
+  }
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:4px">${
+    drafts.map(dr => {
+      const p = prospectMap[dr.prospect_id] || {};
+      const score = dr.confidence_score;
+      const scoreClass = score >= 80 ? 'bgr' : score >= 60 ? 'bg2' : 'brd';
+      const anns = Array.isArray(dr.framework_annotations) ? dr.framework_annotations : [];
+      const preview = (dr.body || '').slice(0, 180) + ((dr.body||'').length > 180 ? '…' : '');
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px">
+        <div class="flex" style="align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:13px">${p.company||'Unknown'}</div>
+            <div style="font-size:10px;color:var(--muted)">${p.decision_maker_name||''}</div>
+          </div>
+          <span class="bdg ${p.priority_score >= 80 ? 'bgr' : 'bg2'}">${p.priority_score||'—'}</span>
+          <span class="bdg ${scoreClass}">conf ${score||'?'}</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);font-weight:600">${dr.subject||'(no subject)'}</div>
+        <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="this.style.display='none';this.nextSibling.style.display='block'">${preview}</div>
+        <div style="font-size:11px;display:none;white-space:pre-wrap;cursor:pointer" onclick="this.style.display='none';this.previousSibling.style.display='block'">${dr.body||''}</div>
+        ${anns.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${anns.map(a => `<span class="bdg bgy" style="font-size:9px" title="${a.rationale||''}">${a.framework}</span>`).join('')}</div>` : ''}
+        <div class="flex" style="gap:6px;margin-top:4px">
+          <button class="btn sm bgreen" onclick="draftAction('${dr.id}','approved')">✓ Approve</button>
+          <button class="btn sm bred" onclick="draftAction('${dr.id}','rejected')">✗ Reject</button>
+          <button class="btn sm bghost" onclick="openDraftEdit('${dr.id}','${(p.company||'').replace(/'/g,"\'")}','${(dr.subject||'').replace(/'/g,"\'")}',this.closest('[style]'))">✏️ Edit</button>
+        </div>
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+
+async function draftAction(id, status) {
+  const res = await fetch(`${ATLAS_BASE}?action=update_draft`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id, status, approved_by: 'ben' }),
+  });
+  const d = await res.json();
+  if (d.ok) loadAtlasQueue();
+  else toast('Error: ' + (d.error || 'unknown'), true);
+}
+
+function openDraftEdit(id, company, subject, cardEl) {
+  currentDraftId = id;
+  document.getElementById('draft-modal-company').textContent = company;
+  document.getElementById('dm-subject').value = subject;
+  // Find body from card
+  const bodyEl = cardEl ? cardEl.querySelector('[style*="pre-wrap"]') || cardEl.querySelectorAll('[style*="cursor"]')[1] : null;
+  document.getElementById('dm-body').value = bodyEl ? bodyEl.textContent : '';
+  document.getElementById('draft-modal').classList.add('open');
+}
+
+function closeDraftModal() {
+  document.getElementById('draft-modal').classList.remove('open');
+  currentDraftId = null;
+}
+
+async function saveDraftEdit() {
+  if (!currentDraftId) return;
+  const subject = document.getElementById('dm-subject').value;
+  const body = document.getElementById('dm-body').value;
+  const res = await fetch(`${ATLAS_BASE}?action=update_draft`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: currentDraftId, subject, body }),
+  });
+  const d = await res.json();
+  if (d.ok) { closeDraftModal(); loadAtlasQueue(); toast('Draft saved'); }
+  else toast('Save error: ' + d.error, true);
+}
+
+async function atlasGenerate() {
+  const btn = document.querySelector('[onclick="atlasGenerate()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⚡ Generating…'; }
+  try {
+    const res = await fetch(`${ATLAS_BASE}?action=generate_drafts`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ batch_size: 5 }),
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(`Generated ${d.generated} draft${d.generated !== 1 ? 's' : ''}`);
+      loadAtlasQueue();
+    } else {
+      toast('Generate error: ' + (d.error || 'unknown'), true);
+    }
+  } catch (e) { toast('Network error: ' + e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Drafts'; } }
+}
+
+async function atlasDispatch() {
+  if (!confirm('Send all approved drafts now via SendGrid?')) return;
+  const btn = document.querySelector('[onclick="atlasDispatch()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '▶ Sending…'; }
+  try {
+    const res = await fetch(`${ATLAS_BASE}?action=dispatch_approved`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}',
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(`Sent: ${d.sent} · Failed: ${d.failed}`);
+      loadAtlasQueue();
+    } else {
+      toast('Dispatch error: ' + (d.error || 'unknown'), true);
+    }
+  } catch (e) { toast('Network error: ' + e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Dispatch Approved'; } }
+}
+
+// ── Leads Browser ─────────────────────────────────────────────────────────
+async function loadLeadsBrowser() {
+  const el = document.getElementById('intel-leads');
+  const countEl = document.getElementById('intel-lead-count');
+  if (!el) return;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_outreach_targets?select=id,company,city,industry,priority_score,status,hot_flag,estimated_pallet_need,current_touch_count,last_touched_at,decision_maker_name,email,notes&order=priority_score.desc&limit=300`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+  allLeads = await r.json();
+  if (!Array.isArray(allLeads)) { el.innerHTML = '<span style="color:var(--red)">Failed to load leads</span>'; return; }
+  if (countEl) countEl.textContent = allLeads.length;
+  renderLeadsTable(allLeads);
+}
+
+function filterLeads() {
+  const q = (document.getElementById('leads-search')?.value || '').toLowerCase();
+  const st = document.getElementById('leads-status-filter')?.value || '';
+  let filtered = allLeads;
+  if (q) filtered = filtered.filter(l => (l.company||'').toLowerCase().includes(q) || (l.decision_maker_name||'').toLowerCase().includes(q) || (l.notes||'').toLowerCase().includes(q));
+  if (st) filtered = filtered.filter(l => l.status === st);
+  renderLeadsTable(filtered);
+}
+
+function renderLeadsTable(leads) {
+  const el = document.getElementById('intel-leads');
+  if (!el) return;
+  if (!leads.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No leads match filter.</span>'; return; }
+  let rows = '';
+  leads.forEach(l => {
+    const sc = l.priority_score;
+    const scCls = sc >= 80 ? 'bgr' : sc >= 60 ? 'bg2' : 'bgy';
+    const lastT = l.last_touched_at ? new Date(l.last_touched_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : 'Never';
+    rows += `<tr style="cursor:pointer" onclick="openLeadPanel('${l.id}')">
+      <td><b>${l.company||'—'}</b>${l.hot_flag?'<span class="bdg brd" style="margin-left:6px">HOT</span>':''}<div style="font-size:10px;color:var(--muted)">${[l.city,l.industry].filter(Boolean).join(' · ')}</div></td>
+      <td>${l.decision_maker_name||'—'}</td>
+      <td><span class="bdg ${scCls}">${sc||'—'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${lastT}</td>
+      <td>${l.current_touch_count||0}</td>
+      <td>${intelBadge(l.status)}</td>
+      <td style="font-size:10px;color:var(--muted)">${l.estimated_pallet_need||'—'}</td>
+    </tr>`;
+  });
+  el.innerHTML = `<table class="dt"><thead><tr><th>Company</th><th>Contact</th><th>Score</th><th>Last Touch</th><th>Touches</th><th>Status</th><th>Est. Pallets</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function openLeadPanel(id) {
+  const l = allLeads.find(x => x.id === id);
+  if (!l) return;
+  const panel = document.getElementById('leads-side-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = `<div class="flex" style="justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div>
+      <div style="font-family:var(--head);font-weight:900;font-size:16px">${l.company}</div>
+      <div style="font-size:11px;color:var(--muted)">${[l.city,l.industry].filter(Boolean).join(' · ')}</div>
+    </div>
+    <button class="btn sm bghost" onclick="document.getElementById('leads-side-panel').style.display='none'">✕</button>
+  </div>
+  <div class="g2" style="margin-bottom:12px">
+    <div><div class="fl">Contact</div><div style="font-size:12px">${l.decision_maker_name||'—'}</div></div>
+    <div><div class="fl">Email</div><div style="font-size:12px">${l.email||'—'}</div></div>
+    <div><div class="fl">Score</div><div style="font-size:12px">${l.priority_score||'—'}</div></div>
+    <div><div class="fl">Est. Pallets</div><div style="font-size:12px">${l.estimated_pallet_need||'—'}</div></div>
+  </div>
+  <div class="fg">
+    <label class="fl">Notes</label>
+    <textarea class="inp" id="lead-notes-${id}" rows="4" style="font-size:12px">${l.notes||''}</textarea>
+  </div>
+  <div class="fg" style="margin-top:8px">
+    <label class="fl">Status</label>
+    <select class="inp" id="lead-status-${id}" style="font-size:12px">
+      ${['not_contacted','in_progress','warm','converted','do_not_contact'].map(s => `<option value="${s}"${l.status===s?' selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
+    </select>
+  </div>
+  <div class="flex" style="gap:8px;margin-top:10px">
+    <button class="btn sm bg" onclick="saveLeadEdits('${id}')">Save</button>
+    <button class="btn sm bghost" onclick="generateDraftForProspect('${id}','${(l.company||'').replace(/'/g,"\'")}')">⚡ Generate Draft Now</button>
+  </div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function saveLeadEdits(id) {
+  const notes = document.getElementById('lead-notes-'+id)?.value;
+  const status = document.getElementById('lead-status-'+id)?.value;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_outreach_targets?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ notes, status }),
+  });
+  if (r.ok) {
+    const lead = allLeads.find(l => l.id === id);
+    if (lead) { lead.notes = notes; lead.status = status; }
+    toast('Lead saved');
+  } else toast('Save failed', true);
+}
+
+async function generateDraftForProspect(id, company) {
+  toast('Generating draft for ' + company + '…');
+  const res = await fetch(`${ATLAS_BASE}?action=generate_drafts`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ prospect_ids: [id], batch_size: 1 }),
+  });
+  const d = await res.json();
+  if (d.ok && d.generated > 0) { toast('Draft created — check Queue'); loadAtlasQueue(); }
+  else toast('Error: ' + (d.error || 'generation failed'), true);
+}
+
+// ── Atlas Settings ─────────────────────────────────────────────────────────
+async function loadAtlasSettings() {
+  const r = await fetch(`${ATLAS_BASE}?action=get_atlas_config`);
+  const d = await r.json();
+  atlasConfig = d.config || {};
+  const daily = document.getElementById('cfg-daily-limit');
+  const tone = document.getElementById('cfg-tone');
+  const terr = document.getElementById('cfg-territory');
+  const btn = document.getElementById('atlas-pause-btn');
+  if (daily) daily.value = atlasConfig.daily_send_limit || 50;
+  if (tone) tone.value = atlasConfig.tone_mix || 'balanced';
+  if (terr) terr.value = (atlasConfig.territory_filter || []).join(',');
+  if (btn) {
+    btn.textContent = atlasConfig.paused ? '▶ Resume Atlas' : '⏸ Pause Atlas';
+    btn.className = atlasConfig.paused ? 'btn bgreen sm' : 'btn bred sm';
+  }
+}
+
+async function saveAtlasConfig() {
+  const daily_send_limit = parseInt(document.getElementById('cfg-daily-limit')?.value) || 50;
+  const tone_mix = document.getElementById('cfg-tone')?.value || 'balanced';
+  const territory_filter = (document.getElementById('cfg-territory')?.value || '').split(',').map(s=>s.trim()).filter(Boolean);
+  const msg = document.getElementById('atlas-config-msg');
+  const r = await fetch(`${ATLAS_BASE}?action=update_atlas_config`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ daily_send_limit, tone_mix, territory_filter }),
+  });
+  const d = await r.json();
+  if (msg) msg.textContent = d.ok ? 'Saved ✓' : 'Error: ' + d.error;
+  if (d.ok) { atlasConfig = { ...atlasConfig, daily_send_limit, tone_mix, territory_filter }; toast('Settings saved'); }
+  else toast('Settings save failed', true);
+}
+
+async function toggleAtlasPause() {
+  const r = await fetch(`${ATLAS_BASE}?action=update_atlas_config`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ paused: !atlasConfig.paused }),
+  });
+  const d = await r.json();
+  if (d.ok) { atlasConfig.paused = d.config?.paused; loadAtlasSettings(); toast(atlasConfig.paused ? 'Atlas paused' : 'Atlas resumed'); }
+  else toast('Toggle failed', true);
+}
+
+function toggleAtlasSettings() {
+  const panel = document.getElementById('atlas-settings-panel');
+  const toggle = document.getElementById('atlas-settings-toggle');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (toggle) toggle.textContent = open ? '▼ expand' : '▲ collapse';
+  if (!open) loadAtlasSettings();
+}
+
+// ── Strategy Tab ──────────────────────────────────────────────────────────
+let stratCache = {};
+
+function loadStrategy() {
+  const activeBtn = document.querySelector('[id^="strat-btn-"]');
+  const activeName = activeBtn ? activeBtn.id.replace('strat-btn-', '') : 'locked_plan';
+  loadStratDoc(activeName);
+}
+
+async function loadStratDoc(name) {
+  // Update button states
+  ['locked_plan','atlas_v2','system_prompt'].forEach(n => {
+    const b = document.getElementById('strat-btn-'+n);
+    if (b) { b.className = n === name ? 'btn sm bg' : 'btn sm bghost'; }
+  });
+
+  const el = document.getElementById('strat-content');
+  if (!el) return;
+
+  if (stratCache[name]) { el.innerHTML = stratCache[name]; return; }
+
+  el.innerHTML = '<span style="color:var(--muted);font-size:12px">Loading…</span>';
+  try {
+    const r = await fetch(`/api/atlas?action=strategy_doc&name=${name}`);
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`; return; }
+    const html = typeof marked !== 'undefined'
+      ? marked.parse(d.content)
+      : `<pre style="white-space:pre-wrap;font-size:11px;color:var(--muted)">${d.content}</pre>`;
+    const wrapped = `<div style="font-size:13px;line-height:1.6;max-width:800px">${html}</div>`;
+    stratCache[name] = wrapped;
+    el.innerHTML = wrapped;
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--red)">Network error: ${e.message}</span>`;
+  }
+}
+
+// ── Override loadIntelligence to also load Atlas sections ─────────────────
+const _origLoadIntelligence = loadIntelligence;
+async function loadIntelligence() {
+  document.getElementById('intel-ts').textContent = 'Loading…';
+  try {
+    const [enquiries, leads, touches, occ] = await Promise.all([
+      sbR('psnm_enquiries', 'order=created_at.desc&limit=50&select=id,company,contact_name,pallets,status,created_at,quoted_rate_gbp,estimated_monthly_revenue_gbp,source,notes'),
+      sbR('psnm_outreach_targets', 'order=priority_score.desc&limit=10&select=id,company,city,industry,priority_score,status,hot_flag,estimated_pallet_need,current_touch_count'),
+      sbR('psnm_outreach_touches', 'select=id,outcome'),
+      sbR('psnm_occupancy_snapshots', 'order=date.desc&limit=7&select=date,pallets'),
+    ]);
+    renderIntelKPIs(enquiries, leads);
+    renderIntelEnquiries(enquiries);
+    renderIntelOutreach(touches);
+    renderIntelOcc(occ);
+    document.getElementById('intel-ts').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    document.getElementById('intel-ts').textContent = 'Error: ' + e.message;
+    toast('Intelligence load error: ' + e.message, true);
+  }
+  // Load Atlas-specific sections
+  await Promise.allSettled([loadAtlasQueue(), loadLeadsBrowser()]);
 }
 </script>
 </body>

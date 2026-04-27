@@ -3,3 +3,4 @@
 .env.production
 .master_credentials
 ../.master_credentials
+.env*.local
