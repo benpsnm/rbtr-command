@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-27 (single-host consolidation — Vercel only)
+# Last updated: 2026-04-28 (Atlas v2 — full operational build deployed)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -28,7 +28,7 @@
 | `/wms.html` | Rich operational WMS — Ben's daily tool |
 | `/quote.html` | Customer quote widget |
 | `/terms.html` | T&Cs |
-| `/api/atlas` | Booking, Atlas priority engine, social pipeline |
+| `/api/atlas` | Booking, Atlas priority engine, social pipeline, Atlas v2 outreach, strategy docs |
 | `/api/cron-morning-brief` | Daily 7am Telegram brief |
 | `/api/supabase-proxy` | Auth + DB proxy |
 
@@ -36,14 +36,24 @@
 
 ## WMS Tabs (at /wms.html)
 
-Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard · Tasks · CRM · Scripts · Revenue · Compliance · Links · Invoicing · Statements · Suppliers · **🧠 Intelligence**
+Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard · Tasks · CRM · Scripts · Revenue · Compliance · Links · Invoicing · Statements · Suppliers · **🧠 Intelligence** · **📋 Strategy**
 
 **Intelligence tab** reads live from Supabase:
-- KPI strip: warehouse occupancy (from S state) + pipeline stats
+- KPI strip: warehouse occupancy + pipeline stats
 - Enquiries Pipeline (psnm_enquiries)
 - Hot Leads (psnm_outreach_targets, ordered by priority_score)
 - Outreach Summary (psnm_outreach_touches)
 - Occupancy Trend (psnm_occupancy_snapshots, last 7)
+- **Atlas v2 Approval Queue** — review/approve/reject/edit AI-generated drafts
+- **Generate Drafts** — triggers batch generation via Anthropic API
+- **Dispatch Approved** — sends approved drafts via SendGrid
+- **Leads Browser** — all 205 prospects, sortable/filterable, editable side panel
+- **Atlas Settings** — daily limit, tone mix, territory filter, pause toggle
+
+**Strategy tab** renders markdown docs:
+- Locked Plan (PSNM_LOCKED_PLAN_v1.md)
+- Atlas v2 Framework (ATLAS_V2_FRAMEWORK.md)
+- System Prompt (_atlas_system_prompt.md)
 
 ---
 
@@ -80,8 +90,10 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 - **Project ref**: `mpxgyobotiqcawmqlhbf`
 - **WMS table**: `psnmwhm_store` (RLS disabled, anon key, single-row warehouse state)
-- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`
+- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`
 - **All pipeline tables**: anon SELECT policy `USING (true)` active
+- **psnm_atlas_drafts**: stores generated email drafts (status: pending_approval → approved/rejected → sent/failed)
+- **psnm_atlas_config**: single row `id='main'`, daily_send_limit=50, paused=false, tone_mix='balanced'
 
 ## Vercel Environment Variables (production)
 
@@ -98,11 +110,19 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | ANTHROPIC_API_KEY | AI features |
 | ELEVENLABS_API_KEY | Voice (rotation pending — sk_2932... exposed) |
 
-## Integrations (live as of 2026-04-27)
+## Integrations (live as of 2026-04-28)
 
-- **SendGrid**: booking confirmation emails fire on every booking
+- **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch
 - **Telegram**: booking alerts + daily 7am brief → TELEGRAM_CHAT_ID=8669062243
+- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation (six-framework cold emails)
 - **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
+
+## Atlas v2 Deferred (Week 2)
+
+- Touches 2–5 (LinkedIn DM, phone script, follow-up email, decision call)
+- Reply inbox monitoring + auto-reply drafts
+- Drip sequence scheduling
+- Multi-channel via Make.com
 
 ---
 
@@ -121,6 +141,8 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-27 PM | Pass 2: Intelligence tab merged into PSNM_v14_LIVE.html |
 | 2026-04-27 PM | Netlify paused (credit limit) — WMS moved to Vercel /wms.html |
 | 2026-04-27 PM | ✅ Single canonical host. One URL. One repo. |
+| 2026-04-28 AM | Atlas v2 deployed: draft generation, approval queue, dispatch, CRM browser, strategy tab |
+| 2026-04-28 AM | All 11 smoke tests passed. 10 drafts pre-generated for top prospects. |
 
 ---
 
