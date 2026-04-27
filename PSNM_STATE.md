@@ -108,9 +108,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 ## TODO (Ben actions only)
 
-1. ElevenLabs key rotation (sk_2932... exposed — see BEN_TODO.md)
-2. Telegram bot token rotation (@Rbtr_rocko_bot — see BEN_TODO.md)
-3. Wire Make.com social scenario (see BEN_TODO.md)
+1. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
 
 ---
 
