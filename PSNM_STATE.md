@@ -114,7 +114,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 - **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch
 - **Telegram**: booking alerts + daily 7am brief → TELEGRAM_CHAT_ID=8669062243
-- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation (six-framework cold emails)
+- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief (opinionated ops briefing)
 - **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
 
 ## Atlas v2 Deferred (Week 2)
@@ -144,6 +144,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-28 AM | Atlas v2 deployed: draft generation, approval queue, dispatch, CRM browser, strategy tab |
 | 2026-04-28 AM | All 11 smoke tests passed. 10 drafts pre-generated for top prospects. |
 | 2026-04-28 AM | PWA manifest + branded icons (installable as Mac/iPhone app) |
+| 2026-04-28 AM | Daily General's Brief — AI-generated ops brief replacing basic stats (fires 07:00 BST) |
 
 ---
 
