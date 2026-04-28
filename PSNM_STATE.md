@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (WAM auto-quote pipeline shipped)
+# Last updated: 2026-04-28 (SendGrid Inbound Parse infrastructure ready)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -113,7 +113,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | RBTR_AUTH_TOKEN | Atlas API auth |
 | ANTHROPIC_API_KEY | AI features |
 | ELEVENLABS_API_KEY | Voice (rotation pending — sk_2932... exposed) |
-| SENDGRID_INBOUND_SECRET | WW webhook auth (optional — graceful bypass if unset) |
+| SENDGRID_INBOUND_SECRET | WW webhook auth — **LIVE in production** (set 2026-04-28). Gate verified: wrong secret → 401, correct → 200. |
 
 ## Integrations (live as of 2026-04-28)
 
@@ -136,9 +136,12 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 ## TODO (Ben actions only)
 
 1. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
-2. **Monday**: SendGrid Inbound Parse DNS — add MX record for `inbound.palletstoragenearme.co.uk` → `mx.sendgrid.net`, configure webhook to `https://rbtr-jarvis.vercel.app/api/atlas?action=inbound_email&secret=YOUR_SECRET`
-3. **Monday**: WhichWarehouse account — change lead delivery email to `leads@inbound.palletstoragenearme.co.uk`
-4. **Monday**: Add `SENDGRID_INBOUND_SECRET` to Vercel prod env vars
+2. **READY — follow ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md (~13 min, 3 sections):**
+   - Section 1: Hostinger DNS — MX record `inbound` → `mx.sendgrid.net` priority 10
+   - Section 2: SendGrid Inbound Parse — add `inbound.palletstoragenearme.co.uk`, webhook URL with secret
+   - Section 3: Hostinger email filter on sales@ — forward @whichwarehouse.com/.net to `leads@inbound.palletstoragenearme.co.uk`, keep copy
+3. WhichWarehouse account — Ben has emailed WW to change lead delivery to sales@palletstoragenearme.co.uk (architecture: WW → sales@ → filter → inbound subdomain → SendGrid Parse → auto-quoter)
+4. `SENDGRID_INBOUND_SECRET` **already live in Vercel** — no action needed
 
 ---
 
@@ -158,6 +161,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-28 AM | Test data cleared — clean baseline for launch. Zero occupancy snapshot seeded (1602 capacity, 912 BE). |
 | 2026-04-28 PM | WW lead integration shipped — psnm_ww_leads table live, inbound_email endpoint deployed, parser smoke tested (PASS). DNS+Parse config pending Monday. |
 | 2026-04-28 PM | WAM auto-quote pipeline shipped — parser + `_quote_calc.js` + scenario engine + WMS UI (quote panel, RH&D clipboard, source filter). 4/4 smoke tests PASS. |
+| 2026-04-28 PM | SendGrid Inbound Parse infrastructure ready — SENDGRID_INBOUND_SECRET live in Vercel, secret gate verified. Ben's manual config (DNS + SendGrid + filter) documented at ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md. |
 
 ---
 
