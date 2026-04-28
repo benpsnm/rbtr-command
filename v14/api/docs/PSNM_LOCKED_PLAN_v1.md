@@ -24,7 +24,7 @@ Goal: reach break-even by June 2026. Then grow to 80%+ occupancy (1,282 pallets)
 
 **Perceived likelihood**: First week free with 12-week commitment. Site visit available before you sign. Walk away at day 5 if we are not delivering.
 
-**Time & effort**: Onboarding typically 3-5 working days from contract signed (subject to third-party haulier availability). 30 days notice to cancel after initial 12 weeks. Zero paperwork to start.
+**Time & effort**: Onboarding typically 3-5 working days from contract signed. We coordinate haulier booking with you for stock collection or delivery — minimal admin on your side. 30 days notice to cancel after initial 12 weeks.
 
 **Risk reversal**: Try us for a week with real product moving. If we're not faster and cleaner than your current setup, walk away — week 2 doesn't bill.
 

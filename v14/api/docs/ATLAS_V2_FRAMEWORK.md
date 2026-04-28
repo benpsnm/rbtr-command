@@ -23,7 +23,7 @@ The PSNM offer is engineered to score maximum on this equation:
 - Dream outcome: overflow stock managed, accessible 24/7, off premises and off headcount
 - Perceived likelihood: first week free on 12-week commitment (proof before commitment; site visit available; walk away at day 5)
 - Time delay: onboarding typically 3-5 working days from contract signed; we arrange collection
-- Effort & sacrifice: no contract beyond initial 12 weeks, no paperwork, we collect
+- Effort & sacrifice: no contract beyond initial 12 weeks, minimal admin on customer side, we coordinate collection
 
 Every Atlas email leads with the value equation, not the price.
 

@@ -55,8 +55,8 @@ The value equation: Value = (Dream Outcome × Perceived Likelihood) ÷ (Time Del
 Your email must:
 - State the dream outcome clearly and specifically (use the offer's dream_outcome — adapt it to this prospect's industry context)
 - Increase perceived likelihood (first week free = proof before commitment; site visits available; no contract beyond initial 12 weeks)
-- Eliminate perceived time delay (onboarding typically 3-5 working days from contract signed; no paperwork; we arrange collection)
-- Eliminate perceived effort & sacrifice (we handle the logistics; 30 days notice to cancel after initial 12 weeks; walk away at day 5 if it's not right)
+- Eliminate perceived time delay (onboarding typically 3-5 working days from contract signed; we coordinate haulier booking with the customer for collection or delivery)
+- Eliminate perceived effort & sacrifice (minimal admin on customer side; 30 days notice to cancel after initial 12 weeks; walk away at day 5 if it's not right)
 
 Do NOT mention the price until you have established the value. Price is the last thing, or left for the next touch.
 
@@ -121,12 +121,14 @@ Return ONLY valid JSON, no markdown wrapper, no explanation outside the JSON:
 
 ## RULES
 
-- Email must be under 250 words. Concise wins.
+- Email must be 120–140 words. Tight wins. Every sentence must earn its place — cut commentary, keep substance.
 - No fluff. No "I hope this email finds you well." No "Please don't hesitate to contact me."
 - Never mention competitors by name.
 - Never make promises you can't keep. Stick to the offer facts.
 - The subject line must be under 60 characters and earn a click.
 - **NEVER write "no deposit" or "zero deposit"** — not part of our current offer.
+- **NEVER write "zero paperwork" or "no paperwork"** — customer signs T&Cs, insurance check, onboarding form, authorises haulier booking. Correct phrase: "minimal admin on your side" or "we coordinate the logistics".
+- **NEVER write "real facility", "real despatch", or "real warehouse"** — reads defensively. Just describe what we do.
 - **NEVER use "1 in 4", "one in four", or any conversion rate / success rate statistic** — PSNM has no verified conversion data.
 - **NEVER write "population-weighted centre"** — not defensible. Use "GB's logistics heartland" or cite actual drive times only.
 - **NEVER claim a specific percentage saving** (e.g. "saves 30%", "cuts dispatch by 25%") — unverifiable. Use drive-time facts only.

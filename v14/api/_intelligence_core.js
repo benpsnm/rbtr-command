@@ -599,7 +599,7 @@ async function generateDraftViaAtlas(p) {
     .replace(/\{\{priority_score\}\}/g, confidenceMap[p.score_grade] || 70)
     .replace(/\{\{dream_outcome\}\}/g, 'Stock stored centrally at GB\'s geographic centre, dispatched nationally — no lease, no staff overhead, no minimum term after the initial 12 weeks')
     .replace(/\{\{perceived_likelihood\}\}/g, 'First week free with 12-week commitment. Site visit available before you sign. Walk away at day 5 if we are not delivering.')
-    .replace(/\{\{time_effort\}\}/g, 'Onboarding typically 3-5 working days from contract signed (subject to third-party haulier availability for stock collection). Zero paperwork. 30 days notice to cancel after initial 12 weeks.')
+    .replace(/\{\{time_effort\}\}/g, 'Onboarding typically 3-5 working days from contract signed. We coordinate haulier booking with you for stock collection or delivery — minimal admin on your side. 30 days notice to cancel after initial 12 weeks.')
     .replace(/\{\{risk_reversal\}\}/g, 'Try us for a week with real product moving through. If we\'re not faster and cleaner than your current setup, walk away — week 2 doesn\'t bill.')
     .replace(/\{\{rate_small\}\}/g, '3.95')
     .replace(/\{\{rate_mid\}\}/g, '3.45')
@@ -656,6 +656,12 @@ async function generateDraftViaAtlas(p) {
   parsed.body = parsed.body.replace(/\bno deposit\b[,.]?\s*/gi, '');
   parsed.body = parsed.body.replace(/,\s*zero deposit\b[,.]?/gi, '');
   parsed.body = parsed.body.replace(/\bzero deposit\b[,.]?\s*/gi, '');
+  // "zero paperwork" / "no paperwork" — overpromises; customer signs T&Cs, insurance check, etc.
+  parsed.body = parsed.body.replace(/[Zz]ero paperwork[^.]*\.\s*/g, '');
+  parsed.body = parsed.body.replace(/,?\s*no paperwork\b[,.]?\s*/gi, '');
+  // "real facility" / "real despatch" — reads defensive
+  parsed.body = parsed.body.replace(/\breal facility,?\s*(with\s+)?real despatch[,.]?\s*/gi, '');
+  parsed.body = parsed.body.replace(/\breal facility\b/gi, 'our facility');
   // "1 in 4" / "one in four" conversion stat
   parsed.body = parsed.body.replace(/[Oo]ne in four [^.]*\.\s*/g, '');
   parsed.body = parsed.body.replace(/1 in 4 [^.]*\.\s*/g, '');
