@@ -123,7 +123,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **Buffer**: PSNM Facebook + Instagram connected (free tier, login: sales@palletstoragenearme.co.uk). 12 posts seeded in psnm_social_posts; posting schedule to be queued. Make.com automation not yet wired.
 - **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
 - **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
-- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily. WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **REQUIRES COMPANIES_HOUSE_API_KEY in Vercel env** (not yet set — see TODO below).
+- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily. WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **COMPANIES_HOUSE_API_KEY live in Vercel.** First harvest: 9/20 inserted (11 blocked), A:3 B:6 C:0.
 
 ## Social Media
 
@@ -172,7 +172,7 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ## TODO (Ben actions only)
 
-1. **Add COMPANIES_HOUSE_API_KEY to Vercel** — then run first harvest: `curl -X POST 'https://rbtr-jarvis.vercel.app/api/atlas?action=intel_harvest' -H 'x-rbtr-auth: TOKEN' -H 'Content-Type: application/json' -d '{"batch_size":100,"days_back":365}'`. Paste key into `.master_credentials` first.
+1. **Run full initial harvest** (one-time): `curl -X POST 'https://rbtr-jarvis.vercel.app/api/atlas?action=intel_harvest' -H 'x-rbtr-auth: TOKEN' -H 'Content-Type: application/json' -d '{"batch_size":100,"days_back":365}'` — pulls last 365 days. Then run Enrich on top 50 A/B via WMS button.
 2. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
 2. **READY — follow ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md (~13 min, 3 sections):**
    - Section 1: Hostinger DNS — MX record `inbound` → `mx.sendgrid.net` priority 10
