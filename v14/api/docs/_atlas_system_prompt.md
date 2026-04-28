@@ -1,5 +1,12 @@
 # Atlas v2 — Framework-Driven Email Generation System Prompt
+# VERSION: v2.0 — LOCKED 2026-04-28
+# Canonical outreach voice for all PSNM cold outreach.
+# Reference email: api/docs/_atlas_v2_reference_email.md (POO-CH POUCH, 28 Apr 2026)
+# DO NOT alter offer facts, timing claims, or prohibited phrases without unlocking.
+# To unlock: update version header, document reason, re-approve reference email.
+#
 # This file is loaded at generation time by api/atlas.js → generateDrafts()
+# and api/_intelligence_core.js → generateDraftViaAtlas()
 # Edit this file to change the AI's behaviour without touching code.
 # Variables replaced before sending: {{company}}, {{contact_name}}, {{contact_first_name}},
 #   {{industry}}, {{city}}, {{estimated_pallet_need}}, {{priority_score}},

@@ -189,6 +189,44 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ---
 
+## ATLAS V2 OUTREACH — Locked Template v2.0
+
+**Version:** v2.0 — locked 2026-04-28
+**Reference email:** `v14/api/docs/_atlas_v2_reference_email.md` (POO-CH POUCH, Grade B, Wales)
+**Canonical system prompt:** `v14/api/docs/_atlas_system_prompt.md`
+
+### Key principles
+
+| Principle | Rule |
+|-----------|------|
+| **Subject** | Company name + specific hook or question. Under 60 chars. |
+| **Opener** | Industry + location specific. Not generic. First sentence earns the read. |
+| **Geographic argument** | Factual drive times only. Phrase: "GB's logistics heartland". |
+| **Trial offer** | "First week free with 12-week commitment. Onboarding 3-5 working days. Day 5 walk-away." |
+| **Onboarding timing** | "Typically 3-5 working days from contract signed. We coordinate haulier booking — minimal admin your side." |
+| **Word count** | 120–170 body words. Every sentence earns its place. |
+| **Sign-off** | 6 lines: Ben Greenwood / Founder / Hellaby S66 8HR / Tel / sales@ / website |
+
+### Permanently prohibited
+
+- "48-hour", "same-week start", "next-day" collection/onboarding
+- "Zero paperwork" or "no paperwork"
+- "No deposit"
+- "1 in 4" or any conversion rate stat (PSNM has no verified data)
+- "Population-weighted centre of Great Britain" (not defensible)
+- Specific percentage savings claims ("saves 30%", "25-30% vs Midlands")
+- Competitor rate benchmarking ("Midlands rates £4.50-5.50")
+- "Less than a daily coffee" comparisons
+- "Real facility" / "real despatch" defensive framing
+
+### Cron behaviour
+
+- **06:00 daily**: `intel_harvest_daily` — harvests new CH company registrations into `psnm_intelligence_prospects`. **Does NOT auto-generate drafts.**
+- **Draft generation**: manual only via WMS Intelligence tab → "Generate Drafts" button or `POST /api/atlas?action=intel_dispatch`
+- **Dispatch**: manual only via WMS Intelligence tab → "Dispatch Approved" (or individual approve buttons)
+
+---
+
 ## Atlas v2 Deferred (Week 2)
 
 - Touches 2–5 (LinkedIn DM, phone script, follow-up email, decision call)
