@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (SendGrid Inbound Parse infrastructure ready)
+# Last updated: 2026-04-28 (social media accounts documented)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -120,9 +120,45 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch + WW inbound parse (DNS pending Monday)
 - **Telegram**: booking alerts + daily 7am brief + WW lead alerts → TELEGRAM_CHAT_ID=8669062243
 - **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief + WW warm response generation
-- **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
+- **Buffer**: PSNM Facebook + Instagram connected (free tier, login: sales@palletstoragenearme.co.uk). 12 posts seeded in psnm_social_posts; posting schedule to be queued. Make.com automation not yet wired.
 - **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
 - **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
+
+## Social Media
+
+### PSNM — Active (as of 2026-04-28)
+
+| Platform | Account | Followers | Status |
+|----------|---------|-----------|--------|
+| Facebook | PSNM Page | ~42 | ✅ Active, connected to Buffer |
+| Instagram | PSNM | ~37 | ✅ Active, connected to Buffer |
+| LinkedIn | PSNM Company Page | — | ⚠️ Exists, dormant — no personal account driving it |
+
+Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `psnm_social_posts`. Posting schedule + queue: Ben to configure today.
+
+**Gap:** No Ben Greenwood personal LinkedIn. Required before LinkedIn outreach (Atlas v2 Touch 2 — LinkedIn DM) can work. Week 2–3 priority.
+
+### Other Accounts (not PSNM, do not cross-post)
+
+| Account | Platform | Followers | Notes |
+|---------|---------|-----------|-------|
+| Sons of Guns | FB | ~1,000 | Phase 2 — Airbnb after Barnsley reno |
+| Sons of Guns | IG | ~2,000 | Phase 2 — Airbnb after Barnsley reno |
+| Co-Lab Custom Studios | IG | ~57,000 | Parked until PSNM break-even (locked plan). Future RBTR asset. |
+| Co-Lab Custom Studios | FB | — | Parked (same rule) |
+| RBTR | FB + IG | — | Placeholders squatted, dormant |
+| Ben Greenwood | FB | — | Personal — occasional "what I'm building now" soft signal-boost OK |
+| ben_son_of_a_gun | IG | — | Personal |
+| Axel Brothers | — | — | Kids — personal, keep separate |
+
+### Rules
+
+- **Never** post PSNM content via Co-Lab or Sons of Guns audiences — algorithmic punishment, brand confusion, Riley exposure risk.
+- Ben Greenwood FB (personal) may post occasional "what I'm building" content as a soft signal-boost for PSNM.
+- All Buffer scheduling for PSNM uses the sales@ login, not personal email.
+- Co-Lab audiences stay parked until PSNM reaches break-even (per locked plan).
+
+---
 
 ## Atlas v2 Deferred (Week 2)
 
