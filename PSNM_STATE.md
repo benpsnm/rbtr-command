@@ -219,6 +219,17 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 - "Less than a daily coffee" comparisons
 - "Real facility" / "real despatch" defensive framing
 
+### Quality gate — `_draft_validator.js` (v2.0, 2026-04-28)
+
+Every draft is validated before entering the approval queue. Drafts with any error-severity issue are routed to `needs_revision` status in WMS (amber border, issues listed inline). Ben can Override & Approve, Reject, or Fix & Approve from the Needs Revision tab.
+
+**Validate retroactively:** WMS → Outreach Queue → 🔍 Validate button runs `POST /api/atlas?action=validate_existing` against all `pending_approval` drafts.
+
+**Integration points:**
+- `atlas.js` `generateDrafts()` — validates after Claude response, before DB insert
+- `_intelligence_core.js` `scoreAndDispatch()` — same
+- `atlas.js` `validateExistingDrafts()` — retroactive scan
+
 ### Cron behaviour
 
 - **06:00 daily**: `intel_harvest_daily` — harvests new CH company registrations into `psnm_intelligence_prospects`. **Does NOT auto-generate drafts.**

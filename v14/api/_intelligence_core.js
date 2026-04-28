@@ -4,6 +4,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { validateDraft } = require('./_draft_validator');
 
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
@@ -721,23 +722,29 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
 
     const confidenceMap = { A: 85, B: 70, C: 55 };
 
+    const validation = validateDraft({ subject: draftData.subject, body: draftData.body });
+    const draftStatus = validation.pass ? 'pending_approval' : 'needs_revision';
+    if (!validation.pass) {
+      const errorRules = validation.issues.filter(i => i.severity === 'error').map(i => i.rule).join(', ');
+      console.warn(`[Atlas validator] ${p.company_name} → needs_revision (${errorRules})`);
+    }
+
     const draft = {
       prospect_id:      null,
       touch_number:     1,
       subject:          draftData.subject,
       body:             draftData.body,
-      status:           'pending_approval',
+      status:           draftStatus,
       confidence_score: draftData.confidence_score || confidenceMap[p.score_grade] || 70,
       framework_annotations: JSON.stringify({
-        // Routing metadata (used by dispatchApproved to find recipient)
         source:                   'intelligence_engine',
         intelligence_prospect_id: p.id,
         score_grade:              p.score_grade,
         to_email:                 p.enriched_email,
         to_name:                  p.company_name,
         company_name:             p.company_name,
-        // Claude's framework annotations (rendered in WMS approval queue)
         atlas_annotations:        draftData.framework_annotations || [],
+        ...(validation.pass ? {} : { validation_issues: validation.issues }),
       }),
     };
 

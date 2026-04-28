@@ -78,6 +78,9 @@ select.inp{cursor:pointer}
 .brd{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.4)}
 .bbl{background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.4)}
 .bgy{background:rgba(136,146,164,0.1);color:var(--muted);border:1px solid var(--border)}
+.atlas-tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:11px;font-family:var(--mono);padding:4px 10px 6px;letter-spacing:.5px}
+.atlas-tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+.atlas-tab-btn:hover:not(.active){color:var(--text)}
 .kpig{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:12px}
 .kpi{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px}
 .kn{font-family:var(--head);font-weight:900;font-size:22px;color:var(--gold);line-height:1}
@@ -3792,10 +3795,17 @@ Pallet Storage Near Me
       <span class="bdg bg2" id="atlas-pending-count" style="margin-left:4px"></span>
       <span class="bdg bgr" id="atlas-approved-count" style="margin-left:4px"></span>
       <span class="bdg bgr" id="atlas-sent-today-count" style="margin-left:4px"></span>
+      <span class="bdg" id="atlas-revision-count" style="margin-left:4px;display:none;background:var(--orange,#f90);color:#000"></span>
       <div class="flex mla" style="gap:6px">
+        <button class="btn sm bghost" onclick="atlasValidateExisting()" title="Run quality gate against queued drafts">🔍 Validate</button>
         <button class="btn sm bg" onclick="atlasGenerate()">⚡ Generate Drafts</button>
         <button class="btn sm bgreen" onclick="atlasDispatch()">▶ Dispatch Approved</button>
       </div>
+    </div>
+    <div id="atlas-queue-tabs" style="display:flex;gap:8px;padding:8px 12px 0;border-bottom:1px solid var(--border,#333)">
+      <button class="atlas-tab-btn active" data-tab="pending" onclick="atlasSetTab('pending')">Pending</button>
+      <button class="atlas-tab-btn" data-tab="needs_revision" onclick="atlasSetTab('needs_revision')">⚠ Needs Revision</button>
+      <button class="atlas-tab-btn" data-tab="approved" onclick="atlasSetTab('approved')">Approved</button>
     </div>
     <div id="atlas-queue"></div>
   </div>
@@ -4247,25 +4257,46 @@ let currentDraftId = null;
 let atlasConfig = {};
 
 // ── Draft queue ────────────────────────────────────────────────────────────
+let atlasCurrentTab = 'pending';
+
+function atlasSetTab(tab) {
+  atlasCurrentTab = tab;
+  document.querySelectorAll('.atlas-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  loadAtlasQueue();
+}
+
 async function loadAtlasQueue() {
-  const r = await fetch(`${ATLAS_BASE}?action=get_drafts&status=pending_approval`);
+  const statusMap = { pending: 'pending_approval', needs_revision: 'needs_revision', approved: 'approved' };
+  const status = statusMap[atlasCurrentTab] || 'pending_approval';
+  const r = await fetch(`${ATLAS_BASE}?action=get_drafts&status=${status}`);
   const d = await r.json();
   const counts = d.counts || {};
 
   const pendEl = document.getElementById('atlas-pending-count');
   const appEl = document.getElementById('atlas-approved-count');
+  const revEl = document.getElementById('atlas-revision-count');
   if (pendEl) pendEl.textContent = (counts.pending_approval || 0) + ' pending';
   if (appEl) appEl.textContent = (counts.approved || 0) + ' approved';
+  if (revEl) {
+    const revCount = counts.needs_revision || 0;
+    revEl.textContent = revCount + ' revision';
+    revEl.style.display = revCount > 0 ? '' : 'none';
+  }
 
   const el = document.getElementById('atlas-queue');
   if (!el) return;
   const drafts = d.drafts || [];
   if (!drafts.length) {
-    el.innerHTML = '<span style="color:var(--muted);font-size:12px">No drafts pending approval. Click ⚡ Generate Drafts to create new ones.</span>';
+    const msgs = {
+      pending: 'No drafts pending approval. Click ⚡ Generate Drafts to create new ones.',
+      needs_revision: 'No drafts flagged for revision. Quality gate is clean.',
+      approved: 'No approved drafts waiting to send.',
+    };
+    el.innerHTML = `<span style="color:var(--muted);font-size:12px;padding:12px;display:block">${msgs[atlasCurrentTab] || 'No drafts.'}</span>`;
     return;
   }
 
-  // Load prospect names for display
+  // Load prospect names for display (classic Atlas drafts with prospect_id)
   const ids = [...new Set(drafts.map(dr => dr.prospect_id).filter(Boolean))];
   let prospectMap = {};
   if (ids.length) {
@@ -4274,34 +4305,79 @@ async function loadAtlasQueue() {
     if (Array.isArray(pl)) pl.forEach(p => { prospectMap[p.id] = p; });
   }
 
-  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:4px">${
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin:8px 12px 12px">${
     drafts.map(dr => {
       const p = prospectMap[dr.prospect_id] || {};
+      // Intelligence engine drafts store company name in framework_annotations
+      let annotations = dr.framework_annotations;
+      if (typeof annotations === 'string') { try { annotations = JSON.parse(annotations); } catch { annotations = []; } }
+      const isIntelDraft = annotations && !Array.isArray(annotations) && annotations.source === 'intelligence_engine';
+      const companyName = isIntelDraft ? (annotations.company_name || annotations.to_name) : (p.company || 'Unknown');
+      const atlasAnns = isIntelDraft ? (annotations.atlas_annotations || []) : (Array.isArray(annotations) ? annotations : []);
+      const validationIssues = isIntelDraft ? (annotations.validation_issues || []) : (annotations?.validation_issues || []);
+
       const score = dr.confidence_score;
       const scoreClass = score >= 80 ? 'bgr' : score >= 60 ? 'bg2' : 'brd';
-      const anns = Array.isArray(dr.framework_annotations) ? dr.framework_annotations : [];
       const preview = (dr.body || '').slice(0, 180) + ((dr.body||'').length > 180 ? '…' : '');
-      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      const isRevision = dr.status === 'needs_revision';
+      const borderColor = isRevision ? 'var(--orange,#f90)' : 'var(--border)';
+
+      const issueHtml = isRevision && validationIssues.length
+        ? `<div style="background:rgba(255,150,0,0.08);border:1px solid rgba(255,150,0,0.3);border-radius:4px;padding:8px;font-size:10px">
+            <div style="font-weight:700;color:var(--orange,#f90);margin-bottom:4px">⚠ Quality gate issues</div>
+            ${validationIssues.map(i => `<div style="color:var(--muted);margin-bottom:2px"><span style="color:${i.severity==='error'?'#f55':'#f90'}">[${i.severity}]</span> ${escHtml(i.description)}${i.offending ? ` — <em>"${escHtml(i.offending)}"</em>` : ''}</div>`).join('')}
+          </div>`
+        : '';
+
+      const actionButtons = isRevision
+        ? `<button class="btn sm bgreen" onclick="draftAction('${dr.id}','approved')">✓ Override & Approve</button>
+           <button class="btn sm bred" onclick="draftAction('${dr.id}','rejected')">✗ Reject</button>
+           <button class="btn sm bghost" onclick="openDraftEdit('${dr.id}','${escAttr(companyName)}','${escAttr(dr.subject||'')}',this.closest('[data-draft]'))">✏️ Fix & Approve</button>`
+        : `<button class="btn sm bgreen" onclick="draftAction('${dr.id}','approved')">✓ Approve</button>
+           <button class="btn sm bred" onclick="draftAction('${dr.id}','rejected')">✗ Reject</button>
+           <button class="btn sm bghost" onclick="openDraftEdit('${dr.id}','${escAttr(companyName)}','${escAttr(dr.subject||'')}',this.closest('[data-draft]'))">✏️ Edit</button>`;
+
+      return `<div data-draft="${dr.id}" style="background:var(--bg3);border:1px solid ${borderColor};border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px">
         <div class="flex" style="align-items:flex-start;gap:8px">
           <div style="flex:1">
-            <div style="font-weight:700;font-size:13px">${p.company||'Unknown'}</div>
-            <div style="font-size:10px;color:var(--muted)">${p.decision_maker_name||''}</div>
+            <div style="font-weight:700;font-size:13px">${escHtml(companyName)}</div>
+            <div style="font-size:10px;color:var(--muted)">${escHtml(p.decision_maker_name||annotations?.to_name||'')}</div>
           </div>
-          <span class="bdg ${p.priority_score >= 80 ? 'bgr' : 'bg2'}">${p.priority_score||'—'}</span>
+          ${p.priority_score ? `<span class="bdg ${p.priority_score >= 80 ? 'bgr' : 'bg2'}">${p.priority_score}</span>` : ''}
           <span class="bdg ${scoreClass}">conf ${score||'?'}</span>
         </div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);font-weight:600">${dr.subject||'(no subject)'}</div>
-        <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="this.style.display='none';this.nextSibling.style.display='block'">${preview}</div>
-        <div style="font-size:11px;display:none;white-space:pre-wrap;cursor:pointer" onclick="this.style.display='none';this.previousSibling.style.display='block'">${dr.body||''}</div>
-        ${anns.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${anns.map(a => `<span class="bdg bgy" style="font-size:9px" title="${a.rationale||''}">${a.framework}</span>`).join('')}</div>` : ''}
-        <div class="flex" style="gap:6px;margin-top:4px">
-          <button class="btn sm bgreen" onclick="draftAction('${dr.id}','approved')">✓ Approve</button>
-          <button class="btn sm bred" onclick="draftAction('${dr.id}','rejected')">✗ Reject</button>
-          <button class="btn sm bghost" onclick="openDraftEdit('${dr.id}','${(p.company||'').replace(/'/g,"\'")}','${(dr.subject||'').replace(/'/g,"\'")}',this.closest('[style]'))">✏️ Edit</button>
-        </div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);font-weight:600">${escHtml(dr.subject||'(no subject)')}</div>
+        ${issueHtml}
+        <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="this.style.display='none';this.nextSibling.style.display='block'">${escHtml(preview)}</div>
+        <div style="font-size:11px;display:none;white-space:pre-wrap;cursor:pointer" onclick="this.style.display='none';this.previousSibling.style.display='block'">${escHtml(dr.body||'')}</div>
+        ${atlasAnns.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${atlasAnns.map(a => `<span class="bdg bgy" style="font-size:9px" title="${escAttr(a.rationale||'')}">${escHtml(a.framework)}</span>`).join('')}</div>` : ''}
+        <div class="flex" style="gap:6px;margin-top:4px">${actionButtons}</div>
       </div>`;
     }).join('')
   }</div>`;
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+
+async function atlasValidateExisting() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '🔍 Validating…';
+  try {
+    const r = await fetch(`${ATLAS_BASE}?action=validate_existing`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ statuses: ['pending_approval'] }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`Validated ${d.checked} drafts — ${d.moved_to_revision} moved to Needs Revision`);
+      loadAtlasQueue();
+    } else {
+      toast('Validation error: ' + (d.error || 'unknown'), true);
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 Validate';
+  }
 }
 
 async function draftAction(id, status) {
@@ -4658,7 +4734,7 @@ async function runPipHarvest() {
   try {
     const r = await fetch('/api/atlas?action=intel_harvest', {
       method: 'POST', headers: PIP_AUTH,
-      body: JSON.stringify({ batch_size: 100, days_back: 365 }),
+      body: JSON.stringify({ batch_size: 100, days_back: 1095 }),
     });
     const d = await r.json();
     if (d.error && d.error.includes('COMPANIES_HOUSE_API_KEY')) {

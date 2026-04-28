@@ -22,6 +22,7 @@ const EMAIL_FROM = process.env.EMAIL_FROM || 'sales@palletstoragenearme.co.uk';
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Near Me';
 const calcQuote = require('./_quote_calc');
 const intelligence = require('./_intelligence_core');
+const { validateDraft } = require('./_draft_validator');
 
 function sbHeaders(extra = {}) {
   const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...extra };
@@ -56,6 +57,17 @@ async function sbUpdate(table, match, row) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+async function sendTelegramAlert(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+  }).catch(() => null);
+}
 
 // ── Auth perimeter (matches supabase-proxy pattern) ─────────────────────────
 function checkAuth(req) {
@@ -582,14 +594,26 @@ async function generateDrafts(body) {
       }
 
       const touchNum = (p.current_touch_count || 0) + 1;
+      const validation = validateDraft({ subject: parsed.subject, body: parsed.body });
+      const draftStatus = validation.pass ? 'pending_approval' : 'needs_revision';
+      const annotations = validation.pass
+        ? (parsed.framework_annotations || [])
+        : { atlas_annotations: parsed.framework_annotations || [], validation_issues: validation.issues };
+
+      if (!validation.pass) {
+        const errorRules = validation.issues.filter(i => i.severity === 'error').map(i => i.rule).join(', ');
+        console.warn(`[Atlas validator] ${p.company} → needs_revision (${errorRules})`);
+        await sendTelegramAlert(`⚠️ Atlas draft flagged\n*${p.company}*\nFailed rules: ${errorRules}\nStatus: needs_revision`).catch(() => {});
+      }
+
       const inserted = await sbInsert('psnm_atlas_drafts', [{
         prospect_id: p.id,
         touch_number: touchNum,
         subject: parsed.subject,
         body: parsed.body,
-        framework_annotations: parsed.framework_annotations || [],
+        framework_annotations: annotations,
         confidence_score: parsed.confidence_score || null,
-        status: 'pending_approval',
+        status: draftStatus,
       }]);
 
       if (inserted?.error || !Array.isArray(inserted)) {
@@ -762,7 +786,7 @@ async function getDrafts(req) {
   const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200);
   const rows = await sbSelect('psnm_atlas_drafts',
     `status=eq.${status}&order=created_at.desc&limit=${limit}&select=id,prospect_id,touch_number,subject,body,framework_annotations,confidence_score,status,created_at,approved_at,sent_at`);
-  const counts = await Promise.all(['pending_approval','approved','rejected','sent','failed'].map(async s => {
+  const counts = await Promise.all(['pending_approval','approved','rejected','sent','failed','needs_revision'].map(async s => {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_atlas_drafts?status=eq.${s}&select=id`, {
       headers: { ...sbHeaders(), Prefer: 'count=exact' },
       method: 'HEAD',
@@ -786,6 +810,45 @@ async function updateAtlasConfig(body) {
   });
   if (!r.ok) return { ok: false, error: await r.text() };
   return { ok: true, config: (await r.json())?.[0] };
+}
+
+// ── Atlas v2 · validate_existing ─────────────────────────────────────────────
+// POST /api/atlas?action=validate_existing
+// Runs the quality gate retroactively against pending_approval drafts.
+// Drafts that fail (have error-severity issues) are moved to needs_revision.
+async function validateExistingDrafts(body) {
+  const statuses = body?.statuses || ['pending_approval'];
+  const statusFilter = statuses.map(s => `status=eq.${s}`).join('&');
+  const drafts = await sbSelect('psnm_atlas_drafts',
+    `or=(${statuses.map(s => `status.eq.${s}`).join(',')})&order=created_at.desc&limit=200&select=id,subject,body,framework_annotations,status`);
+  if (!drafts?.length) return { ok: true, checked: 0, moved_to_revision: 0 };
+
+  let moved = 0;
+  const results = [];
+
+  for (const draft of drafts) {
+    const validation = validateDraft({ subject: draft.subject, body: draft.body });
+    if (!validation.pass) {
+      const existingAnnotations = (() => {
+        try { return typeof draft.framework_annotations === 'string' ? JSON.parse(draft.framework_annotations) : (draft.framework_annotations || []); }
+        catch { return []; }
+      })();
+      const mergedAnnotations = Array.isArray(existingAnnotations)
+        ? { atlas_annotations: existingAnnotations, validation_issues: validation.issues }
+        : { ...existingAnnotations, validation_issues: validation.issues };
+
+      await sbUpdate('psnm_atlas_drafts', { id: draft.id }, {
+        status: 'needs_revision',
+        framework_annotations: mergedAnnotations,
+      });
+      moved++;
+      results.push({ id: draft.id, subject: draft.subject, issues: validation.issues.filter(i => i.severity === 'error').map(i => i.rule) });
+    } else {
+      results.push({ id: draft.id, subject: draft.subject, pass: true, warnings: validation.issues.length });
+    }
+  }
+
+  return { ok: true, checked: drafts.length, moved_to_revision: moved, results };
 }
 
 // ── social posts · manual trigger + Make.com webhook target ─────────────────
@@ -1618,6 +1681,7 @@ module.exports = async function handler(req, res) {
     if (action === 'get_drafts' && req.method === 'GET')         return res.status(200).json(await getDrafts(req));
     if (action === 'get_atlas_config' && req.method === 'GET')   return res.status(200).json({ ok: true, config: await getAtlasConfig() });
     if (action === 'update_atlas_config' && req.method === 'POST') return res.status(200).json(await updateAtlasConfig(body));
+    if (action === 'validate_existing' && req.method === 'POST')  return res.status(200).json(await validateExistingDrafts(body));
     if (action === 'strategy_doc' && req.method === 'GET') return res.status(200).json(await getStrategyDoc(req));
     // WhichWarehouse inbound leads
     if (action === 'get_ww_leads' && req.method === 'GET')          return res.status(200).json(await getWWLeads(req));
