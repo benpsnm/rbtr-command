@@ -177,6 +177,18 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ---
 
+## Phase 2 — Locked Copy (build when ready)
+
+### Insolvency rescue outreach (NOT YET BUILT)
+- **Subject:** `Stock with [failed_company]? — rapid onboarding available`
+- **Body framing:** calm, professional, can-help. No specific time promises.
+  - Use: "we can move fast — typically 3-5 working days from contract signed"
+  - Do NOT use: "48hr rescue", "48-hour", "same-week start"
+  - Tone: "You need a fast, reliable solution. We've done this before. Here's how quickly we can move."
+- **When:** triggered by Companies House dissolution/insolvency event in harvest feed
+
+---
+
 ## Atlas v2 Deferred (Week 2)
 
 - Touches 2–5 (LinkedIn DM, phone script, follow-up email, decision call)

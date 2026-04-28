@@ -1427,7 +1427,7 @@ Write a reply that:
 - Reframes why we're worth considering despite the distance:
   * We're on the M18/M1/A1 corridor — excellent outbound logistics reach
   * Lower cost per pallet than southern warehouses (quote the actual price)
-  * Free collection from them within 48 hours of signing
+  * Onboarding typically 3-5 working days from contract signed (subject to haulier availability)
 - Shows the quote clearly
 - Keeps it short — don't oversell, let the numbers do it
 ${amazon ? '- Also mention we are close to Amazon MCO1/MCO3 fulfilment hubs (Doncaster area)' : ''}`;

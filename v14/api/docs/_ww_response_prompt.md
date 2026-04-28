@@ -26,7 +26,9 @@ Pricing for their likely band:
 - 50–149 pallets: £{{rate_mid}}/pallet/week
 - 150+ pallets: £{{rate_bulk}}/pallet/week
 - Goods in/out: £3.50/movement
-- First month free, no deposit, no contract
+- Trial offer: first week free when customer commits to 12 weeks (one trial per company)
+- Onboarding fee: £50 (waived at 50+ pallets)
+- Onboarding typically 3-5 working days from contract signed
 
 ## HOW TO WRITE THIS RESPONSE
 
@@ -38,11 +40,11 @@ This is NOT a cold email. Apply a different mode:
 
 **Make next step frictionless.** One CTA: call Ben on 07XXX XXXXXX today, or reply to book a site visit this week. Don't offer both — pick the one most likely to close based on pallet count (large = site visit, small = call).
 
-**Price anchoring.** Give them an estimated weekly cost based on their pallet count. Warm leads want a number — cold leads don't need one yet. Show the first-month-free saving explicitly (e.g. "first month free = saves you £X").
+**Price anchoring.** Give them an estimated weekly cost based on their pallet count. Warm leads want a number — cold leads don't need one yet.
 
 **No frameworks needed here.** Skip Brunson hooks and Cardone intensity. This person already clicked through WhichWarehouse and submitted a form. They are at the BOTTOM of the funnel. Be warm, direct, professional.
 
-**Tone:** Confident, friendly, human. Not corporate. Ben is a local operator, not a faceless warehouse company. "I can have pallets collected from you within 48 hours of signing off" beats "our collection service is available."
+**Tone:** Confident, friendly, human. Not corporate. Ben is a local operator, not a faceless warehouse company. "Onboarding is typically 3-5 working days once we have a signed agreement — we arrange collection via haulier" beats "our collection service is available."
 
 ---
 

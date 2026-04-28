@@ -21,13 +21,16 @@ Perceived likelihood: {{perceived_likelihood}}
 Time & effort: {{time_effort}}
 Risk reversal: {{risk_reversal}}
 
+Trial offer: {{headline}}
+Trial terms: Free storage week 1 with 12-week minimum contract. Goods-in/out charged at standard £3.50/pallet during trial. One trial per company. Walk-away conversation at day 5 — week 2 doesn't bill if they leave.
+Storage is ambient only.
+
 Pricing:
 - 1–49 pallets: £{{rate_small}}/pallet/week
 - 50–149 pallets: £{{rate_mid}}/pallet/week
 - 150+ pallets: £{{rate_bulk}}/pallet/week
 - Goods in/out: £3.50/movement
-- Onboarding fee: £50 (waived at 50+ pallets)
-- Free first month. No deposit. No contract.
+- Onboarding fee: £50 (waived at 50+ pallets on 12-week+ commitment)
 
 ---
 
@@ -51,9 +54,9 @@ The value equation: Value = (Dream Outcome × Perceived Likelihood) ÷ (Time Del
 
 Your email must:
 - State the dream outcome clearly and specifically (use the offer's dream_outcome — adapt it to this prospect's industry context)
-- Increase perceived likelihood (free first month = zero-risk proof; site visits available; no contract)
-- Eliminate perceived time delay (48-hour pallet collection; same-week start; no paperwork)
-- Eliminate perceived effort & sacrifice (we handle the logistics; no deposit; cancel with 30 days notice)
+- Increase perceived likelihood (first week free = proof before commitment; site visits available; "1 in 4 prospects we offer this to convert within the trial week" — use this if it fits)
+- Eliminate perceived time delay (onboarding typically 3-5 working days from contract signed; no paperwork; we arrange collection)
+- Eliminate perceived effort & sacrifice (we handle the logistics; 30 days notice to cancel after initial 12 weeks; walk away at day 5 if it's not right)
 
 Do NOT mention the price until you have established the value. Price is the last thing, or left for the next touch.
 
@@ -64,7 +67,7 @@ Structure:
 - Character (hero): the prospect, dealing with the external problem (overflow, space, cost of renting more space)
 - Problem: external (running out of space, peak season pressure), internal (anxiety, distraction), philosophical (the waste of paying for fixed warehouse when you have variable needs)
 - Guide (us): we've done this before; 1,602 spaces; customers like [generalise — "South Yorkshire manufacturers"]; we understand their pain
-- Plan: 3-step (1. Contact us, 2. We collect your pallets in 48h, 3. You access them 24/7 with zero staff overhead)
+- Plan: 3-step (1. Contact us, 2. We handle collection and onboarding — typically 3-5 working days, 3. You access them 24/7 with zero staff overhead)
 - Call to action: specific and direct (see Kennedy below)
 - Success vision: what their life looks like when this is solved
 - Failure to avoid: the cost of NOT acting (missed peak demand, paying for space they only need part-time, competitor taking the space)
@@ -72,7 +75,7 @@ Structure:
 ### 3. BRUNSON HOOK / STORY / OFFER (Russell Brunson — DotCom Secrets)
 - HOOK: one sentence that earns the read. Specific to their industry or location. Not generic. Pattern interrupt.
 - STORY: brief (2–3 sentences). Something real about PSNM that builds credibility and relatability. The 'why we exist' beats the 'what we do'.
-- OFFER: the irresistible offer, framed as a specific proposition — not just "we do storage". Use the free-first-month + specific pallet count structure.
+- OFFER: the irresistible offer, framed as a specific proposition — not just "we do storage". Use the trial offer (first week free, 12-week commitment) + specific pallet count estimate.
 
 ### 4. KENNEDY DIRECT RESPONSE (Dan Kennedy — The Ultimate Sales Letter)
 - Single clear next step (do NOT give them multiple options — confusion = inaction)
@@ -102,7 +105,7 @@ Return ONLY valid JSON, no markdown wrapper, no explanation outside the JSON:
 
 {
   "subject": "one specific, curiosity-earning subject line — not generic, not clickbait",
-  "body": "the full email as a string with \\n for line breaks. Plain text only. No HTML. Sign off as Ben Greenwood, Founder — Pallet Storage Near Me, Hellaby S66 8HR. Tel: 07XXX XXXXXX (use placeholder).",
+  "body": "the full email as a string with \\n for line breaks. Plain text only. No HTML. Sign off EXACTLY as follows (replace 07XXX XXXXXX with actual number):\n\nBen Greenwood\nFounder — Pallet Storage Near Me\nHellaby, Rotherham S66 8HR\nTel: 07XXX XXXXXX\nsales@palletstoragenearme.co.uk\npalletstoragenearme.co.uk",
   "framework_annotations": [
     {"framework": "Hormozi", "where_in_email": "opening paragraph", "rationale": "brief note on what Hormozi element was used and why"},
     {"framework": "StoryBrand", "where_in_email": "para 2", "rationale": "..."},
@@ -123,6 +126,13 @@ Return ONLY valid JSON, no markdown wrapper, no explanation outside the JSON:
 - Never mention competitors by name.
 - Never make promises you can't keep. Stick to the offer facts.
 - The subject line must be under 60 characters and earn a click.
+- **NEVER write "no deposit" or "zero deposit"** — not part of our current offer.
+- **NEVER write "48-hour", "48 hours", "same-week start", or "next-day"** for collection/onboarding. Correct phrase: "typically 3-5 working days from contract signed".
+- **NEVER state or imply specific competitor prices** (e.g. "Midlands rates run £4.50–5.50"). Use "competitive central UK pricing" or similar soft claims only.
+- **NEVER write "less than a daily coffee"** or similar trivialising comparisons.
+- If a prospect asks for a direct price comparison: suggest "happy to compare against your current setup — send me your latest invoice and I'll show you the specific savings."
+- **SIGN-OFF IS MANDATORY AND EXACT** — every email must end with all six lines:
+  Ben Greenwood / Founder — Pallet Storage Near Me / Hellaby, Rotherham S66 8HR / Tel: [number] / sales@palletstoragenearme.co.uk / palletstoragenearme.co.uk
 - confidence_score: your honest assessment of how well this draft applies all 6 frameworks AND how likely it is to get a reply from a cold prospect. 80+ means you'd send it yourself. Below 60 means something is off — explain in the annotation.
 
 ---

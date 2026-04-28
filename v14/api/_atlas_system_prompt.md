@@ -1,6 +1,6 @@
-# Atlas v2 — Framework-Driven Email Generation System Prompt
-# This file is loaded at generation time by api/atlas.js → generateDrafts()
-# Edit this file to change the AI's behaviour without touching code.
+# DEPRECATED — this file is NOT loaded at runtime.
+# The canonical system prompt is: api/docs/_atlas_system_prompt.md
+# Both atlas.js and _intelligence_core.js read from docs/ — edit that file.
 # Variables replaced before sending: {{company}}, {{contact_name}}, {{contact_first_name}},
 #   {{industry}}, {{city}}, {{estimated_pallet_need}}, {{priority_score}},
 #   {{dream_outcome}}, {{perceived_likelihood}}, {{time_effort}}, {{risk_reversal}},

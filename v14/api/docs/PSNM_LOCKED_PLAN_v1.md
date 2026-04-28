@@ -22,11 +22,11 @@ Goal: reach break-even by June 2026. Then grow to 80%+ occupancy (1,282 pallets)
 
 **Dream outcome**: Your overflow stock stored, tracked, accessible 24/7 — off your premises, off your headcount, off your mind.
 
-**Perceived likelihood**: First month free. See it work. If pallet access isn't faster than your current warehouse, we refund everything and help you find somewhere better.
+**Perceived likelihood**: First week free on 12-week commitment. 1 in 4 prospects we offer this to convert within the trial week. We don't offer it lightly.
 
-**Time & effort**: Pallets collected from you within 48 hours. Monthly rolling. 14 days notice to cancel. Zero paperwork to start.
+**Time & effort**: Onboarding typically 3-5 working days from contract signed (subject to third-party haulier availability). 30 days notice to cancel after initial 12 weeks. Zero paperwork to start.
 
-**Risk reversal**: We take the risk, not you. Free first month. No deposit. Walk away any time in month 2.
+**Risk reversal**: Try us for a week with real product moving. If we're not faster and cleaner than your current setup, walk away — week 2 doesn't bill.
 
 **Pricing**:
 - 1–49 pallets: £3.95/pallet/week

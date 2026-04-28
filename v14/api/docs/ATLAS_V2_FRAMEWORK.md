@@ -21,9 +21,9 @@ Value = (Dream Outcome × Perceived Likelihood) ÷ (Time Delay × Effort & Sacri
 
 The PSNM offer is engineered to score maximum on this equation:
 - Dream outcome: overflow stock managed, accessible 24/7, off premises and off headcount
-- Perceived likelihood: free first month (zero-risk proof of concept)
-- Time delay: 48-hour collection, same-week start
-- Effort & sacrifice: no deposit, no contract, no paperwork, we collect
+- Perceived likelihood: first week free on 12-week commitment (proof before commitment; "1 in 4 convert in the trial week")
+- Time delay: onboarding typically 3-5 working days from contract signed; we arrange collection
+- Effort & sacrifice: no contract beyond initial 12 weeks, no paperwork, we collect
 
 Every Atlas email leads with the value equation, not the price.
 
