@@ -818,7 +818,7 @@ function parseWWEmail(subject, textBody) {
     contact_name:  extract(/contact(?:\s+name)?[:\s]+(.+)/i, /name[:\s]+(.+)/i),
     contact_email: extract(/e[- ]?mail[:\s]+(.+)/i) || emailMatch?.[1] || null,
     contact_phone: extract(/(?:phone|tel(?:ephone)?|mobile)[:\s]+(.+)/i) || phoneMatch?.[1] || null,
-    pallet_count:  (() => { const m = t.match(/(\d+)\s*pallets?/i) || t.match(/pallets?[:\s]+(\d+)/i); return m ? parseInt(m[1]) : null; })(),
+    pallet_count:  (() => { const m = t.match(/pallets?[^:\d]*:\s*(\d+)/i) || t.match(/(\d+)[^\S\n]+pallets?/i); return m ? parseInt(m[1]) : null; })(),
     location:      extract(/location[:\s]+(.+)/i, /postcode[:\s]+(.+)/i, /area[:\s]+(.+)/i, /city[:\s]+(.+)/i, /town[:\s]+(.+)/i),
     goods_type:    extract(/goods(?:\s+type)?[:\s]+(.+)/i, /product[s]?[:\s]+(.+)/i, /storage(?:\s+type)?[:\s]+(.+)/i, /items?[:\s]+(.+)/i),
     start_date:    extract(/start(?:\s+date)?[:\s]+(.+)/i, /required(?:\s+from)?[:\s]+(.+)/i, /needed(?:\s+from)?[:\s]+(.+)/i),
@@ -889,6 +889,9 @@ async function inboundEmail(req) {
       body: JSON.stringify({ chat_id: chatId, text: lines, parse_mode: 'HTML', disable_web_page_preview: true }),
     });
     telegramOk = (await tg.json().catch(() => ({}))).ok;
+    if (telegramOk && leadId) {
+      await sbUpdate('psnm_ww_leads', { id: leadId }, { telegram_alerted: true }).catch(() => null);
+    }
   }
 
   return { ok: true, lead_id: leadId, source, parsed, telegram_alerted: telegramOk };

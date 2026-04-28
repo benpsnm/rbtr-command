@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (Atlas v2 — full operational build deployed)
+# Last updated: 2026-04-28 (WW lead integration shipped)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -90,10 +90,11 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 - **Project ref**: `mpxgyobotiqcawmqlhbf`
 - **WMS table**: `psnmwhm_store` (RLS disabled, anon key, single-row warehouse state)
-- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`
+- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`, `psnm_ww_leads`
 - **All pipeline tables**: anon SELECT policy `USING (true)` active
 - **psnm_atlas_drafts**: stores generated email drafts (status: pending_approval → approved/rejected → sent/failed)
 - **psnm_atlas_config**: single row `id='main'`, daily_send_limit=50, paused=false, tone_mix='balanced'
+- **psnm_ww_leads**: WhichWarehouse inbound leads (status: new → contacted → converted/lost). Populated by POST /api/atlas?action=inbound_email (SendGrid Inbound Parse webhook). Auth: SENDGRID_INBOUND_SECRET query param (bypasses x-rbtr-auth). WMS Intelligence tab surfaces leads with warm response generator.
 
 ## Vercel Environment Variables (production)
 
@@ -109,13 +110,15 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | RBTR_AUTH_TOKEN | Atlas API auth |
 | ANTHROPIC_API_KEY | AI features |
 | ELEVENLABS_API_KEY | Voice (rotation pending — sk_2932... exposed) |
+| SENDGRID_INBOUND_SECRET | WW webhook auth (optional — graceful bypass if unset) |
 
 ## Integrations (live as of 2026-04-28)
 
-- **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch
-- **Telegram**: booking alerts + daily 7am brief → TELEGRAM_CHAT_ID=8669062243
-- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief (opinionated ops briefing)
+- **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch + WW inbound parse (DNS pending Monday)
+- **Telegram**: booking alerts + daily 7am brief + WW lead alerts → TELEGRAM_CHAT_ID=8669062243
+- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief + WW warm response generation
 - **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
+- **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
 
 ## Atlas v2 Deferred (Week 2)
 
@@ -129,6 +132,9 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 ## TODO (Ben actions only)
 
 1. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
+2. **Monday**: SendGrid Inbound Parse DNS — add MX record for `inbound.palletstoragenearme.co.uk` → `mx.sendgrid.net`, configure webhook to `https://rbtr-jarvis.vercel.app/api/atlas?action=inbound_email&secret=YOUR_SECRET`
+3. **Monday**: WhichWarehouse account — change lead delivery email to `leads@inbound.palletstoragenearme.co.uk`
+4. **Monday**: Add `SENDGRID_INBOUND_SECRET` to Vercel prod env vars
 
 ---
 
@@ -146,6 +152,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-28 AM | PWA manifest + branded icons (installable as Mac/iPhone app) |
 | 2026-04-28 AM | Daily General's Brief — AI-generated ops brief replacing basic stats (fires 07:00 BST) |
 | 2026-04-28 AM | Test data cleared — clean baseline for launch. Zero occupancy snapshot seeded (1602 capacity, 912 BE). |
+| 2026-04-28 PM | WW lead integration shipped — psnm_ww_leads table live, inbound_email endpoint deployed, parser smoke tested (PASS). DNS+Parse config pending Monday. |
 
 ---
 
