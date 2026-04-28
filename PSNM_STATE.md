@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (WW lead integration shipped)
+# Last updated: 2026-04-28 (WAM auto-quote pipeline shipped)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -95,6 +95,9 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **psnm_atlas_drafts**: stores generated email drafts (status: pending_approval → approved/rejected → sent/failed)
 - **psnm_atlas_config**: single row `id='main'`, daily_send_limit=50, paused=false, tone_mix='balanced'
 - **psnm_ww_leads**: WhichWarehouse inbound leads (status: new → contacted → converted/lost). Populated by POST /api/atlas?action=inbound_email (SendGrid Inbound Parse webhook). Auth: SENDGRID_INBOUND_SECRET query param (bypasses x-rbtr-auth). WMS Intelligence tab surfaces leads with warm response generator.
+  - **WAM path**: `source='whichwarehouse_wam'`. Detected by `WW-XXXX` + `whichwarehouse member` in body. All WAM-specific fields stored as JSON in `notes` column (keys: wam, ww_reference, opportunity_tier, product_nature, storage_only, duration_type, duration_weeks, brief_overview, pallet_weight_kg, pallet_volume_m3, origin_port, amazon_mention, parse_confidence, parse_flags, pallet_count_exact, quote). Quote auto-calculated by `api/_quote_calc.js` at ingest time.
+  - **Direct path**: `source='whichwarehouse'` or `'email_inbound'`. notes = raw text (2000 char). No auto-quote.
+  - **Scenario routing** (for generate_ww_response): blocked → hazmat triage; awkward_data → clarifying Q; location_mismatch → distance reframe; port_pressure → direct-from-port pitch; happy_path → full quote email.
 
 ## Vercel Environment Variables (production)
 
@@ -119,6 +122,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief + WW warm response generation
 - **Social posts**: 12 posts seeded in psnm_social_posts, Make.com not yet wired
 - **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
+- **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
 
 ## Atlas v2 Deferred (Week 2)
 
@@ -153,6 +157,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 | 2026-04-28 AM | Daily General's Brief — AI-generated ops brief replacing basic stats (fires 07:00 BST) |
 | 2026-04-28 AM | Test data cleared — clean baseline for launch. Zero occupancy snapshot seeded (1602 capacity, 912 BE). |
 | 2026-04-28 PM | WW lead integration shipped — psnm_ww_leads table live, inbound_email endpoint deployed, parser smoke tested (PASS). DNS+Parse config pending Monday. |
+| 2026-04-28 PM | WAM auto-quote pipeline shipped — parser + `_quote_calc.js` + scenario engine + WMS UI (quote panel, RH&D clipboard, source filter). 4/4 smoke tests PASS. |
 
 ---
 
