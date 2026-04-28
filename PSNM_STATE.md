@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (Prospect Intelligence Engine built)
+# Last updated: 2026-04-28 EOD (Atlas v2.0 locked, quality gate live, Phase 1 intelligence in production)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -177,15 +177,25 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ---
 
-## Phase 2 — Locked Copy (build when ready)
+## Phase 2 — TOMORROW'S FIRST TASK (29 Apr 2026)
 
-### Insolvency rescue outreach (NOT YET BUILT)
+**Estimated build time: 75–90 min. Both feeds into existing locked template + validator.**
+
+### 2a. Insolvency monitor (Gazette scraping) — NOT YET BUILT
+- **Trigger**: Companies House dissolution/insolvency event in harvest feed OR London Gazette scrape
 - **Subject:** `Stock with [failed_company]? — rapid onboarding available`
 - **Body framing:** calm, professional, can-help. No specific time promises.
   - Use: "we can move fast — typically 3-5 working days from contract signed"
   - Do NOT use: "48hr rescue", "48-hour", "same-week start"
   - Tone: "You need a fast, reliable solution. We've done this before. Here's how quickly we can move."
-- **When:** triggered by Companies House dissolution/insolvency event in harvest feed
+- **Pipeline:** Gazette event → harvest → score → enrich → Atlas dispatch (validator-gated)
+- **Key rule:** These are distressed prospects. No manufactured urgency. Real help, real speed, honest timing.
+
+### 2b. Defence supplier ingestion — NOT YET BUILT
+- **Source:** Public defence supplier directories (MOD supplier list, DPRTE exhibitors, ADS members)
+- **Pipeline:** Directory scrape → normalise → score (use existing A/B/C framework) → enrich → Atlas dispatch
+- **Note:** These are sophisticated B2B buyers. Holmes Dream 100 tone at max. Peer treatment. No tricks.
+- **Key rule:** Same locked template, same validator, same sign-off. No new offer elements without a template unlock.
 
 ---
 
@@ -230,11 +240,19 @@ Every draft is validated before entering the approval queue. Drafts with any err
 - `_intelligence_core.js` `scoreAndDispatch()` — same
 - `atlas.js` `validateExistingDrafts()` — retroactive scan
 
-### Cron behaviour
+### Cron behaviour — ARMED for 29 Apr 2026
 
-- **06:00 daily**: `intel_harvest_daily` — harvests new CH company registrations into `psnm_intelligence_prospects`. **Does NOT auto-generate drafts.**
-- **Draft generation**: manual only via WMS Intelligence tab → "Generate Drafts" button or `POST /api/atlas?action=intel_dispatch`
-- **Dispatch**: manual only via WMS Intelligence tab → "Dispatch Approved" (or individual approve buttons)
+| Time | Job | What it does |
+|------|-----|--------------|
+| 06:00 | `intel_harvest_daily` | Companies House: last 2 days new incorporations → `psnm_intelligence_prospects` |
+| 06:00 | `cron-morning-brief` | AI-generated General's Brief → Telegram (occupancy, pipeline, weather, priorities) |
+| After harvest | Auto-enrichment | Claude enriches all unenriched A/B prospects (email, hook, industry) |
+| After enrichment | Auto-dispatch (top 10 A-tier) | `scoreAndDispatch()` → validator-gated → `pending_approval` or `needs_revision` |
+| On >3 dispatch failures | Telegram alert | `sendTelegramAlert()` fires with failure list |
+
+**Draft generation**: manual via WMS Intelligence tab → "Generate Drafts" button OR auto via intel_dispatch cron
+**Dispatch**: manual only — Ben approves in WMS before any email sends
+**Nothing fires without approval** — validator is gate 1, Ben is gate 2
 
 ---
 
@@ -277,6 +295,15 @@ Every draft is validated before entering the approval queue. Drafts with any err
 | 2026-04-28 PM | WW lead integration shipped — psnm_ww_leads table live, inbound_email endpoint deployed, parser smoke tested (PASS). DNS+Parse config pending Monday. |
 | 2026-04-28 PM | WAM auto-quote pipeline shipped — parser + `_quote_calc.js` + scenario engine + WMS UI (quote panel, RH&D clipboard, source filter). 4/4 smoke tests PASS. |
 | 2026-04-28 PM | SendGrid Inbound Parse infrastructure ready — SENDGRID_INBOUND_SECRET live in Vercel, secret gate verified. Ben's manual config (DNS + SendGrid + filter) documented at ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md. |
+| 2026-04-28 PM | **Atlas v2.0 template locked** — POO-CH POUCH approved as canonical reference email. System prompt marked v2.0 LOCKED. Reference: `v14/api/docs/_atlas_v2_reference_email.md`. |
+| 2026-04-28 PM | **Copy calibration complete (5 iterations)** — Removed: "1 in 4" stat, "30% dispatch reduction", "population-weighted centre", "zero paperwork", "no deposit", "real facility/despatch", "48-hour", "same-week start", competitor rate benchmarks. Post-processing enforcement layer added to `generateDraftViaAtlas()`. |
+| 2026-04-28 PM | **Quality gate deployed** — `_draft_validator.js`: 10 forbidden rules (hard errors), 9 required checks, voice-drift heuristics. Integrated into `atlas.js` generateDrafts() + `_intelligence_core.js` scoreAndDispatch(). WMS Outreach Queue gains Pending/Needs Revision/Approved tabs with per-issue display. Retroactive scan: 5/6 stale 48h drafts moved to needs_revision. POO-CH POUCH: 0 errors, 0 warnings. |
+| 2026-04-28 PM | **Intelligence Engine Phase 1 live** — 44 prospects (A:3 B:24 C:17). Harvest/score/enrich/dispatch all working. Postcode region mapping fixed (11 records). C-tier scoring fixed (days_back:1095). COMPANIES_HOUSE_API_KEY live in Vercel. |
+| 2026-04-28 PM | **Morning automation armed** — 06:00 cron: harvest → enrich → auto-dispatch top 10 A-tier (validator-gated). Telegram alert on >3 failures. General's Brief at 06:00. |
+| 2026-04-28 PM | **Trial offer locked across all surfaces** — quote.html, terms.html, psnm_offer_config, _atlas_system_prompt.md, outreach hooks, _ww_response_prompt.md all updated. Retired: "free first month / no deposit / no contract." |
+| 2026-04-28 PM | **Buffer connected** — PSNM Facebook + Instagram live on Buffer (free tier, sales@). 12 posts seeded. Make.com wire: tomorrow. |
+| 2026-04-28 PM | **Business fundamentals** — VAT registered. NatWest Business account active. Landlord conversation positive. |
+| 2026-04-28 EOD | **Phase 2 scoped** — Insolvency monitor (Gazette scraping) + Defence supplier ingestion. Both deferred to 29 Apr 2026. Est. 75–90 min build. |
 
 ---
 
