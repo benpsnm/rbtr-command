@@ -799,6 +799,209 @@ async function getStrategyDoc(req) {
   }
 }
 
+// ── WhichWarehouse inbound lead integration ──────────────────────────────────
+// HTML-escape helper (shared with General's Brief in cron-morning-brief.js)
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function parseWWEmail(subject, textBody) {
+  const t = (textBody || '').replace(/\r\n/g, '\n');
+  const extract = (...patterns) => {
+    for (const p of patterns) { const m = t.match(p); if (m?.[1]) return m[1].trim(); }
+    return null;
+  };
+  const emailMatch = t.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
+  const phoneMatch = t.match(/(\+?[\d][\d\s\-().]{8,15}\d)/);
+  return {
+    company:       extract(/company[:\s]+(.+)/i, /business[:\s]+(.+)/i, /organisation[:\s]+(.+)/i),
+    contact_name:  extract(/contact(?:\s+name)?[:\s]+(.+)/i, /name[:\s]+(.+)/i),
+    contact_email: extract(/e[- ]?mail[:\s]+(.+)/i) || emailMatch?.[1] || null,
+    contact_phone: extract(/(?:phone|tel(?:ephone)?|mobile)[:\s]+(.+)/i) || phoneMatch?.[1] || null,
+    pallet_count:  (() => { const m = t.match(/(\d+)\s*pallets?/i) || t.match(/pallets?[:\s]+(\d+)/i); return m ? parseInt(m[1]) : null; })(),
+    location:      extract(/location[:\s]+(.+)/i, /postcode[:\s]+(.+)/i, /area[:\s]+(.+)/i, /city[:\s]+(.+)/i, /town[:\s]+(.+)/i),
+    goods_type:    extract(/goods(?:\s+type)?[:\s]+(.+)/i, /product[s]?[:\s]+(.+)/i, /storage(?:\s+type)?[:\s]+(.+)/i, /items?[:\s]+(.+)/i),
+    start_date:    extract(/start(?:\s+date)?[:\s]+(.+)/i, /required(?:\s+from)?[:\s]+(.+)/i, /needed(?:\s+from)?[:\s]+(.+)/i),
+  };
+}
+
+// POST /api/atlas?action=inbound_email — SendGrid Inbound Parse webhook target.
+// Auth: SENDGRID_INBOUND_SECRET query param (bypasses x-rbtr-auth since SG has no custom headers).
+async function inboundEmail(req) {
+  const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
+  const secret = process.env.SENDGRID_INBOUND_SECRET;
+  if (secret && url.searchParams.get('secret') !== secret) return { ok: false, error: 'invalid webhook secret' };
+
+  const body = req.body || {};
+  const from = String(body.from || '');
+  const subject = String(body.subject || '').slice(0, 500);
+  const rawText = String(body.text || '').replace(/<[^>]+>/g, ' ');
+  const rawHtml = String(body.html || '');
+  const text = rawText || rawHtml.replace(/<[^>]+>/g, ' ');
+
+  const parsed = parseWWEmail(subject, text);
+
+  // Determine source from sender domain
+  const source = /whichwarehouse/i.test(from) ? 'whichwarehouse'
+    : /storageseek|storagenet|easystore/i.test(from) ? 'storage_portal'
+    : 'email_inbound';
+
+  const row = {
+    source,
+    company:          parsed.company,
+    contact_name:     parsed.contact_name,
+    contact_email:    parsed.contact_email || (from.match(/<([^>]+)>/)?.[1] || from.split(/\s/)[0] || null),
+    contact_phone:    parsed.contact_phone,
+    pallet_count:     parsed.pallet_count,
+    location:         parsed.location,
+    goods_type:       parsed.goods_type,
+    start_date:       parsed.start_date,
+    notes:            text.slice(0, 2000),
+    raw_subject:      subject,
+    raw_body:         text.slice(0, 5000),
+    status:           'new',
+  };
+
+  const inserted = await sbInsert('psnm_ww_leads', [row]);
+  const leadId = inserted?.[0]?.id;
+
+  // Telegram alert — immediate
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  let telegramOk = false;
+  if (token && chatId) {
+    const lines = [
+      `🔔 <b>NEW ${source === 'whichwarehouse' ? 'WW' : 'INBOUND'} LEAD</b>`,
+      parsed.company    ? `<b>${escHtml(parsed.company)}</b>` : '(company not parsed)',
+      parsed.contact_name ? `Contact: ${escHtml(parsed.contact_name)}` : null,
+      parsed.pallet_count ? `Pallets: <b>${parsed.pallet_count}</b>` : null,
+      parsed.location     ? `Location: ${escHtml(parsed.location)}` : null,
+      parsed.goods_type   ? `Goods: ${escHtml(parsed.goods_type)}` : null,
+      parsed.start_date   ? `Start: ${escHtml(parsed.start_date)}` : null,
+      ``,
+      `📧 Subject: ${escHtml(subject.slice(0, 80))}`,
+      ``,
+      `Review + respond: <i>rbtr-jarvis.vercel.app/wms.html</i> → Intelligence → WW Leads`,
+    ].filter(l => l !== null).join('\n');
+    const tg = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: lines, parse_mode: 'HTML', disable_web_page_preview: true }),
+    });
+    telegramOk = (await tg.json().catch(() => ({}))).ok;
+  }
+
+  return { ok: true, lead_id: leadId, source, parsed, telegram_alerted: telegramOk };
+}
+
+// GET /api/atlas?action=get_ww_leads&status=new&limit=50
+async function getWWLeads(req) {
+  const url = new URL(req.url, `http://${req.headers.host || 'x'}`);
+  const filterStatus = url.searchParams.get('status');
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200);
+  const qs = [
+    filterStatus ? `status=eq.${filterStatus}` : null,
+    `order=received_at.desc`,
+    `limit=${limit}`,
+    `select=id,received_at,source,company,contact_name,contact_email,contact_phone,pallet_count,location,goods_type,start_date,status,notes`,
+  ].filter(Boolean).join('&');
+  const rows = await sbSelect('psnm_ww_leads', qs);
+  const counts = {};
+  for (const s of ['new','contacted','converted','lost']) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_ww_leads?status=eq.${s}&select=id`,
+      { method: 'HEAD', headers: { ...sbHeaders(), Prefer: 'count=exact' } });
+    counts[s] = parseInt((r.headers.get('content-range') || '').split('/')[1]) || 0;
+  }
+  return { ok: true, leads: rows || [], counts };
+}
+
+// POST /api/atlas?action=update_ww_lead  { id, status, notes, ... }
+async function updateWWLead(body) {
+  const { id, ...patch } = body || {};
+  if (!id) return { ok: false, error: 'id required' };
+  const allowed = ['status','notes','contact_name','contact_email','contact_phone','pallet_count','location','response_draft'];
+  const update = {};
+  for (const k of allowed) if (patch[k] !== undefined) update[k] = patch[k];
+  update.updated_at = new Date().toISOString();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/psnm_ww_leads?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify(update),
+  });
+  const rows = await r.json().catch(() => []);
+  return { ok: r.ok, lead: rows?.[0] || update };
+}
+
+// POST /api/atlas?action=generate_ww_response  { lead_id }
+// Warmer, faster cadence than cold outreach — bottom-of-funnel inbound.
+async function generateWWResponse(body) {
+  const { lead_id } = body || {};
+  if (!lead_id) return { ok: false, error: 'lead_id required' };
+
+  const leads = await sbSelect('psnm_ww_leads', `id=eq.${lead_id}&limit=1`);
+  const lead = leads?.[0];
+  if (!lead) return { ok: false, error: 'lead not found' };
+
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const model = process.env.ANTHROPIC_MODEL_DEFAULT || 'claude-sonnet-4-6';
+  if (!anthropicKey) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+
+  const offer = await getOfferConfig();
+  let promptTemplate = null;
+  try { promptTemplate = fs.readFileSync(path.join(__dirname, 'docs/_ww_response_prompt.md'), 'utf8'); }
+  catch (_) {}
+
+  const palletBand = (lead.pallet_count || 0) >= 150 ? 'bulk'
+    : (lead.pallet_count || 0) >= 50 ? 'mid' : 'small';
+  const weeklyEst = lead.pallet_count
+    ? (lead.pallet_count * Number(offer?.[`rate_${palletBand}`] || 3.95)).toFixed(2)
+    : null;
+
+  const sysPrompt = promptTemplate
+    ? promptTemplate
+        .replace(/\{\{company\}\}/g,            lead.company || 'your company')
+        .replace(/\{\{contact_name\}\}/g,        lead.contact_name || 'there')
+        .replace(/\{\{contact_first_name\}\}/g,  (lead.contact_name || '').split(' ')[0] || 'there')
+        .replace(/\{\{pallet_count\}\}/g,         String(lead.pallet_count || 'your enquired'))
+        .replace(/\{\{location\}\}/g,             lead.location || 'your area')
+        .replace(/\{\{goods_type\}\}/g,           lead.goods_type || 'your goods')
+        .replace(/\{\{start_date\}\}/g,           lead.start_date || 'your preferred date')
+        .replace(/\{\{rate_small\}\}/g,           String(offer?.rate_small || '3.95'))
+        .replace(/\{\{rate_mid\}\}/g,             String(offer?.rate_mid   || '3.45'))
+        .replace(/\{\{rate_bulk\}\}/g,            String(offer?.rate_bulk  || '2.95'))
+        .replace(/\{\{headline\}\}/g,             offer?.headline || 'First month free. No deposit. No contract.')
+    : `You are Ben Greenwood, founder of Pallet Storage Near Me (Hellaby, Rotherham S66 8HR).
+Reply warmly and quickly to a WhichWarehouse inbound lead from ${lead.company || 'a prospect'}.
+Contact: ${lead.contact_name || 'unknown'}. Pallets: ${lead.pallet_count || '?'}. Location: ${lead.location || '?'}.
+This is warm inbound — they found us on WhichWarehouse. Respond fast, confirm availability,
+quote ~£${weeklyEst || '?'}/week for their requirement, show first month free saving,
+give one CTA (call or site visit). Under 200 words. No fluff.
+Output JSON: {"subject":"...","body":"...","confidence_score":0-100}`;
+
+  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, max_tokens: 600, system: sysPrompt,
+      messages: [{ role: 'user', content: 'Generate the warm response now.' }] }),
+  });
+
+  if (!aiRes.ok) return { ok: false, error: `Anthropic ${aiRes.status}` };
+  const aiJson = await aiRes.json();
+  const raw = aiJson?.content?.[0]?.text || '';
+  let parsed;
+  try { const m = raw.match(/\{[\s\S]*\}/); parsed = JSON.parse(m?.[0] || raw); }
+  catch (_) { return { ok: false, error: 'JSON parse failed', raw: raw.slice(0, 300) }; }
+
+  // Store the draft on the lead record
+  await sbUpdate('psnm_ww_leads', { id: lead_id }, {
+    response_draft: `SUBJECT: ${parsed.subject}\n\n${parsed.body}`,
+    status: lead.status === 'new' ? 'new' : lead.status,
+    updated_at: new Date().toISOString(),
+  });
+
+  return { ok: true, lead_id, subject: parsed.subject, body: parsed.body, confidence_score: parsed.confidence_score };
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -813,6 +1016,9 @@ module.exports = async function handler(req, res) {
   // book is public — submitted by external visitors
   const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})) : {};
   if (action === 'book' && req.method === 'POST') return res.status(201).json(await bookEnquiry(body));
+
+  // inbound_email: auth via SENDGRID_INBOUND_SECRET query param (not x-rbtr-auth)
+  if (action === 'inbound_email' && req.method === 'POST') return res.status(200).json(await inboundEmail(req));
 
   const auth = checkAuth(req);
   if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }
@@ -838,7 +1044,11 @@ module.exports = async function handler(req, res) {
     if (action === 'get_atlas_config' && req.method === 'GET')   return res.status(200).json({ ok: true, config: await getAtlasConfig() });
     if (action === 'update_atlas_config' && req.method === 'POST') return res.status(200).json(await updateAtlasConfig(body));
     if (action === 'strategy_doc' && req.method === 'GET') return res.status(200).json(await getStrategyDoc(req));
-    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc' });
+    // WhichWarehouse inbound leads
+    if (action === 'get_ww_leads' && req.method === 'GET')          return res.status(200).json(await getWWLeads(req));
+    if (action === 'update_ww_lead' && req.method === 'POST')       return res.status(200).json(await updateWWLead(body));
+    if (action === 'generate_ww_response' && req.method === 'POST') return res.status(200).json(await generateWWResponse(body));
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });

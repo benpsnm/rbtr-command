@@ -3806,6 +3806,27 @@ Pallet Storage Near Me
     <div id="intel-enquiries"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   </div>
 
+  <!-- WhichWarehouse Inbound Leads -->
+  <div class="card" id="ww-leads-card">
+    <div class="ct">
+      📨 WhichWarehouse Leads
+      <span class="bdg bg2" id="ww-new-count" style="margin-left:4px"></span>
+      <div class="flex mla" style="gap:6px">
+        <button class="btn sm bghost" onclick="loadWWLeads()">↻</button>
+      </div>
+    </div>
+    <div id="ww-leads-list"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+
+  <!-- WW Lead Side Panel -->
+  <div id="ww-lead-panel" style="display:none;position:fixed;top:0;right:0;width:380px;height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:200;overflow-y:auto;padding:20px">
+    <div class="flex" style="margin-bottom:16px">
+      <div class="st" id="ww-panel-company">Lead</div>
+      <button class="btn sm bghost mla" onclick="closeWWPanel()">✕</button>
+    </div>
+    <div id="ww-panel-body"></div>
+  </div>
+
   <!-- Leads Browser -->
   <div class="card">
     <div class="ct">
@@ -4543,8 +4564,108 @@ async function loadIntelligence() {
     document.getElementById('intel-ts').textContent = 'Error: ' + e.message;
     toast('Intelligence load error: ' + e.message, true);
   }
-  // Load Atlas-specific sections
-  await Promise.allSettled([loadAtlasQueue(), loadLeadsBrowser()]);
+  // Load Atlas-specific sections + WW leads
+  await Promise.allSettled([loadAtlasQueue(), loadLeadsBrowser(), loadWWLeads()]);
+}
+
+// ── WhichWarehouse Leads ────────────────────────────────────────────────────
+async function loadWWLeads() {
+  const el = document.getElementById('ww-leads-list');
+  const badge = document.getElementById('ww-new-count');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--muted);font-size:12px">Loading…</span>';
+  try {
+    const r = await fetch('/api/atlas?action=get_ww_leads&limit=20', { headers: { 'x-rbtr-auth': RBTR_AUTH_TOKEN } });
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`; return; }
+    const newCount = d.counts?.new || 0;
+    if (badge) badge.textContent = newCount > 0 ? `${newCount} new` : '';
+    if (!d.leads?.length) {
+      el.innerHTML = '<span style="color:var(--muted);font-size:12px">No WW leads yet. Configure SendGrid Inbound Parse to start receiving leads.</span>';
+      return;
+    }
+    el.innerHTML = d.leads.map(l => `
+      <div class="company-card${l.status==='new'?' priority':''}" onclick="openWWLead('${l.id}')" style="cursor:pointer;margin-bottom:8px">
+        <div class="flex" style="gap:8px;align-items:center">
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:13px">${l.company||'Unknown company'}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+              ${l.contact_name||''} ${l.contact_name&&l.pallet_count?'·':''} ${l.pallet_count?l.pallet_count+' pallets':''} ${l.location?'· '+l.location:''}
+            </div>
+          </div>
+          <span class="bdg ${l.status==='new'?'brd':l.status==='contacted'?'bbl':l.status==='converted'?'bgr':'bg2'}">${l.status}</span>
+          <span style="font-size:10px;color:var(--muted)">${new Date(l.received_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<span style="color:var(--red)">Load error: ${e.message}</span>`; }
+}
+
+async function openWWLead(id) {
+  const r = await fetch(`/api/atlas?action=get_ww_leads&limit=200`, { headers: { 'x-rbtr-auth': RBTR_AUTH_TOKEN } });
+  const d = await r.json();
+  const lead = d.leads?.find(l => l.id === id);
+  if (!lead) return;
+  const panel = document.getElementById('ww-lead-panel');
+  document.getElementById('ww-panel-company').textContent = lead.company || 'Lead';
+  document.getElementById('ww-panel-body').innerHTML = `
+    <div style="margin-bottom:12px">
+      <div class="fg"><label class="fl">Company</label><input class="inp" id="wwp_company" value="${lead.company||''}"/></div>
+      <div class="fg"><label class="fl">Contact</label><input class="inp" id="wwp_contact" value="${lead.contact_name||''}"/></div>
+      <div class="fg"><label class="fl">Email</label><input class="inp" id="wwp_email" value="${lead.contact_email||''}"/></div>
+      <div class="fg"><label class="fl">Phone</label><input class="inp" id="wwp_phone" value="${lead.contact_phone||''}"/></div>
+      <div class="fg"><label class="fl">Pallets</label><input class="inp" type="number" id="wwp_pallets" value="${lead.pallet_count||''}"/></div>
+      <div class="fg"><label class="fl">Location</label><input class="inp" id="wwp_location" value="${lead.location||''}"/></div>
+      <div class="fg"><label class="fl">Goods</label><input class="inp" id="wwp_goods" value="${lead.goods_type||''}"/></div>
+      <div class="fg"><label class="fl">Start</label><input class="inp" id="wwp_start" value="${lead.start_date||''}"/></div>
+      <div class="fg"><label class="fl">Status</label>
+        <select class="inp" id="wwp_status">
+          ${['new','contacted','converted','lost'].map(s=>`<option${s===lead.status?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Notes</label><textarea class="inp" id="wwp_notes" rows="3">${lead.notes||''}</textarea></div>
+    </div>
+    ${lead.response_draft?`<div class="card" style="background:var(--bg3);margin-bottom:12px"><div class="ct" style="font-size:11px">Draft Response</div><pre style="font-size:11px;white-space:pre-wrap;color:var(--text)">${lead.response_draft}</pre></div>`:''}
+    <div class="flex" style="gap:8px;flex-wrap:wrap">
+      <button class="btn sm bg" onclick="saveWWLead('${id}')">💾 Save</button>
+      <button class="btn sm bghost" onclick="genWWResponse('${id}')">⚡ Generate Response</button>
+      ${lead.contact_email?`<a href="mailto:${lead.contact_email}" class="btn sm bghost">📧 Email</a>`:''}
+      ${lead.contact_phone?`<a href="tel:${lead.contact_phone}" class="btn sm bghost">📞 Call</a>`:''}
+    </div>
+  `;
+  panel.style.display = 'block';
+}
+
+function closeWWPanel() { document.getElementById('ww-lead-panel').style.display = 'none'; }
+
+async function saveWWLead(id) {
+  const body = {
+    id,
+    contact_name:  document.getElementById('wwp_contact')?.value,
+    contact_email: document.getElementById('wwp_email')?.value,
+    contact_phone: document.getElementById('wwp_phone')?.value,
+    pallet_count:  parseInt(document.getElementById('wwp_pallets')?.value)||null,
+    location:      document.getElementById('wwp_location')?.value,
+    notes:         document.getElementById('wwp_notes')?.value,
+    status:        document.getElementById('wwp_status')?.value,
+  };
+  const r = await fetch('/api/atlas?action=update_ww_lead', {
+    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    body:JSON.stringify(body),
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Saved'); loadWWLeads(); }
+  else toast('Save failed: ' + d.error, true);
+}
+
+async function genWWResponse(id) {
+  toast('Generating warm response…');
+  const r = await fetch('/api/atlas?action=generate_ww_response', {
+    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    body:JSON.stringify({ lead_id: id }),
+  });
+  const d = await r.json();
+  if (d.ok) { toast(`Response generated (confidence: ${d.confidence_score}%) — saved to lead`); openWWLead(id); }
+  else toast('Generation failed: ' + d.error, true);
 }
 </script>
 </body>
