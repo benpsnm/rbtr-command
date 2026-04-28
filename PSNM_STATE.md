@@ -1,5 +1,5 @@
 # PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 (social media accounts documented)
+# Last updated: 2026-04-28 (Prospect Intelligence Engine built)
 # Rule: AI tools read this file first before answering anything about PSNM state.
 
 ---
@@ -90,7 +90,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 - **Project ref**: `mpxgyobotiqcawmqlhbf`
 - **WMS table**: `psnmwhm_store` (RLS disabled, anon key, single-row warehouse state)
-- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`, `psnm_ww_leads`
+- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`, `psnm_ww_leads`, `psnm_intelligence_prospects`
 - **All pipeline tables**: anon SELECT policy `USING (true)` active
 - **psnm_atlas_drafts**: stores generated email drafts (status: pending_approval → approved/rejected → sent/failed)
 - **psnm_atlas_config**: single row `id='main'`, daily_send_limit=50, paused=false, tone_mix='balanced'
@@ -123,6 +123,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **Buffer**: PSNM Facebook + Instagram connected (free tier, login: sales@palletstoragenearme.co.uk). 12 posts seeded in psnm_social_posts; posting schedule to be queued. Make.com automation not yet wired.
 - **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
 - **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
+- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily. WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **REQUIRES COMPANIES_HOUSE_API_KEY in Vercel env** (not yet set — see TODO below).
 
 ## Social Media
 
@@ -171,7 +172,8 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ## TODO (Ben actions only)
 
-1. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
+1. **Add COMPANIES_HOUSE_API_KEY to Vercel** — then run first harvest: `curl -X POST 'https://rbtr-jarvis.vercel.app/api/atlas?action=intel_harvest' -H 'x-rbtr-auth: TOKEN' -H 'Content-Type: application/json' -d '{"batch_size":100,"days_back":365}'`. Paste key into `.master_credentials` first.
+2. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
 2. **READY — follow ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md (~13 min, 3 sections):**
    - Section 1: Hostinger DNS — MX record `inbound` → `mx.sendgrid.net` priority 10
    - Section 2: SendGrid Inbound Parse — add `inbound.palletstoragenearme.co.uk`, webhook URL with secret

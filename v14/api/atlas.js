@@ -21,6 +21,7 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'sales@palletstoragenearme.co.uk';
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Near Me';
 const calcQuote = require('./_quote_calc');
+const intelligence = require('./_intelligence_core');
 
 function sbHeaders(extra = {}) {
   const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...extra };
@@ -1556,6 +1557,8 @@ module.exports = async function handler(req, res) {
 
   // inbound_email: auth via SENDGRID_INBOUND_SECRET query param (not x-rbtr-auth)
   if (action === 'inbound_email' && req.method === 'POST') return res.status(200).json(await inboundEmail(req));
+  // intel_harvest_daily: cron-only, no user auth (Vercel cron calls have no headers)
+  if (action === 'intel_harvest_daily' && req.method === 'POST') return res.status(200).json(await intelligence.harvestDaily());
 
   const auth = checkAuth(req);
   if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }
@@ -1587,7 +1590,14 @@ module.exports = async function handler(req, res) {
     if (action === 'update_ww_lead' && req.method === 'POST')       return res.status(200).json(await updateWWLead(body));
     if (action === 'generate_ww_response' && req.method === 'POST') return res.status(200).json(await generateWWResponse(body));
     if (action === 'recompute_ww_quote' && req.method === 'POST')   return res.status(200).json(await recomputeWWQuote(body));
-    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response' });
+    // Intelligence Engine (absorbed from intelligence.js — 12-fn Hobby limit)
+    if (action === 'intel_stats' && req.method === 'GET')               return res.status(200).json(await intelligence.getStats());
+    if (action === 'intel_harvest' && req.method === 'POST')            return res.status(200).json(await intelligence.harvest(body));
+    if (action === 'intel_enrich' && req.method === 'POST')             return res.status(200).json(await intelligence.enrich(body));
+    if (action === 'intel_dispatch' && req.method === 'POST')           return res.status(200).json(await intelligence.scoreAndDispatch(body));
+    if (action === 'intel_prospect' && req.method === 'GET')            return res.status(200).json(await intelligence.getProspect(url.searchParams.get('id')));
+    if (action === 'intel_harvest_daily' && req.method === 'POST')      return res.status(200).json(await intelligence.harvestDaily());
+    res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response|intel_stats|intel_harvest|intel_enrich|intel_dispatch|intel_prospect|intel_harvest_daily' });
   } catch (err) {
     console.error('[atlas]', err);
     res.status(500).json({ error: err.message });

@@ -124,3 +124,34 @@ Return ONLY valid JSON, no markdown wrapper, no explanation outside the JSON:
 - Never make promises you can't keep. Stick to the offer facts.
 - The subject line must be under 60 characters and earn a click.
 - confidence_score: your honest assessment of how well this draft applies all 6 frameworks AND how likely it is to get a reply from a cold prospect. 80+ means you'd send it yourself. Below 60 means something is off — explain in the annotation.
+
+---
+
+## GEOGRAPHIC CENTRE PITCH — Intelligence Engine Prospects
+
+This section applies when the prospect comes from the `psnm_intelligence_prospects` table (trigger signal from the automated harvest system).
+
+### MANDATORY OPENING — use the outreach_hook verbatim
+The prospect record contains an `outreach_hook` field — the specific reason this prospect was flagged. Open the email with this hook, adapted naturally into the first sentence or two.
+
+### GEOGRAPHIC CENTRE ARGUMENT
+Hellaby is approximately the population-weighted centre of Great Britain. This is PSNM's single most powerful and differentiating value proposition. Use it.
+
+Drive times from Hellaby, Rotherham S66 8HR:
+- Glasgow: 4 hours
+- London: 3 hours (via M1)
+- Cardiff: 3.5 hours
+- Felixstowe port: 3 hours (largest UK container port)
+- Liverpool port: 2 hours
+- Southampton port: 4 hours
+
+**ROI framing using Hormozi's Value Equation:**
+- Time saved per dispatch: a company distributing nationally from London adds 30-90 minutes per delivery vs Hellaby
+- Fuel cost: at 45p/mile, an extra 60 miles round-trip = £27/delivery. For a company doing 50 deliveries/month, that's £1,350/month in fuel alone — more than the storage cost
+- One specific drive-time fact must appear in the email body — e.g. "Glasgow is 4 hours from us. From Felixstowe it's 8 hours." Make it concrete.
+
+### SINGLE CTA
+One CTA only: a 15-minute call to discuss their specific logistics setup. No site visit offers, no multiple options. "15-minute call with Ben — 07506 255033 or reply to book a slot."
+
+### TONE
+These are brand-new companies (or young SMEs) who probably haven't found a warehouse yet. Don't position PSNM as an alternative — position it as the obvious first choice before they make the wrong decision. Confident. Helpful. Slightly urgent (but real urgency — their setup decisions are being made now, not later).

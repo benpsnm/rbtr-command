@@ -3806,6 +3806,30 @@ Pallet Storage Near Me
     <div id="intel-enquiries"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   </div>
 
+  <!-- Prospect Intelligence Engine -->
+  <div class="card" id="pip-card">
+    <div class="ct">
+      🔍 Prospect Intelligence Engine
+      <span class="bdg bg2" id="pip-a-count" style="margin-left:4px"></span>
+      <span class="bdg bghost" id="pip-total-count" style="margin-left:4px;font-size:9px"></span>
+      <div class="flex mla" style="gap:6px">
+        <button class="btn sm bghost" onclick="runPipHarvest()" id="pip-harvest-btn">⬇ Harvest</button>
+        <button class="btn sm bghost" onclick="runPipEnrich()" id="pip-enrich-btn">🔎 Enrich</button>
+        <button class="btn sm bgreen" onclick="runPipDispatch()" id="pip-dispatch-btn">▶ Dispatch A-tier</button>
+      </div>
+    </div>
+    <div id="pip-body"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+
+  <!-- Prospect Intelligence Drawer (hidden by default) -->
+  <div id="pip-drawer" style="display:none;position:fixed;top:0;right:0;width:460px;max-width:96vw;height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:200;overflow-y:auto;padding:20px;box-sizing:border-box">
+    <div class="flex" style="margin-bottom:14px">
+      <div class="st" id="pip-drawer-title">Prospect Detail</div>
+      <button class="btn sm bghost mla" onclick="closePipDrawer()">✕ Close</button>
+    </div>
+    <div id="pip-drawer-body"></div>
+  </div>
+
   <!-- WhichWarehouse Inbound Leads -->
   <div class="card" id="ww-leads-card">
     <div class="ct">
@@ -4569,8 +4593,198 @@ async function loadIntelligence() {
     document.getElementById('intel-ts').textContent = 'Error: ' + e.message;
     toast('Intelligence load error: ' + e.message, true);
   }
-  // Load Atlas-specific sections + WW leads
-  await Promise.allSettled([loadAtlasQueue(), loadLeadsBrowser(), loadWWLeads()]);
+  // Load Atlas-specific sections + WW leads + prospect intelligence
+  await Promise.allSettled([loadAtlasQueue(), loadLeadsBrowser(), loadWWLeads(), loadPipStats()]);
+}
+
+// ── Prospect Intelligence Engine ────────────────────────────────────────────
+const PIP_AUTH = { 'Content-Type': 'application/json', 'x-rbtr-auth': RBTR_AUTH_TOKEN };
+
+async function loadPipStats() {
+  const el = document.getElementById('pip-body');
+  try {
+    const r = await fetch('/api/atlas?action=intel_stats', { headers: PIP_AUTH });
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed'}</span>`; return; }
+    const { counts, recent } = d;
+
+    document.getElementById('pip-a-count').textContent = counts.A ? `A: ${counts.A}` : '';
+    document.getElementById('pip-total-count').textContent = counts.total ? `${counts.total} total · ${counts.dispatched} dispatched` : '0 prospects';
+
+    if (!recent || recent.length === 0) {
+      el.innerHTML = `<span style="color:var(--muted);font-size:12px">No prospects yet — click ⬇ Harvest to pull from Companies House.</span>`;
+      return;
+    }
+
+    const gradeColor = g => g === 'A' ? 'var(--green)' : g === 'B' ? '#f59e0b' : 'var(--muted)';
+    const rows = recent.map(p => {
+      const signals = JSON.parse(p.trigger_signals || '[]');
+      const chips = signals.map(s => `<span class="bdg bghost" style="font-size:9px;margin-right:2px">${s.replace(/_/g,' ')}</span>`).join('');
+      const emailDot = p.enriched_email ? `<span style="color:var(--green);margin-left:4px" title="${p.enriched_email}">✉</span>` : '';
+      const webDot  = p.enriched_website ? `<span style="color:var(--muted);margin-left:2px" title="${p.enriched_website}">🌐</span>` : '';
+      const dispDot = p.atlas_dispatched ? `<span style="color:var(--muted);margin-left:2px" title="Dispatched to Atlas">✓</span>` : '';
+      return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openPipDrawer('${p.id}')">
+        <td style="padding:6px 8px;font-family:var(--mono);font-size:10px">
+          <span style="color:${gradeColor(p.score_grade)};font-weight:700;font-size:13px">${p.score_grade || '?'}</span>
+        </td>
+        <td style="padding:6px 8px;font-size:12px;max-width:200px">
+          <div style="font-weight:500">${escHtml(p.company_name || '—')}</div>
+          <div style="color:var(--muted);font-size:10px">${escHtml(p.postcode || '')} ${escHtml(p.region || '')}${emailDot}${webDot}${dispDot}</div>
+        </td>
+        <td style="padding:6px 8px;font-size:11px;color:var(--muted);max-width:220px">${chips}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-size:11px;color:var(--muted)">
+        A: <b style="color:var(--green)">${counts.A}</b> &nbsp; B: <b style="color:#f59e0b">${counts.B}</b> &nbsp; C: <b style="color:var(--muted)">${counts.C}</b> &nbsp; Dispatched: <b>${counts.dispatched}</b>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">
+          <th style="padding:4px 8px;text-align:left">Grade</th>
+          <th style="padding:4px 8px;text-align:left">Company</th>
+          <th style="padding:4px 8px;text-align:left">Signals</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  }
+}
+
+async function runPipHarvest() {
+  const btn = document.getElementById('pip-harvest-btn');
+  btn.disabled = true; btn.textContent = '⏳ Harvesting…';
+  try {
+    const r = await fetch('/api/atlas?action=intel_harvest', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ batch_size: 100, days_back: 365 }),
+    });
+    const d = await r.json();
+    if (d.error && d.error.includes('COMPANIES_HOUSE_API_KEY')) {
+      toast('⚠ COMPANIES_HOUSE_API_KEY not set in Vercel env vars', true);
+    } else if (d.ok) {
+      toast(`✓ Harvest done — ${d.inserted} inserted, ${d.blocked} blocked, ${d.skipped} skipped`);
+      loadPipStats();
+    } else {
+      toast('Harvest error: ' + (d.error || 'unknown'), true);
+    }
+  } catch(e) {
+    toast('Harvest failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '⬇ Harvest';
+  }
+}
+
+async function runPipEnrich() {
+  const btn = document.getElementById('pip-enrich-btn');
+  btn.disabled = true; btn.textContent = '⏳ Enriching…';
+  try {
+    const r = await fetch('/api/atlas?action=intel_enrich', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ limit: 50 }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✓ Enrichment done — ${d.enriched} enriched, ${d.failed} failed`);
+      loadPipStats();
+    } else {
+      toast('Enrich error: ' + (d.error || 'unknown'), true);
+    }
+  } catch(e) {
+    toast('Enrich failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔎 Enrich';
+  }
+}
+
+async function runPipDispatch() {
+  const btn = document.getElementById('pip-dispatch-btn');
+  btn.disabled = true; btn.textContent = '⏳ Dispatching…';
+  try {
+    const r = await fetch('/api/atlas?action=intel_dispatch', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ limit: 10 }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✓ Dispatched ${d.dispatched} A-tier prospects to Atlas approval queue`);
+      loadPipStats();
+      loadAtlasQueue();
+    } else {
+      toast('Dispatch error: ' + (d.error || 'unknown'), true);
+    }
+  } catch(e) {
+    toast('Dispatch failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Dispatch A-tier';
+  }
+}
+
+async function openPipDrawer(id) {
+  document.getElementById('pip-drawer').style.display = 'block';
+  document.getElementById('pip-drawer-body').innerHTML = '<span style="color:var(--muted)">Loading…</span>';
+  try {
+    const r = await fetch(`/api/atlas?action=intel_prospect&id=${id}`, { headers: PIP_AUTH });
+    const d = await r.json();
+    if (!d.ok) { document.getElementById('pip-drawer-body').innerHTML = `<span style="color:var(--red)">${d.error}</span>`; return; }
+    const p = d.prospect;
+    document.getElementById('pip-drawer-title').textContent = p.company_name || 'Prospect';
+    const sics = JSON.parse(p.sic_codes || '[]').map(s => `${s.code} — ${s.description||s}`).join('<br>');
+    const signals = JSON.parse(p.trigger_signals || '[]').map(s => `<span class="bdg bghost">${s.replace(/_/g,' ')}</span>`).join(' ');
+    const gradeColor = p.score_grade === 'A' ? 'var(--green)' : p.score_grade === 'B' ? '#f59e0b' : 'var(--muted)';
+    const dispBtn = !p.atlas_dispatched ? `<button class="btn sm bgreen" onclick="runPipDispatchSingle('${p.id}','${(p.company_name||'').replace(/'/g,"\\'")}')">▶ Dispatch to Atlas</button>` : '<span style="color:var(--muted);font-size:11px">✓ Dispatched to Atlas</span>';
+    document.getElementById('pip-drawer-body').innerHTML = `
+      <div style="margin-bottom:16px">
+        <span class="bdg" style="background:${gradeColor};color:#fff;font-size:16px;padding:4px 10px">Grade ${p.score_grade||'?'}</span>
+        <a href="https://find-and-update.company-information.service.gov.uk/company/${p.company_number}" target="_blank" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:8px">CH: ${p.company_number}</a>
+      </div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Registered Address</div><div style="font-size:12px">${escHtml(p.registered_address||'—')}</div></div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Region</div><div style="font-size:12px">${escHtml(p.region||'—')}</div></div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Incorporated</div><div style="font-size:12px">${p.incorporation_date||'—'}</div></div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">SIC Codes</div><div style="font-size:11px;font-family:var(--mono)">${sics||'—'}</div></div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Trigger Signals</div><div>${signals||'—'}</div></div>
+      <div style="margin-bottom:14px;background:var(--bg3,#1a1a2e);padding:10px;border-radius:4px;border-left:3px solid var(--green)">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Outreach Hook</div>
+        <div style="font-size:12px;line-height:1.5">${escHtml(p.outreach_hook||'—')}</div>
+      </div>
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Score Reasoning</div><div style="font-size:11px;color:var(--muted)">${escHtml(p.score_reasoning||'—')}</div></div>
+      <div style="margin-bottom:14px;padding:10px;border:1px solid var(--border);border-radius:4px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Enrichment</div>
+        <div style="font-size:12px;display:grid;grid-template-columns:80px 1fr;gap:4px">
+          <span style="color:var(--muted)">Website</span><span>${p.enriched_website ? `<a href="${p.enriched_website}" target="_blank">${escHtml(p.enriched_website)}</a>` : '—'}</span>
+          <span style="color:var(--muted)">Email</span><span>${p.enriched_email ? escHtml(p.enriched_email) : '—'}</span>
+          <span style="color:var(--muted)">Phone</span><span>${p.enriched_phone ? escHtml(p.enriched_phone) : '—'}</span>
+          <span style="color:var(--muted)">LinkedIn</span><span>${p.enriched_linkedin ? `<a href="${p.enriched_linkedin}" target="_blank">View</a>` : '—'}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${dispBtn}</div>`;
+  } catch(e) {
+    document.getElementById('pip-drawer-body').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  }
+}
+
+function closePipDrawer() {
+  document.getElementById('pip-drawer').style.display = 'none';
+}
+
+async function runPipDispatchSingle(id, company) {
+  toast(`Dispatching ${company} to Atlas…`);
+  try {
+    // Update record to A-grade eligible then run dispatch
+    const r = await fetch('/api/atlas?action=intel_dispatch', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ limit: 1, prospect_id: id }),
+    });
+    const d = await r.json();
+    toast(d.dispatched > 0 ? `✓ Draft created for ${company}` : 'Already dispatched or no email enriched', !d.dispatched);
+    loadPipStats();
+    openPipDrawer(id);
+  } catch(e) { toast('Error: ' + e.message, true); }
+}
+
+function escHtml(s) {
+  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── WhichWarehouse Leads ────────────────────────────────────────────────────
