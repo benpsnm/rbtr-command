@@ -630,10 +630,24 @@ async function dispatchApproved(body) {
 
   for (const draft of toSend) {
     try {
-      const prospect = await sbSelect('psnm_outreach_targets',
-        `id=eq.${draft.prospect_id}&select=company,decision_maker_name,email&limit=1`);
-      const p = prospect?.[0];
-      if (!p?.email) {
+      // Primary: look up email from psnm_outreach_targets (classic Atlas prospect)
+      let toEmail = null, toName = null;
+      if (draft.prospect_id) {
+        const prospect = await sbSelect('psnm_outreach_targets',
+          `id=eq.${draft.prospect_id}&select=company,decision_maker_name,email&limit=1`);
+        const p = prospect?.[0];
+        toEmail = p?.email || null;
+        toName  = p?.decision_maker_name || p?.company || null;
+      }
+      // Fallback: intelligence engine drafts store to_email in framework_annotations
+      if (!toEmail) {
+        const ann = typeof draft.framework_annotations === 'string'
+          ? JSON.parse(draft.framework_annotations || '{}')
+          : (draft.framework_annotations || {});
+        toEmail = ann.to_email || null;
+        toName  = ann.to_name  || ann.company_name || toName || null;
+      }
+      if (!toEmail) {
         failedCount.push({ id: draft.id, error: 'No email on prospect record' });
         await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'failed', send_result: { error: 'no_email', at: new Date().toISOString() } });
         continue;
@@ -645,7 +659,7 @@ async function dispatchApproved(body) {
           method: 'POST',
           headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            personalizations: [{ to: [{ email: p.email, name: p.decision_maker_name || p.company }] }],
+            personalizations: [{ to: [{ email: toEmail, name: toName || toEmail }] }],
             from: { email: EMAIL_FROM, name: EMAIL_FROM_NAME },
             subject: draft.subject,
             content: [{ type: 'text/plain', value: draft.body }],
@@ -662,25 +676,27 @@ async function dispatchApproved(body) {
       const now = new Date().toISOString();
       if (sendOk) {
         await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult });
-        await sbInsert('psnm_outreach_touches', [{
-          target_id: draft.prospect_id,
-          channel: 'email',
-          direction: 'outbound',
-          touched_at: now,
-          template: `atlas_v2_touch_${draft.touch_number}`,
-          subject: draft.subject,
-          body_excerpt: draft.body.slice(0, 200),
-          outcome: 'sent',
-          notes: `Atlas v2 Touch ${draft.touch_number}`,
-        }]);
-        await sbUpdate('psnm_outreach_targets', { id: draft.prospect_id }, {
-          last_touched_at: now,
-          current_touch_count: (await sbSelect('psnm_outreach_targets', `id=eq.${draft.prospect_id}&select=current_touch_count`))?.[0]?.current_touch_count + 1 || 1,
-        });
-        sentCount.push({ id: draft.id, company: p.company });
+        if (draft.prospect_id) {
+          await sbInsert('psnm_outreach_touches', [{
+            target_id: draft.prospect_id,
+            channel: 'email',
+            direction: 'outbound',
+            touched_at: now,
+            template: `atlas_v2_touch_${draft.touch_number}`,
+            subject: draft.subject,
+            body_excerpt: draft.body.slice(0, 200),
+            outcome: 'sent',
+            notes: `Atlas v2 Touch ${draft.touch_number}`,
+          }]);
+          await sbUpdate('psnm_outreach_targets', { id: draft.prospect_id }, {
+            last_touched_at: now,
+            current_touch_count: (await sbSelect('psnm_outreach_targets', `id=eq.${draft.prospect_id}&select=current_touch_count`))?.[0]?.current_touch_count + 1 || 1,
+          });
+        }
+        sentCount.push({ id: draft.id, company: toName });
       } else {
         await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'failed', send_result: sendResult });
-        failedCount.push({ id: draft.id, company: p.company, error: sendResult.error });
+        failedCount.push({ id: draft.id, company: toName, error: sendResult.error });
       }
     } catch (e) {
       failedCount.push({ id: draft.id, error: e.message });
@@ -689,6 +705,24 @@ async function dispatchApproved(body) {
   }
 
   const queued = approved.length - toSend.length;
+
+  if (failedCount.length > 3) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (token && chatId) {
+      const failList = failedCount.slice(0, 5)
+        .map(f => `• ${f.company || f.id.slice(0, 8)}: ${f.error || 'unknown'}`)
+        .join('\n');
+      const extra = failedCount.length > 5 ? `\n…and ${failedCount.length - 5} more` : '';
+      const msg = `⚠️ <b>Atlas dispatch issues — review needed</b>\n${failedCount.length} of ${toSend.length} drafts failed\n\n${failList}${extra}\n\nWMS → Intelligence → Approval Queue`;
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML' }),
+      }).catch(() => null);
+    }
+  }
+
   return {
     ok: true,
     sent: sentCount.length,

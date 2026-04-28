@@ -2,6 +2,9 @@
 // NOT a Vercel function (underscore-prefixed). Required by intelligence.js.
 // Data flow: Harvest (CH API) → Score → Enrich (Claude) → Dispatch (Atlas)
 
+const fs   = require('fs');
+const path = require('path');
+
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
 const CH_API_KEY    = process.env.COMPANIES_HOUSE_API_KEY;
@@ -183,15 +186,52 @@ function isInnerLondon(postcode) {
 
 function assignRegion(postcode) {
   if (!postcode) return 'Unknown';
-  const pc = postcode.toUpperCase().trim();
-  if (/^(S|DN|HD|BD|LS|HG|YO|HU|LN|NG|DE|LE|SK)/.test(pc)) return 'Midlands/North';
-  if (/^(M|L|PR|BB|FY|BL|OL|WN|WA|CH|CW|ST|WV|WS|B|DY|TF)/.test(pc)) return 'North West/West Midlands';
-  if (/^(NE|SR|DH|TS|CA|LA|DL|HG)/.test(pc)) return 'North East';
-  if (/^(E|EC|WC|W|SW|SE|N|NW)/.test(pc)) return 'London';
-  if (/^(AL|EN|WD|HP|MK|NN|OX|RG|GU|SO|BN|RH|TN|ME|DA|RM|SS|CO|IP|PE|CB|SG|CM|IG|KT|SM|CR|BR|TW)/.test(pc)) return 'South/South East';
-  if (/^(BS|BA|SN|GL|HR|WR|CV|SY|LD|SA|CF|NP|LL)/.test(pc)) return 'West/Wales';
-  if (/^(EH|G|FK|KY|DD|AB|IV|PH|PA|KA|DG|ML|TD)/.test(pc)) return 'Scotland';
-  return 'Other';
+  const pc = postcode.toUpperCase().replace(/\s/g, '');
+  // Extract 1-2 letter area code. Greedy {1,2} tries 2-letter first (e.g. BN, NP, SA)
+  // before falling back to 1-letter (S, B, N) — fixes alternation-order bugs.
+  const area = pc.match(/^([A-Z]{1,2})/)?.[1];
+  if (!area) return 'Unknown';
+  const AREA_MAP = {
+    // Scotland
+    AB:'Scotland', DD:'Scotland', DG:'Scotland', EH:'Scotland', FK:'Scotland',
+    G: 'Scotland', HS:'Scotland', IV:'Scotland', KA:'Scotland', KW:'Scotland',
+    KY:'Scotland', ML:'Scotland', PA:'Scotland', PH:'Scotland', TD:'Scotland', ZE:'Scotland',
+    // Northern Ireland
+    BT:'Northern Ireland',
+    // North East
+    DH:'North East', DL:'North East', NE:'North East', SR:'North East', TS:'North East',
+    // North West
+    BB:'North West', BL:'North West', CA:'North West', CH:'North West', CW:'North West',
+    FY:'North West', L: 'North West', LA:'North West', M: 'North West', OL:'North West',
+    PR:'North West', SK:'North West', WA:'North West', WN:'North West',
+    // Yorkshire
+    BD:'Yorkshire', DN:'Yorkshire', HD:'Yorkshire', HG:'Yorkshire', HU:'Yorkshire',
+    HX:'Yorkshire', LS:'Yorkshire', S: 'Yorkshire', WF:'Yorkshire', YO:'Yorkshire',
+    // East Midlands
+    DE:'East Midlands', LE:'East Midlands', LN:'East Midlands', NG:'East Midlands',
+    NN:'East Midlands', PE:'East Midlands',
+    // West Midlands
+    B: 'West Midlands', CV:'West Midlands', DY:'West Midlands', HR:'West Midlands',
+    ST:'West Midlands', TF:'West Midlands', WR:'West Midlands', WS:'West Midlands', WV:'West Midlands',
+    // East of England
+    AL:'East', CB:'East', CM:'East', CO:'East', IP:'East', NR:'East', SG:'East', SS:'East',
+    // London
+    BR:'London', CR:'London', DA:'London', E: 'London', EC:'London', EN:'London',
+    HA:'London', IG:'London', KT:'London', N: 'London', NW:'London', RM:'London',
+    SE:'London', SM:'London', SW:'London', TW:'London', UB:'London', W: 'London',
+    WC:'London', WD:'London',
+    // South East
+    BN:'South East', CT:'South East', GU:'South East', ME:'South East', MK:'South East',
+    OX:'South East', PO:'South East', RG:'South East', RH:'South East', SL:'South East',
+    SO:'South East', TN:'South East',
+    // South West
+    BA:'South West', BH:'South West', BS:'South West', DT:'South West', EX:'South West',
+    GL:'South West', PL:'South West', SN:'South West', SP:'South West', TA:'South West',
+    TQ:'South West', TR:'South West',
+    // Wales
+    CF:'Wales', LD:'Wales', LL:'Wales', NP:'Wales', SA:'Wales', SY:'Wales',
+  };
+  return AREA_MAP[area] || (area.length === 2 ? AREA_MAP[area[0]] : null) || 'Other';
 }
 
 // ── Scoring logic ─────────────────────────────────────────────────────────────
@@ -368,8 +408,11 @@ async function enrich({ limit = 50 } = {}) {
   if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
 
   const cap = Math.min(limit, 100); // hard cap per spec
+  // Only pick up records not yet attempted — avoids burning A-tier slots repeatedly
+  // and avoids re-hammering Anthropic on recently-errored records.
+  // To force a retry: clear last_enrichment_attempt in Supabase dashboard.
   const rows = await sbSelect(TABLE,
-    `enriched_email=is.null&enriched_website=is.null&score_grade=in.(A,B)&order=score_grade.asc,created_at.asc&limit=${cap}&select=id,company_name,company_number,registered_address,postcode`);
+    `enriched_email=is.null&enriched_website=is.null&last_enrichment_attempt=is.null&score_grade=in.(A,B,C)&order=score_grade.asc,created_at.asc&limit=${cap}&select=id,company_name,company_number,registered_address,postcode`);
 
   if (!rows || rows.length === 0) return { ok: true, enriched: 0, message: 'Nothing to enrich' };
 
@@ -413,10 +456,17 @@ Rules:
 
       const data = await r.json().catch(() => null);
       const text = (data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
-      const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
+      // Robust JSON extraction — handles prose wrapper, markdown fences, any position
       let parsed = null;
-      try { parsed = JSON.parse(cleaned); } catch {}
+      const stripped = text.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/im, '').trim();
+      try { parsed = JSON.parse(stripped); } catch {}
+      if (!parsed) {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+      }
+      const apiErr = data?.type === 'error' ? `${data.error?.type || 'api_error'}:${(data.error?.message || '').slice(0, 60)}` : null;
+      const parseError = !parsed ? (apiErr || `no_json (stop=${data?.stop_reason},textLen=${text.length})`) : null;
 
       if (parsed) {
         await sbUpdate(TABLE, { id: row.id }, {
@@ -431,105 +481,246 @@ Rules:
       } else {
         await sbUpdate(TABLE, { id: row.id }, {
           last_enrichment_attempt: new Date().toISOString(),
+          score_reasoning: (parseError ? `[enrich_err:${parseError}] ` : '') + (row.score_reasoning || ''),
           updated_at: new Date().toISOString(),
         });
         failed++;
       }
     } catch (e) {
+      await sbUpdate(TABLE, { id: row.id }, {
+        last_enrichment_attempt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).catch(() => null);
       failed++;
     }
-    await sleep(2000); // ~30 req/min well under Anthropic limit
+    await sleep(3000); // 20 req/min — headroom for web_search beta rate limits
   }
 
   return { ok: true, enriched, failed, total: rows.length };
 }
 
-// ── SCORE AND DISPATCH ────────────────────────────────────────────────────────
-async function scoreAndDispatch({ limit = 10 } = {}) {
-  const cap = Math.min(limit, 50);
-  const prospects = await sbSelect(TABLE,
-    `score_grade=eq.A&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`);
+// ── City extraction from CH address string ────────────────────────────────────
+function extractCity(addr, postcode) {
+  if (!addr) return postcode ? postcode.replace(/\d.*$/, '').trim() : 'UK';
+  // CH addresses are typically: "Street, Locality, Town, Region, Postcode"
+  const parts = addr.split(',').map(s => s.trim()).filter(Boolean);
+  // Strip postcode-looking parts from the end
+  const clean = parts.filter(p => !/^[A-Z]{1,2}\d/.test(p.toUpperCase().replace(/\s/g, '')));
+  // Town is usually 2nd-to-last or last remaining part
+  return clean[clean.length - 2] || clean[clean.length - 1] || 'UK';
+}
 
+// ── Approximate road distance (miles) from Hellaby S66 8HR by postcode area ──
+const HELLABY_DISTANCES = {
+  // Yorkshire — home territory
+  S:5, DN:12, WF:25, HD:20, HX:30, BD:35, LS:40, HG:50, HU:60, YO:65,
+  // East Midlands
+  NG:40, DE:30, LN:60, LE:70, NN:90, PE:90,
+  // West Midlands
+  ST:55, DY:75, WV:75, WS:80, B:80, TF:80, CV:85, WR:105, HR:120,
+  // North East
+  TS:55, DL:60, DH:70, SR:75, NE:80,
+  // North West
+  SK:55, BB:55, OL:55, BL:60, M:65, PR:65, FY:75, L:80, WA:75, WN:70, CW:80, CH:90, LA:100, CA:130,
+  // East of England
+  CB:120, MK:125, SG:150, CO:150, CM:155, AL:155, SN:160, IP:165, NR:165, SS:165, RM:175,
+  // Wales
+  SY:110, LD:130, LL:140, NP:145, CF:160, SA:175,
+  // London & surrounds
+  EN:170, N:175, NW:175, E:175, W:180, WC:180, EC:180, WD:175, HA:185, SE:185, IG:175,
+  DA:185, UB:185, KT:190, CR:190, SM:195, TW:195, BR:185, SW:195,
+  // South East
+  OX:155, RG:185, SL:180, ME:200, BH:200, BN:215, RH:210, GU:210, SO:215, TN:210, CT:215, PO:225,
+  // South West
+  GL:140, BS:165, BA:165, DT:200, EX:220, SP:190, TA:195, PL:245, TQ:240, TR:280,
+  // Scotland
+  DG:200, G:230, FK:230, ML:235, KA:240, EH:250, TD:255, KY:265, PA:235, DD:280, PH:290, AB:370, IV:395,
+};
+
+function getDistanceInfo(postcode) {
+  if (!postcode) return null;
+  const area = postcode.toUpperCase().replace(/\s/g, '').match(/^([A-Z]{1,2})/)?.[1];
+  const dist = area ? (HELLABY_DISTANCES[area] || (area.length === 2 ? HELLABY_DISTANCES[area[0]] : null)) : null;
+  if (!dist) return null;
+  const hrs = dist < 35 ? 'under 30 minutes' : dist < 55 ? 'about 45 minutes' : dist < 80 ? 'about 1 hour' : dist < 120 ? `about ${Math.round(dist / 55 * 2) / 2} hours` : `${Math.round(dist / 55 * 2) / 2} hours`;
+  return { miles: dist, label: `~${dist} miles (~${hrs} drive)` };
+}
+
+// ── Generate draft via Claude + Atlas v2 system prompt ────────────────────────
+// Unified with generateDrafts() in atlas.js — one source of truth for quality.
+async function generateDraftViaAtlas(p) {
+  let promptTemplate;
+  try {
+    promptTemplate = fs.readFileSync(path.join(__dirname, 'docs/_atlas_system_prompt.md'), 'utf8');
+  } catch { return null; }
+
+  const companyAge = p.incorporation_date
+    ? Math.floor((Date.now() - new Date(p.incorporation_date).getTime()) / 86400000)
+    : null;
+
+  const sics = JSON.parse(p.sic_codes || '[]');
+  const industry = sics.map(s => s.description || s.code).filter(Boolean).join(', ') || 'wholesale / retail';
+  const city = extractCity(p.registered_address, p.postcode);
+  const distInfo = getDistanceInfo(p.postcode);
+
+  const shortName = (p.company_name || '').replace(/\s+(LTD\.?|LIMITED|PLC|LLP)$/i, '').trim();
+  const triggers = JSON.parse(p.trigger_signals || '[]');
+  const triggerText = triggers.map(t => ({
+    incorporated_under_90d:  `incorporated just ${companyAge} days ago — very likely still setting up logistics`,
+    incorporated_under_365d: `incorporated ${Math.round((companyAge||0)/30)} months ago — growth stage, probably reviewing storage options`,
+    residential_address:     'registered at a residential address — suggests not yet in a warehouse',
+    inner_london:            'London-registered — London storage is expensive; central GB argument is strong',
+  }[t] || t)).join('; ');
+
+  const gradeContext = {
+    A: `Grade A: incorporated ${companyAge} days ago. Very high probability of needing warehousing imminently — decision is being made now.`,
+    B: `Grade B: incorporated ~${Math.round((companyAge||180)/30)} months ago. Growth stage. Likely reviewing storage options before committing to a lease.`,
+    C: `Grade C: incorporated ~${Math.round((companyAge||365)/365 * 10)/10} years ago. Established. Likely reviewing warehousing costs or capacity for the year ahead.`,
+  }[p.score_grade] || '';
+
+  const distanceContext = distInfo
+    ? `The company is approximately ${distInfo.label} from Hellaby. ${distInfo.miles < 80 ? 'Very close — emphasise rapid response, local logistics partner angle.' : distInfo.miles < 150 ? 'Within comfortable day-trip distance — central UK argument is powerful.' : 'Further afield — lead with national reach and central GB positioning.'}`
+    : '';
+
+  const walesContext = ['Wales'].includes(p.region)
+    ? `The company is in Wales. Emphasise: Hellaby is central GB — 3.5 hours from Cardiff, faster national reach than any Welsh depot. Ideal for businesses shipping beyond Wales.`
+    : '';
+
+  const confidenceMap = { A: 85, B: 70, C: 55 };
+
+  // Fill system prompt template vars (all the same as generateDrafts() in atlas.js)
+  const prompt = promptTemplate
+    .replace(/\{\{company\}\}/g, shortName)
+    .replace(/\{\{contact_name\}\}/g, 'the team')
+    .replace(/\{\{contact_first_name\}\}/g, 'there')
+    .replace(/\{\{industry\}\}/g, industry)
+    .replace(/\{\{city\}\}/g, city)
+    .replace(/\{\{estimated_pallet_need\}\}/g, p.score_grade === 'A' ? '10–50' : p.score_grade === 'B' ? '25–100' : '50–200')
+    .replace(/\{\{priority_score\}\}/g, confidenceMap[p.score_grade] || 70)
+    .replace(/\{\{dream_outcome\}\}/g, 'Stock collected in 48 hours, stored centrally at GB\'s geographic centre, dispatched nationally — no lease, no staff overhead, no minimum term')
+    .replace(/\{\{perceived_likelihood\}\}/g, 'Free first month. No contract. No deposit. Cancel with 30 days notice. Site visits available.')
+    .replace(/\{\{time_effort\}\}/g, '48-hour pallet collection. Same-week start. Zero paperwork.')
+    .replace(/\{\{risk_reversal\}\}/g, 'Free first month — if we\'re not the right fit, you pay nothing.')
+    .replace(/\{\{rate_small\}\}/g, '3.95')
+    .replace(/\{\{rate_mid\}\}/g, '3.45')
+    .replace(/\{\{rate_bulk\}\}/g, '2.95')
+    .replace(/\{\{headline\}\}/g, 'Central GB warehousing. No lease. No staff. No minimum term.')
+    .replace(/\{\{touch_number\}\}/g, '1')
+    .replace(/\{\{tone_mix\}\}/g, 'direct');
+
+  const userMsg = [
+    `Generate a cold outreach email for ${shortName} (${industry}), based in ${city}.`,
+    ``,
+    `Intelligence Engine context — use to personalise this email:`,
+    `- ${gradeContext}`,
+    ...(triggerText ? [`- Trigger signals: ${triggerText}`] : []),
+    `- Outreach hook (use this verbatim or adapt it into the opening): "${p.outreach_hook}"`,
+    ...(distanceContext ? [`- Geography: ${distanceContext}`] : []),
+    ...(walesContext ? [`- Region note: ${walesContext}`] : []),
+    `- SIC: ${sics[0]?.code} — ${sics[0]?.description || 'unknown'}`,
+    ``,
+    `Apply all six frameworks. Subject line must reference their specific situation, not generic. Return only valid JSON as specified.`,
+  ].join('\n');
+
+  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      system: prompt,
+      messages: [{ role: 'user', content: userMsg }],
+    }),
+  });
+
+  if (!aiRes.ok) return null;
+
+  const aiJson = await aiRes.json().catch(() => null);
+  const rawContent = aiJson?.content?.[0]?.text || '';
+  const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+  let parsed = null;
+  try { parsed = JSON.parse(jsonMatch?.[0] || rawContent); } catch {}
+  if (!parsed?.subject || !parsed?.body) return null;
+
+  // Replace phone placeholder — system prompt tells Claude to use 07XXX XXXXXX
+  parsed.body    = parsed.body.replace(/07XXX XXXXXX/g, '07506 255033');
+  parsed.subject = parsed.subject.replace(/07XXX XXXXXX/g, '07506 255033');
+
+  return parsed;
+}
+
+// ── SCORE AND DISPATCH ────────────────────────────────────────────────────────
+// grade: 'A'|'B'|'C'|null (null = A-tier only, production default)
+// prospect_id: specific intelligence_prospect id to dispatch exactly one
+async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null } = {}) {
+  if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+
+  const cap = Math.min(limit, 50);
+  let query;
+  if (prospect_id) {
+    query = `id=eq.${prospect_id}&atlas_dispatched=eq.false&enriched_email=not.is.null&select=*`;
+  } else if (grade) {
+    query = `score_grade=eq.${grade}&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`;
+  } else {
+    query = `score_grade=eq.A&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`;
+  }
+
+  const prospects = await sbSelect(TABLE, query);
   if (!prospects || prospects.length === 0) {
-    return { ok: true, dispatched: 0, message: 'No undispatched A-tier prospects with email' };
+    return { ok: true, dispatched: 0, message: 'No matching undispatched prospects with email' };
   }
 
   let dispatched = 0;
   const errors = [];
 
   for (const p of prospects) {
-    const sics = JSON.parse(p.sic_codes || '[]').map(s => s.description || s.code).slice(0, 3).join(', ');
-    const subject = `${p.company_name} — pallet storage at the geographic centre of GB`;
+    const draftData = await generateDraftViaAtlas(p);
+    if (!draftData) {
+      errors.push({ company: p.company_name, error: 'Claude draft generation failed' });
+      continue;
+    }
 
-    const body = buildOutreachBody(p);
-    if (!body) { errors.push({ company: p.company_name, error: 'body generation failed' }); continue; }
+    const confidenceMap = { A: 85, B: 70, C: 55 };
 
     const draft = {
-      prospect_id:    null, // intelligence prospects not in psnm_outreach_targets
-      touch_number:   1,
-      subject,
-      body,
-      status:         'pending_approval',
-      confidence_score: p.score_grade === 'A' ? 85 : 70,
+      prospect_id:      null,
+      touch_number:     1,
+      subject:          draftData.subject,
+      body:             draftData.body,
+      status:           'pending_approval',
+      confidence_score: draftData.confidence_score || confidenceMap[p.score_grade] || 70,
       framework_annotations: JSON.stringify({
-        source: 'intelligence_engine',
+        // Routing metadata (used by dispatchApproved to find recipient)
+        source:                   'intelligence_engine',
         intelligence_prospect_id: p.id,
-        score_grade: p.score_grade,
-        trigger_signals: JSON.parse(p.trigger_signals || '[]'),
-        outreach_hook: p.outreach_hook,
+        score_grade:              p.score_grade,
+        to_email:                 p.enriched_email,
+        to_name:                  p.company_name,
+        company_name:             p.company_name,
+        // Claude's framework annotations (rendered in WMS approval queue)
+        atlas_annotations:        draftData.framework_annotations || [],
       }),
     };
 
-    // Insert into Atlas approval queue
     const result = await sbInsert('psnm_atlas_drafts', [draft]);
     if (result && result.error) {
       errors.push({ company: p.company_name, error: result.error.slice?.(0, 100) });
     } else {
       await sbUpdate(TABLE, { id: p.id }, {
-        atlas_dispatched: true,
+        atlas_dispatched:    true,
         atlas_dispatched_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        updated_at:          new Date().toISOString(),
       });
       dispatched++;
     }
+    await sleep(1000); // brief gap between consecutive Claude calls
   }
 
   return { ok: true, dispatched, errors: errors.slice(0, 10), total_candidates: prospects.length };
-}
-
-function buildOutreachBody(p) {
-  const hook = p.outreach_hook || '';
-  const age = p.incorporation_date
-    ? Math.floor((Date.now() - new Date(p.incorporation_date).getTime()) / 86400000)
-    : null;
-  const ageText = age && age <= 90  ? `just ${age} days ago`
-    : age && age <= 180 ? `${Math.round(age / 30)} months ago`
-    : age ? `${Math.round(age / 365 * 10) / 10} years ago`
-    : 'recently';
-
-  const name = (p.company_name || 'there').replace(/\sLTD\.?$/i, '').replace(/\sLIMITED$/i, '');
-
-  return [
-    `Hi,`,
-    ``,
-    hook,
-    ``,
-    `Pallet Storage Near Me operates from Hellaby Industrial Estate, Rotherham — roughly the population-weighted centre of Great Britain. Drive times:`,
-    `- Glasgow: 4 hours`,
-    `- London: 3 hours`,
-    `- Felixstowe port: 3 hours`,
-    `- Liverpool port: 2 hours`,
-    ``,
-    `For a business shipping nationally, central is faster and cheaper than any single-region warehouse. Our pricing: £3.95/pallet/week for 1-49 pallets, £3.45 for 50-149, £2.95 for 150+. Goods in/out £3.50 each. No contracts.`,
-    ``,
-    `If you're figuring out your logistics setup — I'm Ben Greenwood, founder. Happy to talk specifics. 15-min call?`,
-    ``,
-    `Ben Greenwood`,
-    `Pallet Storage Near Me`,
-    `Unit 3C Hellaby Industrial Estate, Rotherham S66 8HR`,
-    `07506 255033`,
-    `palletstoragenearme.co.uk`,
-  ].join('\n');
 }
 
 // ── HARVEST DAILY (cron combined run) ────────────────────────────────────────
@@ -537,11 +728,17 @@ async function harvestDaily() {
   const autorun = process.env.PSNM_INTELLIGENCE_AUTORUN;
   if (autorun === 'false') return { ok: true, skipped: true, reason: 'PSNM_INTELLIGENCE_AUTORUN=false' };
 
-  const harvest_result = await harvest({ batch_size: 100, days_back: 2 }); // last 48hrs
+  const harvest_result = await harvest({ batch_size: 100, days_back: 2 }); // last 48hrs — A/B feed
+  // Weekly C-tier sweep: on Mondays also harvest 1-3 year old companies
+  const dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon
+  let ctier_result = null;
+  if (dayOfWeek === 1) {
+    ctier_result = await harvest({ batch_size: 100, days_back: 1095 }); // up to 3 years back
+  }
   const enrich_result  = await enrich({ limit: 50 });
   const dispatch_result = await scoreAndDispatch({ limit: 10 });
 
-  return { ok: true, harvest: harvest_result, enrich: enrich_result, dispatch: dispatch_result };
+  return { ok: true, harvest: harvest_result, ctier_harvest: ctier_result, enrich: enrich_result, dispatch: dispatch_result };
 }
 
 // ── GET STATS ─────────────────────────────────────────────────────────────────
