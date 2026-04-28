@@ -73,7 +73,23 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 
 - Goods-in: £3.50/movement
 - Goods-out: £3.50/movement
-- Onboarding fee: £50 (waived for 50+ pallets)
+- Onboarding fee: £50 (waived for 50+ pallets on 12-week+ commitment)
+
+## NEW OFFER (canonical — as of 2026-04-28)
+
+**Trial offer: First week free — when you commit to 12 weeks**
+
+| Term | Detail |
+|------|--------|
+| Week 1 | Storage free. G-in/out at standard £3.50/pallet. |
+| Weeks 2–12 | Standard tier pricing applies. |
+| After week 12 | Rolling monthly, 30 days notice to cancel. |
+| Eligibility | One trial per company (tracked by CH number / trading name). |
+| Walk-away | Day 5 conversation — exit with no further charges if not satisfied. |
+| Onboarding fee | £50, waived at 50+ pallets — compatible with trial offer. |
+
+**Retired offer (DELETE any reference):** ~~Free first month, no deposit, no contract~~
+**Notice period:** 30 days (consistent across all T&Cs, outreach, config). Previously had "14 days" in time_effort — corrected 2026-04-28.
 
 ## Fixed Costs (monthly)
 
@@ -123,7 +139,7 @@ Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard 
 - **Buffer**: PSNM Facebook + Instagram connected (free tier, login: sales@palletstoragenearme.co.uk). 12 posts seeded in psnm_social_posts; posting schedule to be queued. Make.com automation not yet wired.
 - **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
 - **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
-- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily. WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **COMPANIES_HOUSE_API_KEY live in Vercel.** First harvest: 9/20 inserted (11 blocked), A:3 B:6 C:0.
+- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily + Monday C-tier sweep (days_back: 1095). WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **COMPANIES_HOUSE_API_KEY live in Vercel.** Current DB: **44 total — A:3 B:24 C:17.** Region mapping fixed (lookup table, 11 records corrected). Enrichment JSON parser fixed (robust extraction). A-tier enrichment ran: 0/3 emails found (too new, no web presence). C-tier fix: WMS Harvest button now uses days_back:1095; weekly Monday cron sweep added.
 
 ## Social Media
 

@@ -598,13 +598,13 @@ async function generateDraftViaAtlas(p) {
     .replace(/\{\{estimated_pallet_need\}\}/g, p.score_grade === 'A' ? '10–50' : p.score_grade === 'B' ? '25–100' : '50–200')
     .replace(/\{\{priority_score\}\}/g, confidenceMap[p.score_grade] || 70)
     .replace(/\{\{dream_outcome\}\}/g, 'Stock collected in 48 hours, stored centrally at GB\'s geographic centre, dispatched nationally — no lease, no staff overhead, no minimum term')
-    .replace(/\{\{perceived_likelihood\}\}/g, 'Free first month. No contract. No deposit. Cancel with 30 days notice. Site visits available.')
-    .replace(/\{\{time_effort\}\}/g, '48-hour pallet collection. Same-week start. Zero paperwork.')
-    .replace(/\{\{risk_reversal\}\}/g, 'Free first month — if we\'re not the right fit, you pay nothing.')
+    .replace(/\{\{perceived_likelihood\}\}/g, '1 in 4 prospects we offer this to convert within the trial week. We don\'t offer it lightly.')
+    .replace(/\{\{time_effort\}\}/g, '48-hour pallet collection. Same-week start. Zero paperwork. 30 days notice to cancel after initial 12 weeks.')
+    .replace(/\{\{risk_reversal\}\}/g, 'Try us for a week with real product moving through. If we\'re not faster and cleaner than your current setup, walk away — week 2 doesn\'t bill.')
     .replace(/\{\{rate_small\}\}/g, '3.95')
     .replace(/\{\{rate_mid\}\}/g, '3.45')
     .replace(/\{\{rate_bulk\}\}/g, '2.95')
-    .replace(/\{\{headline\}\}/g, 'Central GB warehousing. No lease. No staff. No minimum term.')
+    .replace(/\{\{headline\}\}/g, 'First week free — when you commit to 12 weeks')
     .replace(/\{\{touch_number\}\}/g, '1')
     .replace(/\{\{tone_mix\}\}/g, 'direct');
 
@@ -649,6 +649,26 @@ async function generateDraftViaAtlas(p) {
   // Replace phone placeholder — system prompt tells Claude to use 07XXX XXXXXX
   parsed.body    = parsed.body.replace(/07XXX XXXXXX/g, '07506 255033');
   parsed.subject = parsed.subject.replace(/07XXX XXXXXX/g, '07506 255033');
+
+  // Remove "no deposit" — retired offer term; Claude generates it from training data.
+  // Handle comma context: ", no deposit" / "no deposit, " / "no deposit." / "no deposit\n"
+  parsed.body = parsed.body.replace(/,\s*no deposit\b[,.]?/gi, '');
+  parsed.body = parsed.body.replace(/\bno deposit\b[,.]?\s*/gi, '');
+  parsed.body = parsed.body.replace(/,\s*zero deposit\b[,.]?/gi, '');
+  parsed.body = parsed.body.replace(/\bzero deposit\b[,.]?\s*/gi, '');
+  // Clean up any double-comma or trailing comma-space before newline left by removal
+  parsed.body = parsed.body.replace(/,\s*,/g, ',');
+  parsed.body = parsed.body.replace(/,\s*\n/g, '\n');
+  parsed.body = parsed.body.replace(/,\s*$/gm, '');
+
+  // Enforce canonical sign-off — replace everything from last "Ben Greenwood" to end
+  const SIGN_OFF = 'Ben Greenwood\nFounder — Pallet Storage Near Me\nHellaby, Rotherham S66 8HR\nTel: 07506 255033\nsales@palletstoragenearme.co.uk\npalletstoragenearme.co.uk';
+  const sigIdx = parsed.body.lastIndexOf('Ben Greenwood');
+  if (sigIdx !== -1) {
+    parsed.body = parsed.body.slice(0, sigIdx) + SIGN_OFF;
+  } else {
+    parsed.body = parsed.body + '\n\n' + SIGN_OFF;
+  }
 
   return parsed;
 }
