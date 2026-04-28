@@ -4598,7 +4598,7 @@ async function loadIntelligence() {
 }
 
 // ── Prospect Intelligence Engine ────────────────────────────────────────────
-const PIP_AUTH = { 'Content-Type': 'application/json', 'x-rbtr-auth': RBTR_AUTH_TOKEN };
+const PIP_AUTH = { 'Content-Type': 'application/json' };
 
 async function loadPipStats() {
   const el = document.getElementById('pip-body');
@@ -4798,7 +4798,7 @@ async function loadWWLeads() {
   const src = document.getElementById('ww-source-filter')?.value || '';
   const srcParam = src ? `&source_filter=${src}` : '';
   try {
-    const r = await fetch(`/api/atlas?action=get_ww_leads&limit=50${srcParam}`, { headers: { 'x-rbtr-auth': RBTR_AUTH_TOKEN } });
+    const r = await fetch(`/api/atlas?action=get_ww_leads&limit=50${srcParam}`, { headers: {} });
     const d = await r.json();
     if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`; return; }
     _wwLeadsCache = d.leads || [];
@@ -4840,7 +4840,7 @@ async function loadWWLeads() {
 async function openWWLead(id) {
   let lead = _wwLeadsCache.find(l => l.id === id);
   if (!lead) {
-    const r = await fetch(`/api/atlas?action=get_ww_leads&limit=200`, { headers: { 'x-rbtr-auth': RBTR_AUTH_TOKEN } });
+    const r = await fetch(`/api/atlas?action=get_ww_leads&limit=200`, { headers: {} });
     const d = await r.json();
     lead = d.leads?.find(l => l.id === id);
   }
@@ -4972,7 +4972,7 @@ async function saveWWLead(id) {
     body.contact_phone = document.getElementById('wwp_phone')?.value;
   }
   const r = await fetch('/api/atlas?action=update_ww_lead', {
-    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body),
   });
   const d = await r.json();
@@ -4983,7 +4983,7 @@ async function saveWWLead(id) {
 async function genWWResponse(id) {
   toast('Generating response…');
   const r = await fetch('/api/atlas?action=generate_ww_response', {
-    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ lead_id: id }),
   });
   const d = await r.json();
@@ -4997,7 +4997,7 @@ async function genWWResponse(id) {
 
 async function recomputeWWQuote(id) {
   const r = await fetch('/api/atlas?action=recompute_ww_quote', {
-    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ lead_id: id }),
   });
   const d = await r.json();
@@ -5011,7 +5011,7 @@ async function approveAndSendWAM(id) {
   if (!lead.contact_email) {
     // No email on file — mark contacted, show copy prompt
     const r = await fetch('/api/atlas?action=update_ww_lead', {
-      method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ id, status:'contacted' }),
     });
     await r.json();
@@ -5024,13 +5024,13 @@ async function approveAndSendWAM(id) {
   const subject = lines[0].replace(/^SUBJECT:\s*/,'');
   const bodyText = lines.slice(2).join('\n');
   const sr = await fetch('/api/atlas?action=send_email', {
-    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ to: lead.contact_email, subject, text: bodyText }),
   });
   const sd = await sr.json();
   if (sd.ok || sd.status === 202) {
     await fetch('/api/atlas?action=update_ww_lead', {
-      method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ id, status:'contacted' }),
     });
     toast('Sent and marked contacted ✓');
@@ -5040,7 +5040,7 @@ async function approveAndSendWAM(id) {
 
 async function declineWWLead(id, reason) {
   const r = await fetch('/api/atlas?action=update_ww_lead', {
-    method:'POST', headers:{'Content-Type':'application/json','x-rbtr-auth':RBTR_AUTH_TOKEN},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({ id, status:'lost' }),
   });
   const d = await r.json();
