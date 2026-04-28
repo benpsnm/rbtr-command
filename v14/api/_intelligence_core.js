@@ -264,7 +264,7 @@ function scoreProspect({ companyAge, isResidential, sicClassification, isInLondo
     return {
       grade: 'B',
       reasoning: `Incorporated ${companyAge} days ago. Growth stage business — likely reviewing warehousing options.${residential_note}`,
-      hook: `${companyAge <= 180 ? 'Just over 6 months in' : 'Coming up on your first year'} — wherever you're warehousing now, our central GB location (4hrs Glasgow, 3hrs London, 2hrs Liverpool port) cuts cross-country dispatch by ~30%. Worth a 15-min chat?`,
+      hook: `${companyAge <= 180 ? 'Just over 6 months in' : 'Coming up on your first year'} — your logistics setup is being decided now, not later. Our central GB location (Hellaby, S66) gives you Glasgow 4hr, London 3hr, Liverpool port 2hr from one address. Worth a 15-min chat?`,
     };
   }
   // Grade B: Inner London — de-prioritise but still B
@@ -280,7 +280,7 @@ function scoreProspect({ companyAge, isResidential, sicClassification, isInLondo
     return {
       grade: 'C',
       reasoning: `Established (${Math.round(companyAge/365 * 10) / 10} years). Stable but may be reviewing warehouse costs.`,
-      hook: `If you're reviewing warehousing for the year ahead — Hellaby is the geographic centre of GB. Most of our customers save 25-30% vs Midlands/South pricing while reaching all of GB faster.`,
+      hook: `If you're reviewing warehousing for the year ahead — Hellaby gives you competitive central UK pricing with strong reach across all GB postcodes. Glasgow 4hr, London 3hr, Felixstowe 3hr from one address.`,
     };
   }
   return { grade: null, reasoning: 'No trigger signals — deprioritised', hook: null };
@@ -598,7 +598,7 @@ async function generateDraftViaAtlas(p) {
     .replace(/\{\{estimated_pallet_need\}\}/g, p.score_grade === 'A' ? '10–50' : p.score_grade === 'B' ? '25–100' : '50–200')
     .replace(/\{\{priority_score\}\}/g, confidenceMap[p.score_grade] || 70)
     .replace(/\{\{dream_outcome\}\}/g, 'Stock stored centrally at GB\'s geographic centre, dispatched nationally — no lease, no staff overhead, no minimum term after the initial 12 weeks')
-    .replace(/\{\{perceived_likelihood\}\}/g, '1 in 4 prospects we offer this to convert within the trial week. We don\'t offer it lightly.')
+    .replace(/\{\{perceived_likelihood\}\}/g, 'First week free with 12-week commitment. Site visit available before you sign. Walk away at day 5 if we are not delivering.')
     .replace(/\{\{time_effort\}\}/g, 'Onboarding typically 3-5 working days from contract signed (subject to third-party haulier availability for stock collection). Zero paperwork. 30 days notice to cancel after initial 12 weeks.')
     .replace(/\{\{risk_reversal\}\}/g, 'Try us for a week with real product moving through. If we\'re not faster and cleaner than your current setup, walk away — week 2 doesn\'t bill.')
     .replace(/\{\{rate_small\}\}/g, '3.95')
@@ -650,13 +650,22 @@ async function generateDraftViaAtlas(p) {
   parsed.body    = parsed.body.replace(/07XXX XXXXXX/g, '07506 255033');
   parsed.subject = parsed.subject.replace(/07XXX XXXXXX/g, '07506 255033');
 
-  // Remove "no deposit" — retired offer term; Claude generates it from training data.
-  // Handle comma context: ", no deposit" / "no deposit, " / "no deposit." / "no deposit\n"
+  // Post-processing: remove retired/fabricated claims Claude generates from training data
+  // "no deposit"
   parsed.body = parsed.body.replace(/,\s*no deposit\b[,.]?/gi, '');
   parsed.body = parsed.body.replace(/\bno deposit\b[,.]?\s*/gi, '');
   parsed.body = parsed.body.replace(/,\s*zero deposit\b[,.]?/gi, '');
   parsed.body = parsed.body.replace(/\bzero deposit\b[,.]?\s*/gi, '');
-  // Clean up any double-comma or trailing comma-space before newline left by removal
+  // "1 in 4" / "one in four" conversion stat
+  parsed.body = parsed.body.replace(/[Oo]ne in four [^.]*\.\s*/g, '');
+  parsed.body = parsed.body.replace(/1 in 4 [^.]*\.\s*/g, '');
+  // "population-weighted centre"
+  parsed.body = parsed.body.replace(/population-weighted cent(?:re|er) of Great Britain/gi, "GB's logistics heartland");
+  parsed.body = parsed.body.replace(/population-weighted cent(?:re|er)/gi, "logistics heartland");
+  // Unverifiable percentage claims ("saves X%", "cuts X%", "25-30%", "~30%")
+  parsed.body = parsed.body.replace(/cuts cross-country dispatch by (?:roughly |around |approximately |~)?\d+%/gi, 'reduces average dispatch time across UK postcodes');
+  parsed.body = parsed.body.replace(/save[s]? (?:roughly |around |approximately |~)?\d+[-–]\d+% vs [^.]+\./gi, 'competitive central UK pricing.');
+  // Clean up double-comma or trailing comma-space left by removals
   parsed.body = parsed.body.replace(/,\s*,/g, ',');
   parsed.body = parsed.body.replace(/,\s*\n/g, '\n');
   parsed.body = parsed.body.replace(/,\s*$/gm, '');

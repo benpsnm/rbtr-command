@@ -54,7 +54,7 @@ The value equation: Value = (Dream Outcome × Perceived Likelihood) ÷ (Time Del
 
 Your email must:
 - State the dream outcome clearly and specifically (use the offer's dream_outcome — adapt it to this prospect's industry context)
-- Increase perceived likelihood (first week free = proof before commitment; site visits available; "1 in 4 prospects we offer this to convert within the trial week" — use this if it fits)
+- Increase perceived likelihood (first week free = proof before commitment; site visits available; no contract beyond initial 12 weeks)
 - Eliminate perceived time delay (onboarding typically 3-5 working days from contract signed; no paperwork; we arrange collection)
 - Eliminate perceived effort & sacrifice (we handle the logistics; 30 days notice to cancel after initial 12 weeks; walk away at day 5 if it's not right)
 
@@ -127,6 +127,9 @@ Return ONLY valid JSON, no markdown wrapper, no explanation outside the JSON:
 - Never make promises you can't keep. Stick to the offer facts.
 - The subject line must be under 60 characters and earn a click.
 - **NEVER write "no deposit" or "zero deposit"** — not part of our current offer.
+- **NEVER use "1 in 4", "one in four", or any conversion rate / success rate statistic** — PSNM has no verified conversion data.
+- **NEVER write "population-weighted centre"** — not defensible. Use "GB's logistics heartland" or cite actual drive times only.
+- **NEVER claim a specific percentage saving** (e.g. "saves 30%", "cuts dispatch by 25%") — unverifiable. Use drive-time facts only.
 - **NEVER write "48-hour", "48 hours", "same-week start", or "next-day"** for collection/onboarding. Correct phrase: "typically 3-5 working days from contract signed".
 - **NEVER state or imply specific competitor prices** (e.g. "Midlands rates run £4.50–5.50"). Use "competitive central UK pricing" or similar soft claims only.
 - **NEVER write "less than a daily coffee"** or similar trivialising comparisons.
@@ -145,7 +148,7 @@ This section applies when the prospect comes from the `psnm_intelligence_prospec
 The prospect record contains an `outreach_hook` field — the specific reason this prospect was flagged. Open the email with this hook, adapted naturally into the first sentence or two.
 
 ### GEOGRAPHIC CENTRE ARGUMENT
-Hellaby is approximately the population-weighted centre of Great Britain. This is PSNM's single most powerful and differentiating value proposition. Use it.
+Hellaby, Rotherham is in GB's logistics heartland — strong motorway access (M18/M1/A1 corridor) with competitive drive-time reach across all UK postcodes. This is PSNM's single most powerful and differentiating value proposition. Use it.
 
 Drive times from Hellaby, Rotherham S66 8HR:
 - Glasgow: 4 hours

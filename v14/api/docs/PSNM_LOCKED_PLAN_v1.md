@@ -22,7 +22,7 @@ Goal: reach break-even by June 2026. Then grow to 80%+ occupancy (1,282 pallets)
 
 **Dream outcome**: Your overflow stock stored, tracked, accessible 24/7 — off your premises, off your headcount, off your mind.
 
-**Perceived likelihood**: First week free on 12-week commitment. 1 in 4 prospects we offer this to convert within the trial week. We don't offer it lightly.
+**Perceived likelihood**: First week free with 12-week commitment. Site visit available before you sign. Walk away at day 5 if we are not delivering.
 
 **Time & effort**: Onboarding typically 3-5 working days from contract signed (subject to third-party haulier availability). 30 days notice to cancel after initial 12 weeks. Zero paperwork to start.
 
