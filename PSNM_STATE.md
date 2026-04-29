@@ -177,25 +177,33 @@ Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `p
 
 ---
 
-## Phase 2 — TOMORROW'S FIRST TASK (29 Apr 2026)
+## Phase 2 — LIVE (built 2026-04-28)
 
-**Estimated build time: 75–90 min. Both feeds into existing locked template + validator.**
+**Both sources live on feature/intelligence-engine-phase2. Merge to main + deploy production is final step.**
 
-### 2a. Insolvency monitor (Gazette scraping) — NOT YET BUILT
-- **Trigger**: Companies House dissolution/insolvency event in harvest feed OR London Gazette scrape
-- **Subject:** `Stock with [failed_company]? — rapid onboarding available`
-- **Body framing:** calm, professional, can-help. No specific time promises.
-  - Use: "we can move fast — typically 3-5 working days from contract signed"
-  - Do NOT use: "48hr rescue", "48-hour", "same-week start"
-  - Tone: "You need a fast, reliable solution. We've done this before. Here's how quickly we can move."
-- **Pipeline:** Gazette event → harvest → score → enrich → Atlas dispatch (validator-gated)
-- **Key rule:** These are distressed prospects. No manufactured urgency. Real help, real speed, honest timing.
+### 2a. Insolvency monitor (Gazette scraping) — ✅ BUILT
+- **Trigger**: London Gazette Atom feed — notice types 2430/2920/2930/2110 (administration, winding up, CVA)
+- **Filter**: 22 logistics SIC codes — only failed 3PLs/warehouses/courier companies trigger customer search
+- **Pipeline:** Gazette → `harvestInsolvency()` → Claude web search (affected customers) → `enrich()` → score A → `psnm_intelligence_prospects`
+- **Pitch type:** `insolvency_rescue` — Atlas v2 INSOLVENCY RESCUE PITCH template
+- **Urgency window:** 21 days from notice date. Urgent (<7 days) dispatched first in `scoreAndDispatch()`
+- **Cron:** `intel_harvest_insolvency_daily` at 06:15 daily
+- **WMS:** 🚨 Insolvency button, urgency banner, red source badge
 
-### 2b. Defence supplier ingestion — NOT YET BUILT
-- **Source:** Public defence supplier directories (MOD supplier list, DPRTE exhibitors, ADS members)
-- **Pipeline:** Directory scrape → normalise → score (use existing A/B/C framework) → enrich → Atlas dispatch
-- **Note:** These are sophisticated B2B buyers. Holmes Dream 100 tone at max. Peer treatment. No tricks.
-- **Key rule:** Same locked template, same validator, same sign-off. No new offer elements without a template unlock.
+### 2b. Defence supplier ingestion — ✅ BUILT
+- **Source:** Claude web search × 5 queries → CH verify → insert
+- **Pipeline:** `harvestDefence()` → 5 queries targeting UK SME defence supply chain → CH number verify → enrich → score B → `psnm_intelligence_prospects`
+- **Pitch type:** `defence_supplier` — Atlas v2 DEFENCE SUPPLY CHAIN PITCH template
+- **Key rule:** NEVER claim ISO 9001 / Cyber Essentials / SC clearance. Holmes Dream 100 tone max.
+- **Cron:** `intel_harvest_defence_weekly` at 06:30 Sunday only
+- **WMS:** 🛡 Defence button, green source badge
+
+### Phase 2 infrastructure (both sources)
+- `getProspectSource()`, `getSafeTriggers()`, `getUrgencyWindowEnds()` helpers in `_intelligence_core.js`
+- Phase 2 trigger_signals format: JSON object with `_source` key (vs Phase 1 JSON array)
+- `scoreAndDispatch()` priority: urgentInsolvency → chA → defB → chB
+- `generateDraftViaAtlas()` detects `pitch_type` and injects source-specific context block
+- Full validation gate (same as Phase 1) — validator-gated, Telegram alert on failure
 
 ---
 
@@ -304,6 +312,7 @@ Every draft is validated before entering the approval queue. Drafts with any err
 | 2026-04-28 PM | **Buffer connected** — PSNM Facebook + Instagram live on Buffer (free tier, sales@). 12 posts seeded. Make.com wire: tomorrow. |
 | 2026-04-28 PM | **Business fundamentals** — VAT registered. NatWest Business account active. Landlord conversation positive. |
 | 2026-04-28 EOD | **Phase 2 scoped** — Insolvency monitor (Gazette scraping) + Defence supplier ingestion. Both deferred to 29 Apr 2026. Est. 75–90 min build. |
+| 2026-04-28 EOD | **Phase 2 built** — Gazette insolvency monitor + defence supplier ingestion. `harvestInsolvency()` + `harvestDefence()` live in `_intelligence_core.js`. Two new Atlas v2 pitch templates (INSOLVENCY RESCUE + DEFENCE SUPPLY CHAIN). `scoreAndDispatch()` 4-tier priority. WMS urgency banner, source filter, source counter strip. 2 new crons (06:15 daily + 06:30 Sun). Commits: 9b80791 (core) + 177e34b (WMS). Pending: deploy to production + test harvests. |
 
 ---
 
