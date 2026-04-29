@@ -4706,7 +4706,10 @@ function pipGetTriggers(p) {
   try {
     const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
     if (Array.isArray(parsed)) return parsed;
-    if (parsed && typeof parsed === 'object') return parsed.triggers || [];
+    if (parsed && typeof parsed === 'object') {
+      const t = parsed.triggers;
+      return Array.isArray(t) ? t : [];
+    }
   } catch {}
   return [];
 }
@@ -4777,8 +4780,8 @@ async function loadPipStats() {
 
     const rows = prospects.map(p => {
       const src = pipGetProspectSource(p);
-      const triggers = pipGetTriggers(p);
-      const chips = triggers.slice(0,3).map(s => `<span class="bdg bghost" style="font-size:9px;margin-right:2px">${escHtml(s.replace(/_/g,' '))}</span>`).join('');
+      const triggers = Array.isArray(pipGetTriggers(p)) ? pipGetTriggers(p) : [];
+      const chips = triggers.slice(0,3).map(s => `<span class="bdg bghost" style="font-size:9px;margin-right:2px">${escHtml(String(s).replace(/_/g,' '))}</span>`).join('');
       const emailDot = p.enriched_email    ? `<span style="color:var(--green);margin-left:4px" title="${escAttr(p.enriched_email)}">✉</span>` : '';
       const webDot   = p.enriched_website  ? `<span style="color:var(--muted);margin-left:2px" title="${escAttr(p.enriched_website)}">🌐</span>` : '';
       const dispDot  = p.atlas_dispatched  ? `<span style="color:var(--muted);margin-left:2px" title="Dispatched to Atlas">✓</span>` : '';
@@ -4931,7 +4934,8 @@ async function openPipDrawer(id) {
     const p = d.prospect;
     document.getElementById('pip-drawer-title').textContent = p.company_name || 'Prospect';
     const sics = JSON.parse(p.sic_codes || '[]').map(s => `${s.code} — ${s.description||s}`).join('<br>');
-    const signals = pipGetTriggers(p).map(s => `<span class="bdg bghost">${escHtml(s.replace(/_/g,' '))}</span>`).join(' ');
+    const safeSignals = Array.isArray(pipGetTriggers(p)) ? pipGetTriggers(p) : [];
+    const signals = safeSignals.map(s => `<span class="bdg bghost">${escHtml(String(s).replace(/_/g,' '))}</span>`).join(' ');
     const gradeColor = p.score_grade === 'A' ? 'var(--green)' : p.score_grade === 'B' ? '#f59e0b' : 'var(--muted)';
     const dispBtn = !p.atlas_dispatched ? `<button class="btn sm bgreen" onclick="runPipDispatchSingle('${p.id}','${(p.company_name||'').replace(/'/g,"\\'")}')">▶ Dispatch to Atlas</button>` : '<span style="color:var(--muted);font-size:11px">✓ Dispatched to Atlas</span>';
     document.getElementById('pip-drawer-body').innerHTML = `

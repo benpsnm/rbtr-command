@@ -533,7 +533,7 @@ async function harvest({ batch_size = 100, days_back = 365 } = {}) {
         incorporation_date: incDate || null,
         date_of_creation: incDate || null,
         ambient_likely:   clf.allowed,
-        trigger_signals:  JSON.stringify(triggers),
+        trigger_signals:  JSON.stringify(Array.isArray(triggers) ? triggers : []),
         score_grade:      grade,
         score_reasoning:  reasoning,
         outreach_hook:    hook,
@@ -804,6 +804,8 @@ Rules:
           enriched_linkedin:         parsed.linkedin || null,
           last_enrichment_attempt:   new Date().toISOString(),
           updated_at:                new Date().toISOString(),
+          // Coerce null trigger_signals to empty array to prevent frontend .map() errors
+          ...(row.trigger_signals == null ? { trigger_signals: '[]' } : {}),
         });
         enriched++;
       } else {
