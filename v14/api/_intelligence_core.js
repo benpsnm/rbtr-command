@@ -12,34 +12,57 @@ const CH_API_KEY    = process.env.COMPANIES_HOUSE_API_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const TABLE         = 'psnm_intelligence_prospects';
 
-// ── SIC ALLOWLIST — ambient physical-product businesses ──────────────────────
-const SIC_ALLOWLIST = new Set([
-  // Manufacturing / production (ambient)
-  10410,10440,10610,10710,10720,10810,10820,10860,11030,11040,
-  13100,13200,13300,14110,14120,14130,14310,14390,15110,15120,15200,
-  16101,16102,16210,16220,16240,16290,17110,17120,17211,17219,17220,17230,17240,17290,
-  18110,18120,18130,18140,18200,
+// ── SIC TIERS — high-confidence (A) vs possible (B) stockholding businesses ──
+// Tier A: wholesale/distribution + core manufacturing with definite physical storage
+// Tier B: retail/e-commerce + lighter manufacturing — need size/age qualifier
+
+const SIC_TIER_A = new Set([
+  // Paper & packaging manufacture (definite stock)
+  17110,17120,17211,17219,17220,17230,17240,17290,
+  // Rubber & plastics (manufacturing intermediates)
   22110,22190,22210,22220,22230,22290,
+  // Non-metallic minerals — glass, ceramics, packaging (ambient)
   23110,23120,23130,23140,23190,23200,23310,23320,23410,23420,23430,23440,23490,
   23510,23520,23610,23620,23630,23640,23650,23690,23700,23910,23990,
+  // Basic metals
   24100,24200,24310,24320,24330,24340,
+  // Fabricated metal products — hardware, structural, containers
   25110,25120,25210,25290,25300,25400,25500,25610,25620,25710,25720,25730,
   25910,25921,25929,25930,25940,25990,
+  // Electronics manufacturing
   26110,26120,26200,26301,26309,26400,26511,26512,26513,26514,26520,26600,26701,26702,26800,
+  // Electrical equipment manufacturing
   27110,27120,27200,27310,27320,27330,27400,27510,27520,27900,
+  // Machinery & equipment manufacturing
   28110,28120,28131,28132,28140,28150,28210,28220,28230,28240,28250,28291,28292,28293,28294,
   28301,28302,28410,28490,28910,28921,28922,28923,28930,28940,28950,28960,28990,
-  29100,29201,29202,29203,29310,29320,
-  30110,30120,30200,30300,30400,30910,30920,30990,
-  31010,31020,31030,31090,
-  32110,32120,32130,32200,32300,32401,32409,32500,32910,32990,
-  33110,33120,33130,33140,33150,33160,33170,33190,33200,
-  // Wholesale / distribution
+  // Wholesale / distribution (all — unambiguous stock-holding)
   46110,46120,46130,46140,46150,46160,46170,46180,46190,
   46210,46220,46230,46240,46310,46320,46330,46341,46342,46350,46360,46370,46380,46390,
   46410,46420,46431,46439,46441,46442,46450,46460,46470,46480,46491,46499,
   46510,46520,46610,46620,46630,46640,46650,46660,46690,
   46711,46719,46720,46730,46740,46750,46760,46770,46900,
+]);
+
+const SIC_TIER_B = new Set([
+  // Food processing — ambient only (oils, milling, sugar, cereals, cocoa)
+  10410,10440,10610,10710,10720,10810,10820,10860,11030,11040,
+  // Textiles & apparel
+  13100,13200,13300,14110,14120,14130,14310,14390,15110,15120,15200,
+  // Wood products
+  16101,16102,16210,16220,16240,16290,
+  // Printing & publishing
+  18110,18120,18130,18140,18200,
+  // Motor vehicles, parts & accessories
+  29100,29201,29202,29203,29310,29320,
+  // Other transport equipment — bicycles, motorcycles, recreational
+  30110,30120,30200,30300,30400,30910,30920,30990,
+  // Furniture manufacture
+  31010,31020,31030,31090,
+  // Other manufacturing — jewellery, sports, medical devices, toys
+  32110,32120,32130,32200,32300,32401,32409,32500,32910,32990,
+  // Repair & installation of equipment
+  33110,33120,33130,33140,33150,33160,33170,33190,33200,
   // E-commerce / retail with stockholding
   47190,47210,47220,47230,47240,47250,47260,47290,
   47410,47421,47429,47430,47510,47520,47530,47540,
@@ -226,8 +249,10 @@ function buildDefenceTriggers(meta) {
 function classifySics(sicCodes) {
   const codes = (sicCodes || []).map(s => parseInt(s.toString().replace(/\D/g, '')));
   const blocked = codes.some(c => SIC_BLOCKLIST.has(c));
-  const allowed = codes.some(c => SIC_ALLOWLIST.has(c));
-  return { blocked, allowed, unclassified: !blocked && !allowed };
+  const tierA   = !blocked && codes.some(c => SIC_TIER_A.has(c));
+  const tierB   = !blocked && !tierA && codes.some(c => SIC_TIER_B.has(c));
+  const allowed  = tierA || tierB;
+  return { blocked, tierA, tierB, allowed, unclassified: !blocked && !allowed };
 }
 
 // ── Address analysis ─────────────────────────────────────────────────────────
@@ -256,6 +281,19 @@ function isInnerLondon(postcode) {
   if (!postcode) return false;
   const pc = postcode.toUpperCase().replace(/\s/g, '');
   return INNER_LONDON_PREFIXES.some(p => pc.startsWith(p));
+}
+
+// Block postcodes where delivery economics make Hellaby uncompetitive or non-viable
+function isLogisticallyViable(postcode) {
+  if (!postcode) return true; // unknown — let through, don't over-block
+  const pc = postcode.toUpperCase().replace(/\s/g, '');
+  const BLOCKED_PREFIXES = [
+    'BT',                           // Northern Ireland (separate logistics network)
+    'JE','GY','IM',                 // Channel Islands / Isle of Man
+    'AB','IV','KW','PH','FK',       // Far-north Scotland (uneconomical delivery time)
+    'ZE','HS','KA',                 // Shetland, Western Isles, Ayrshire islands
+  ];
+  return !BLOCKED_PREFIXES.some(p => pc.startsWith(p));
 }
 
 function assignRegion(postcode) {
@@ -309,55 +347,78 @@ function assignRegion(postcode) {
 }
 
 // ── Scoring logic ─────────────────────────────────────────────────────────────
-function scoreProspect({ companyAge, isResidential, sicClassification, isInLondon, triggers, companyName }) {
+// Hard block order: name → SIC blocked → residential → non-viable region
+// Grade A: Tier A SIC + age ≤ 365 + non-residential + logViable
+// Grade B: (Tier A + age 366-730) OR (Tier B + age ≤ 365 + non-residential + logViable)
+// Grade C: inner London OR Tier B + age 366-730 — human review, never auto-dispatched
+function scoreProspect({ companyAge, isResidential, isLogViable, sicClassification, isInLondon, triggers, companyName }) {
   if (NAME_BLOCKLIST.some(p => p.test(companyName || ''))) {
     return { grade: null, reasoning: 'Blocked by company name pattern (hazmat/pharma/chilled)', hook: null };
   }
   if (sicClassification.blocked) {
     return { grade: null, reasoning: 'Blocked SIC code', hook: null };
   }
-  // Grade A: <90 days + residential + clean SIC
-  if (companyAge <= 90 && isResidential && !isInLondon && sicClassification.allowed) {
+  if (sicClassification.unclassified) {
+    return { grade: null, reasoning: 'Unclassified SIC code — default block', hook: null };
+  }
+  // Residential = hard block (no warehouse = nothing to store)
+  if (isResidential) {
+    return { grade: null, reasoning: 'Residential address — sole trader / pre-commercial stage', hook: null };
+  }
+  // Non-viable region
+  if (!isLogViable) {
+    return { grade: null, reasoning: 'Non-viable postcode region (NI / islands / far-north Scotland)', hook: null };
+  }
+
+  // Grade A: Tier A SIC + age ≤ 365 + non-London
+  if (sicClassification.tierA && companyAge <= 365 && !isInLondon) {
+    const ageLabel = companyAge <= 90 ? `${companyAge} days` : `${Math.round(companyAge / 30)} months`;
     return {
       grade: 'A',
-      reasoning: `Incorporated ${companyAge} days ago. Registered address looks residential — not yet in a warehouse. SIC code signals physical product business.`,
-      hook: `You incorporated ${companyAge} days ago. Wherever you're trading from now, it's not a warehouse. Hellaby is the geographic centre of GB — talk to me before you sign a lease.`,
+      reasoning: `Incorporated ${ageLabel} ago. Tier A SIC (wholesale/manufacturing) — high-confidence stock-holding business. Not yet in a dedicated warehouse.`,
+      hook: companyAge <= 90
+        ? `You incorporated ${companyAge} days ago. Most physical-product businesses find they need proper warehousing within 3 months. Hellaby is the geographic centre of GB — get a quote before you commit elsewhere.`
+        : `${Math.round(companyAge / 30)} months in — your logistics setup is being decided now, not later. Hellaby (S66): Glasgow 4hr, London 3hr, Liverpool port 2hr from one address. Worth a 15-min chat?`,
     };
   }
-  // Grade A: <90 days with strong SIC even without residential (could be accountant address)
-  if (companyAge <= 90 && !isInLondon && sicClassification.allowed) {
-    return {
-      grade: 'A',
-      reasoning: `Very recently incorporated (${companyAge} days). High probability of needing warehousing imminently.`,
-      hook: `You incorporated ${companyAge} days ago. Most new physical-product businesses realise they need proper warehousing within 3 months. Hellaby is the geographic centre of GB — get a quote before you commit elsewhere.`,
-    };
-  }
-  // Grade B: 90-365 days + allowed SIC
-  if (companyAge <= 365 && !isInLondon && (sicClassification.allowed || (isResidential && !sicClassification.blocked))) {
-    const residential_note = isResidential ? ' Registered address looks residential — probably still trading from home or an accountant address.' : '';
+
+  // Grade B case 1: Tier A SIC + age 366-730 days
+  if (sicClassification.tierA && companyAge > 365 && companyAge <= 730 && !isInLondon) {
     return {
       grade: 'B',
-      reasoning: `Incorporated ${companyAge} days ago. Growth stage business — likely reviewing warehousing options.${residential_note}`,
+      reasoning: `Incorporated ${Math.round(companyAge / 30)} months ago. Wholesale/manufacturing — likely reviewing warehousing as business matures.`,
+      hook: `Coming up on your second year — if your warehousing arrangements aren't sorted, now's the time. Our central GB location (Hellaby, S66) gives you Glasgow 4hr, London 3hr, Felixstowe 3hr from one address.`,
+    };
+  }
+
+  // Grade B case 2: Tier B SIC + age ≤ 365 + non-residential + logViable
+  if (sicClassification.tierB && companyAge <= 365 && !isInLondon) {
+    return {
+      grade: 'B',
+      reasoning: `Incorporated ${Math.round(companyAge / 30)} months ago. Tier B SIC (retail/apparel/furniture) — possible stock-holding business at growth stage.`,
       hook: `${companyAge <= 180 ? 'Just over 6 months in' : 'Coming up on your first year'} — your logistics setup is being decided now, not later. Our central GB location (Hellaby, S66) gives you Glasgow 4hr, London 3hr, Liverpool port 2hr from one address. Worth a 15-min chat?`,
     };
   }
-  // Grade B: Inner London — de-prioritise but still B
-  if (companyAge <= 365 && isInLondon && sicClassification.allowed) {
-    return {
-      grade: 'B',
-      reasoning: `London-registered, ${companyAge} days old. Local London options exist but are expensive — central GB argument still valid for national distribution.`,
-      hook: `London storage is expensive and slow for national dispatch. From Hellaby: Glasgow 4hrs, Cardiff 3.5hrs, all ports under 3hrs. If you're shipping nationally, it's worth a conversation.`,
-    };
-  }
-  // Grade C: 1-3 years
-  if (companyAge <= 1095 && (sicClassification.allowed || isResidential)) {
+
+  // Grade C: inner London (any qualifying SIC, any age ≤ 730) — not dispatched, for review
+  if (isInLondon && companyAge <= 730 && sicClassification.allowed) {
     return {
       grade: 'C',
-      reasoning: `Established (${Math.round(companyAge/365 * 10) / 10} years). Stable but may be reviewing warehouse costs.`,
+      reasoning: `London-registered, ${Math.round(companyAge / 30)} months old. Local options exist but are expensive — central GB argument valid for national distribution.`,
+      hook: `London storage is expensive and slow for national dispatch. From Hellaby: Glasgow 4hrs, Cardiff 3.5hrs, all ports under 3hrs. If you're shipping nationally, worth a conversation.`,
+    };
+  }
+
+  // Grade C: Tier B + age 366-730 — borderline, human review
+  if (sicClassification.tierB && companyAge > 365 && companyAge <= 730 && !isInLondon) {
+    return {
+      grade: 'C',
+      reasoning: `Tier B SIC, ${Math.round(companyAge / 30)} months old. Borderline — may be reviewing warehousing but lower confidence than Tier A.`,
       hook: `If you're reviewing warehousing for the year ahead — Hellaby gives you competitive central UK pricing with strong reach across all GB postcodes. Glasgow 4hr, London 3hr, Felixstowe 3hr from one address.`,
     };
   }
-  return { grade: null, reasoning: 'No trigger signals — deprioritised', hook: null };
+
+  return { grade: null, reasoning: 'Outside scoring criteria — deprioritised', hook: null };
 }
 
 // ── Phase 2: Gazette insolvency notice fetcher ───────────────────────────────
@@ -446,13 +507,14 @@ async function findAffectedCustomers(failedCompanyName, insolvencyType, noticeDa
 }
 
 // ── HARVEST ──────────────────────────────────────────────────────────────────
-async function harvest({ batch_size = 100, days_back = 365 } = {}) {
+async function harvest({ batch_size = 100, days_back = 365, dry_run = false } = {}) {
   if (!CH_API_KEY) return { ok: false, error: 'COMPANIES_HOUSE_API_KEY not set — add to Vercel env vars' };
 
   const cap = Math.min(batch_size, 500);
   const fromDate = new Date(Date.now() - days_back * 86400000).toISOString().slice(0, 10);
   let inserted = 0, skipped = 0, blocked = 0;
   const errors = [];
+  const dryRunLog = dry_run ? [] : null;
 
   // Build SIC code filter string for CH advanced search
   // We search by incorporation date range and filter SIC locally
@@ -477,8 +539,8 @@ async function harvest({ batch_size = 100, days_back = 365 } = {}) {
       const sics = company.sic_codes || [];
       const clf = classifySics(sics);
 
-      if (clf.blocked || (clf.unclassified)) {
-        // Default: BLOCK unclassified (per spec)
+      // Hard SIC block
+      if (clf.blocked || clf.unclassified) {
         blocked++;
         continue;
       }
@@ -504,22 +566,38 @@ async function harvest({ batch_size = 100, days_back = 365 } = {}) {
         ? Math.floor((Date.now() - new Date(incDate).getTime()) / 86400000)
         : 9999;
 
+      // Hard block: residential address
       const isResidential = isResidentialAddress(addr);
+      if (isResidential) { blocked++; continue; }
+
+      // Hard block: non-viable region
+      const logViable = isLogisticallyViable(postcode);
+      if (!logViable) { blocked++; continue; }
+
       const isLondon = isInnerLondon(postcode);
       const region = assignRegion(postcode);
 
       const triggers = [];
       if (companyAge <= 90) triggers.push('incorporated_under_90d');
       else if (companyAge <= 365) triggers.push('incorporated_under_365d');
-      if (isResidential) triggers.push('residential_address');
+      else if (companyAge <= 730) triggers.push('incorporated_under_730d');
+      if (clf.tierA) triggers.push('sic_tier_a');
+      else if (clf.tierB) triggers.push('sic_tier_b');
       if (isLondon) triggers.push('inner_london');
 
       const { grade, reasoning, hook } = scoreProspect({
-        companyAge, isResidential, sicClassification: clf, isInLondon: isLondon,
+        companyAge, isResidential: false, isLogViable: true,
+        sicClassification: clf, isInLondon: isLondon,
         triggers, companyName: company.company_name,
       });
 
       if (!grade) { skipped++; continue; }
+
+      if (dry_run) {
+        dryRunLog.push({ company_name: company.company_name, postcode, grade, sic_tier: clf.tierA ? 'A' : 'B', age_days: companyAge, reasoning });
+        inserted++;
+        continue;
+      }
 
       const sicFormatted = sics.map(s => ({ code: s, description: SIC_DESCRIPTIONS[parseInt(s)] || s }));
 
@@ -553,13 +631,15 @@ async function harvest({ batch_size = 100, days_back = 365 } = {}) {
     if (page.items.length < fetchSize) break; // last page
   }
 
-  return {
-    ok: true,
-    inserted, skipped, blocked,
-    total_fetched: totalFetched,
-    errors: errors.slice(0, 10),
-    from_date: fromDate,
-  };
+  const result = { ok: true, inserted, skipped, blocked, total_fetched: totalFetched, errors: errors.slice(0, 10), from_date: fromDate };
+  if (dry_run) {
+    result.dry_run = true;
+    result.dry_run_log = dryRunLog;
+    result.grade_a = dryRunLog.filter(r => r.grade === 'A').length;
+    result.grade_b = dryRunLog.filter(r => r.grade === 'B').length;
+    result.grade_c = dryRunLog.filter(r => r.grade === 'C').length;
+  }
+  return result;
 }
 
 // ── HARVEST INSOLVENCY ───────────────────────────────────────────────────────

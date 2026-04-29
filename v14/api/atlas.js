@@ -1710,6 +1710,7 @@ module.exports = async function handler(req, res) {
     if (action === 'intel_harvest_defence' && req.method === 'POST')             return res.status(200).json(await intelligence.harvestDefence(body));
     if (action === 'intel_harvest_insolvency_daily' && req.method === 'POST')    return res.status(200).json(await intelligence.harvestInsolvencyDaily());
     if (action === 'intel_harvest_defence_weekly' && req.method === 'POST')      return res.status(200).json(await intelligence.harvestDefenceWeekly());
+    if (action === 'intel_harvest_dryrun' && req.method === 'POST')             return res.status(200).json(await intelligence.harvest({ ...body, dry_run: true }));
     res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response|intel_stats|intel_harvest|intel_enrich|intel_dispatch|intel_prospect|intel_harvest_daily' });
   } catch (err) {
     console.error('[atlas]', err);
