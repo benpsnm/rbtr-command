@@ -22,7 +22,7 @@ EXTRACT these types of claims:
 - Distances in miles ("60 miles", "170 miles")
 - Facility capacity numbers ("1,602 pallet spaces", "1,602-space facility")
 - Facility spec type ("ambient only", "ambient pallet facility")
-- Postcode only — NOT town or city names ("S66 8HR" yes, "Hellaby" or "Rotherham" no)
+- Postcode only — use claim_type "facility" ("S66 8HR" yes, "Hellaby" or "Rotherham" no)
 - Motorway access ("M18/M1")
 - Prices with £ sign ("£3.95/pallet/week", "£3.50 per pallet movement")
 - Complete offer statements as ONE claim — do NOT split sub-components ("First week free when you commit to 12 weeks" is ONE claim, not two)
@@ -87,10 +87,13 @@ function matchClaim(claim, registry) {
   if (exact) return { matched: true, registry_value: exact.claim_value };
 
   // Determine which registry entries to search.
-  // claim_type 'other' means haiku couldn't classify it — try all types as fallback.
-  const sameType = claim.claim_type === 'other'
+  // claim_type 'other', or any unrecognised type haiku invents (e.g. "postcode"),
+  // falls back to searching all registry entries.
+  const KNOWN_TYPES = new Set(['drive_time', 'facility', 'offer_terms', 'other']);
+  const effectiveType = KNOWN_TYPES.has(claim.claim_type) ? claim.claim_type : 'other';
+  const sameType = effectiveType === 'other'
     ? registry
-    : registry.filter(r => r.claim_type === claim.claim_type);
+    : registry.filter(r => r.claim_type === effectiveType);
   const cv = claim.claim_value.toLowerCase();
 
   // 2. Bidirectional phrase match — skipped for drive_time.
@@ -98,11 +101,14 @@ function matchClaim(claim, registry) {
   // minute portion (e.g. "1h 30min" and "3h 30min" both contain "h 30min ") while
   // referring to completely different journeys. Phrase matching would create false
   // positives that let fabricated drive times through.
-  if (claim.claim_type !== 'drive_time') {
+  if (effectiveType !== 'drive_time') {
     // Normalise hyphens to spaces so "ambient-only" matches "ambient only".
-    const cvNorm = cv.replace(/-/g, ' ');
+    const cvNorm = cv.replace(/-/g, ' ').trim();
     for (const r of sameType) {
-      const rv = r.claim_value.toLowerCase().replace(/-/g, ' ');
+      const rv = r.claim_value.toLowerCase().replace(/-/g, ' ').trim();
+      // Exact value match (case-insensitive, normalised) — handles short unique codes
+      // like postcodes ("S66 8HR") that are below the minimum phrase length.
+      if (cvNorm === rv) return { matched: true, registry_value: r.claim_value };
       // Must be ≥ 8 chars AND ≥ 25% of the registry value length.
       // The 25% floor prevents short generic substrings (e.g. "12 weeks" at 22% of
       // notice_period) from incidentally matching the wrong registry entry.
