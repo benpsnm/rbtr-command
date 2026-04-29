@@ -1689,12 +1689,16 @@ module.exports = async function handler(req, res) {
     if (action === 'generate_ww_response' && req.method === 'POST') return res.status(200).json(await generateWWResponse(body));
     if (action === 'recompute_ww_quote' && req.method === 'POST')   return res.status(200).json(await recomputeWWQuote(body));
     // Intelligence Engine (absorbed from intelligence.js — 12-fn Hobby limit)
-    if (action === 'intel_stats' && req.method === 'GET')               return res.status(200).json(await intelligence.getStats());
-    if (action === 'intel_harvest' && req.method === 'POST')            return res.status(200).json(await intelligence.harvest(body));
-    if (action === 'intel_enrich' && req.method === 'POST')             return res.status(200).json(await intelligence.enrich(body));
-    if (action === 'intel_dispatch' && req.method === 'POST')           return res.status(200).json(await intelligence.scoreAndDispatch(body));
-    if (action === 'intel_prospect' && req.method === 'GET')            return res.status(200).json(await intelligence.getProspect(url.searchParams.get('id')));
-    if (action === 'intel_harvest_daily' && req.method === 'POST')      return res.status(200).json(await intelligence.harvestDaily());
+    if (action === 'intel_stats' && req.method === 'GET')                        return res.status(200).json(await intelligence.getStats());
+    if (action === 'intel_harvest' && req.method === 'POST')                     return res.status(200).json(await intelligence.harvest(body));
+    if (action === 'intel_enrich' && req.method === 'POST')                      return res.status(200).json(await intelligence.enrich(body));
+    if (action === 'intel_dispatch' && req.method === 'POST')                    return res.status(200).json(await intelligence.scoreAndDispatch(body));
+    if (action === 'intel_prospect' && req.method === 'GET')                     return res.status(200).json(await intelligence.getProspect(url.searchParams.get('id')));
+    if (action === 'intel_harvest_daily' && req.method === 'POST')               return res.status(200).json(await intelligence.harvestDaily());
+    if (action === 'intel_harvest_insolvency' && req.method === 'POST')          return res.status(200).json(await intelligence.harvestInsolvency(body));
+    if (action === 'intel_harvest_defence' && req.method === 'POST')             return res.status(200).json(await intelligence.harvestDefence(body));
+    if (action === 'intel_harvest_insolvency_daily' && req.method === 'POST')    return res.status(200).json(await intelligence.harvestInsolvencyDaily());
+    if (action === 'intel_harvest_defence_weekly' && req.method === 'POST')      return res.status(200).json(await intelligence.harvestDefenceWeekly());
     res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response|intel_stats|intel_harvest|intel_enrich|intel_dispatch|intel_prospect|intel_harvest_daily' });
   } catch (err) {
     console.error('[atlas]', err);
