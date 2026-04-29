@@ -112,7 +112,7 @@ function matchClaim(claim, registry) {
       // Must be ≥ 8 chars AND ≥ 25% of the registry value length.
       // The 25% floor prevents short generic substrings (e.g. "12 weeks" at 22% of
       // notice_period) from incidentally matching the wrong registry entry.
-      const minLen = Math.max(8, Math.ceil(rv.length * 0.25));
+      const minLen = Math.max(6, Math.ceil(rv.length * 0.25));
       for (let len = Math.min(cvNorm.length, rv.length); len >= minLen; len--) {
         for (let i = 0; i <= cvNorm.length - len; i++) {
           if (rv.includes(cvNorm.slice(i, i + len))) {
