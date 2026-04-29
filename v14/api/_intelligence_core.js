@@ -1069,11 +1069,13 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
     const all = await sbSelect(TABLE, `atlas_dispatched=eq.false&enriched_email=not.is.null&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
     const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
-    const urgentInsolvency = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') <= sevenDaysOut);
+    const urgentInsolvency  = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') <= sevenDaysOut);
+    const normalInsolvency  = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') >  sevenDaysOut);
     const chA    = all.filter(p => getProspectSource(p) === 'companies_house' && p.score_grade === 'A');
     const defB   = all.filter(p => getProspectSource(p) === 'defence_supplier');
     const chB    = all.filter(p => getProspectSource(p) === 'companies_house' && p.score_grade === 'B');
-    prospects = [...urgentInsolvency, ...chA, ...defB, ...chB].slice(0, cap);
+    // Priority: urgent insolvency → CH A → normal insolvency (still in window) → defence B → CH B
+    prospects = [...urgentInsolvency, ...chA, ...normalInsolvency, ...defB, ...chB].slice(0, cap);
   }
 
   if (!prospects || prospects.length === 0) {
