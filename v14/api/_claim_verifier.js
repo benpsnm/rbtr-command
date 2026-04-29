@@ -27,7 +27,7 @@ EXTRACT these types of claims:
 - Prices with £ sign ("£3.95/pallet/week", "£3.50 per pallet movement")
 - Complete offer statements as ONE claim — do NOT split sub-components ("First week free when you commit to 12 weeks" is ONE claim, not two)
 - Notice period ("30-day notice to cancel after the initial 12 weeks")
-- Onboarding timeline ("3-5 working days from contract signed")
+- Onboarding timeline — use claim_type "offer_terms" ("3-5 working days from contract signed")
 
 DO NOT extract:
 - Town or city names without a postcode (no "Hellaby", "Rotherham", "Manchester" alone)
@@ -82,29 +82,39 @@ function matchClaim(claim, registry) {
   );
   if (exact) return { matched: true, registry_value: exact.claim_value };
 
-  const sameType = registry.filter(r => r.claim_type === claim.claim_type);
+  // Determine which registry entries to search.
+  // claim_type 'other' means haiku couldn't classify it — try all types as fallback.
+  const sameType = claim.claim_type === 'other'
+    ? registry
+    : registry.filter(r => r.claim_type === claim.claim_type);
   const cv = claim.claim_value.toLowerCase();
 
-  // 2. Bidirectional phrase match — same claim_type only.
-  // Finds longest common substring between claim and each registry entry.
-  // Must be ≥ 8 chars AND ≥ 25% of the registry value length.
-  // The 25% floor prevents short generic substrings (e.g. "12 weeks") from
-  // matching registry entries where they appear incidentally.
-  for (const r of sameType) {
-    const rv = r.claim_value.toLowerCase();
-    const minLen = Math.max(8, Math.ceil(rv.length * 0.25));
-    for (let len = Math.min(cv.length, rv.length); len >= minLen; len--) {
-      for (let i = 0; i <= cv.length - len; i++) {
-        if (rv.includes(cv.slice(i, i + len))) {
-          return { matched: true, registry_value: r.claim_value };
+  // 2. Bidirectional phrase match — skipped for drive_time.
+  // Drive times must use numeric token matching only: two times can share the same
+  // minute portion (e.g. "1h 30min" and "3h 30min" both contain "h 30min ") while
+  // referring to completely different journeys. Phrase matching would create false
+  // positives that let fabricated drive times through.
+  if (claim.claim_type !== 'drive_time') {
+    for (const r of sameType) {
+      const rv = r.claim_value.toLowerCase();
+      // Must be ≥ 8 chars AND ≥ 25% of the registry value length.
+      // The 25% floor prevents short generic substrings (e.g. "12 weeks" at 22% of
+      // notice_period) from incidentally matching the wrong registry entry.
+      const minLen = Math.max(8, Math.ceil(rv.length * 0.25));
+      for (let len = Math.min(cv.length, rv.length); len >= minLen; len--) {
+        for (let i = 0; i <= cv.length - len; i++) {
+          if (rv.includes(cv.slice(i, i + len))) {
+            return { matched: true, registry_value: r.claim_value };
+          }
         }
       }
     }
   }
 
-  // 3. Numeric token match — same claim_type only.
+  // 3. Numeric token match — same claim_type only (or all types for 'other').
   // A distinctive numeric token (currency, time, distance, large number, period)
   // appearing in both the claim and a registry entry is treated as a match.
+  // For drive_time this is the ONLY match path — exact hour+minute combination required.
   const claimTokens = extractNumericTokens(cv);
   if (claimTokens.size > 0) {
     for (const r of sameType) {
