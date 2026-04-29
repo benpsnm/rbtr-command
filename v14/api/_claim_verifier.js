@@ -9,7 +9,7 @@
 //   has_red_claims     — one or more claims not in registry   → needs_source
 //   insufficient_data  — LLM reported INSUFFICIENT_DATA       → enrichment_required
 
-const Anthropic = require('@anthropic-ai/sdk');
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
 const EXTRACTION_PROMPT = `You are a fact-extraction assistant for a pallet storage cold-email pipeline.
 
@@ -84,15 +84,23 @@ async function verifyDraft(body, registry) {
 
   let extraction;
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const prompt = EXTRACTION_PROMPT.replace('{{DRAFT}}', body);
-    const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      messages: [{ role: 'user', content: prompt }],
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      }),
     });
-    const text = msg.content[0].text.trim();
-    // Strip markdown fences if present
+    if (!aiRes.ok) throw new Error(`Anthropic API ${aiRes.status}`);
+    const aiJson = await aiRes.json();
+    const text = (aiJson?.content?.[0]?.text || '').trim();
     const cleaned = text.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
     extraction = JSON.parse(cleaned);
   } catch (err) {
