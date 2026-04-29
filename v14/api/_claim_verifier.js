@@ -68,6 +68,10 @@ function extractNumericTokens(text) {
   (t.match(/£[\d,]+\.?\d*/g) || []).forEach(m => tokens.add(m));
   (t.match(/\d+h\s*\d+\s*min|\d+h\b(?!\s*\d)|\b\d+\s*min\b/g) || [])
     .forEach(m => tokens.add(m.replace(/\s+/g, '')));
+  // Sub-hour times written as "NN minutes" — normalise to "NNmin" so "25 minutes"
+  // and "25min" share the same token and match the registry.
+  (t.match(/\b\d+\s*minutes?\b/g) || [])
+    .forEach(m => tokens.add(m.replace(/\s+/g, '').replace(/minutes?$/, 'min')));
   (t.match(/\d+\s*miles?\b/g) || []).forEach(m => tokens.add(m.replace(/\s+/, ' ').trim()));
   (t.match(/\d{1,3}(?:,\d{3})+/g) || []).forEach(m => tokens.add(m));
   (t.match(/\d+-(?:day|week|month)s?/g) || []).forEach(m => tokens.add(m));
