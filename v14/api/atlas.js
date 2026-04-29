@@ -23,6 +23,7 @@ const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Nea
 const calcQuote = require('./_quote_calc');
 const intelligence = require('./_intelligence_core');
 const { validateDraft } = require('./_draft_validator');
+const { verifyDraft } = require('./_claim_verifier');
 
 function sbHeaders(extra = {}) {
   const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...extra };
@@ -1794,6 +1795,11 @@ module.exports = async function handler(req, res) {
     if (action === 'intel_harvest_defence_weekly' && req.method === 'POST')      return res.status(200).json(await intelligence.harvestDefenceWeekly());
     if (action === 'intel_harvest_dryrun' && req.method === 'POST')             return res.status(200).json(await intelligence.harvest({ ...body, dry_run: true }));
     if (action === 'intel_dispatch_dryrun' && req.method === 'POST')            return res.status(200).json(await intelligence.scoreAndDispatch({ ...body, dry_run: true }));
+    if (action === 'intel_verify_draft'    && req.method === 'POST') {
+      if (!body.body) return res.status(400).json({ error: 'body field required' });
+      const registry = await intelligence.loadFactRegistry();
+      return res.status(200).json(await verifyDraft(body.body, registry));
+    }
     res.status(400).json({ error: 'action required: offer_config|book|queue|scorecard|seed_day1|complete_action|log_cash|send_email|rank_targets|social_post|social_due|generate_drafts|dispatch_approved|update_draft|get_drafts|get_atlas_config|update_atlas_config|strategy_doc|inbound_email|get_ww_leads|update_ww_lead|generate_ww_response|intel_stats|intel_harvest|intel_enrich|intel_dispatch|intel_prospect|intel_harvest_daily' });
   } catch (err) {
     console.error('[atlas]', err);

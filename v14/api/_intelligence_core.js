@@ -1397,4 +1397,4 @@ async function harvestDefenceWeekly() {
   return harvestDefence({ cap: 50 });
 }
 
-module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect };
+module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect, loadFactRegistry };

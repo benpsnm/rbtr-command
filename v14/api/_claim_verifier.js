@@ -15,18 +15,26 @@ const EXTRACTION_PROMPT = `You are a fact-extraction assistant for a pallet stor
 
 Given an email draft below, extract every verifiable factual claim into a JSON array.
 For each claim output:
-  { "claim_type": "drive_time"|"facility"|"offer_terms"|"other", "claim_key": "<short key>", "claim_value": "<verbatim value from email>" }
+  { "claim_type": "drive_time"|"facility"|"offer_terms"|"other", "claim_key": "<short key>", "claim_value": "<verbatim text from email>" }
 
-Examples of what counts as a claim:
-- Drive time or distance ("1h 15min from Manchester", "60 miles")
-- Facility spec ("ambient only", "1,602 pallet spaces", "M18/M1")
-- Offer terms ("£3.45/pallet/week", "12-week minimum", "30-day notice")
-- Location/postcode ("S66 8HR", "Hellaby")
+EXTRACT these types of claims:
+- Drive times with duration ("1h 15min from Manchester", "3h 15min from London") — include the duration verbatim
+- Distances in miles ("60 miles", "170 miles")
+- Facility capacity numbers ("1,602 pallet spaces", "1,602-space facility")
+- Facility spec type ("ambient only", "ambient pallet facility")
+- Postcode only — NOT town or city names ("S66 8HR" yes, "Hellaby" or "Rotherham" no)
+- Motorway access ("M18/M1")
+- Prices with £ sign ("£3.95/pallet/week", "£3.50 per pallet movement")
+- Complete offer statements as ONE claim — do NOT split sub-components ("First week free when you commit to 12 weeks" is ONE claim, not two)
+- Notice period ("30-day notice to cancel after the initial 12 weeks")
+- Onboarding timeline ("3-5 working days from contract signed")
 
-Do NOT extract:
-- Generic opener/closer phrases
-- Prospect-specific facts about their business (those are not our claims)
-- Questions or calls to action
+DO NOT extract:
+- Town or city names without a postcode (no "Hellaby", "Rotherham", "Manchester" alone)
+- Volume ranges without an associated price (no "10-50 pallets" if £3.95/pallet/week is already extracted)
+- Sub-components of an offer statement — extract the full sentence as one claim
+- Generic phrases, greetings, sign-off lines, questions, calls to action
+- Facts about the prospect's own business
 
 If the draft contains the literal text "INSUFFICIENT_DATA" anywhere, return exactly:
   { "insufficient_data": true }
@@ -50,19 +58,62 @@ function buildFactBlock(registry) {
   return 'VERIFIED FACT REGISTRY:\n' + lines.join('\n');
 }
 
+// Extract distinctive numeric tokens from a string.
+// Patterns: currency (£3.95), drive times (3h 15min), distances (170 miles),
+// large formatted numbers (1,602), hyphenated periods (30-day, 12-week),
+// working-day ranges (3-5 working days).
+function extractNumericTokens(text) {
+  const t = text.toLowerCase();
+  const tokens = new Set();
+  (t.match(/£[\d,]+\.?\d*/g) || []).forEach(m => tokens.add(m));
+  (t.match(/\d+h\s*\d+\s*min|\d+h\b(?!\s*\d)|\b\d+\s*min\b/g) || [])
+    .forEach(m => tokens.add(m.replace(/\s+/g, '')));
+  (t.match(/\d+\s*miles?\b/g) || []).forEach(m => tokens.add(m.replace(/\s+/, ' ').trim()));
+  (t.match(/\d{1,3}(?:,\d{3})+/g) || []).forEach(m => tokens.add(m));
+  (t.match(/\d+-(?:day|week|month)s?/g) || []).forEach(m => tokens.add(m));
+  (t.match(/\d+-\d+\s*working\s*days?/g) || []).forEach(m => tokens.add(m.replace(/\s+/, ' ').trim()));
+  return tokens;
+}
+
 function matchClaim(claim, registry) {
-  // Exact key match first
+  // 1. Exact key match — same claim_type only
   const exact = registry.find(
     r => r.claim_type === claim.claim_type && r.claim_key === claim.claim_key
   );
   if (exact) return { matched: true, registry_value: exact.claim_value };
 
-  // Fuzzy: same type, value substring match
-  const fuzzy = registry.find(
-    r => r.claim_type === claim.claim_type &&
-         r.claim_value.toLowerCase().includes(claim.claim_value.toLowerCase().slice(0, 8))
-  );
-  if (fuzzy) return { matched: true, registry_value: fuzzy.claim_value };
+  const sameType = registry.filter(r => r.claim_type === claim.claim_type);
+  const cv = claim.claim_value.toLowerCase();
+
+  // 2. Bidirectional phrase match — same claim_type only.
+  // Finds longest common substring between claim and each registry entry.
+  // Must be ≥ 8 chars AND ≥ 25% of the registry value length.
+  // The 25% floor prevents short generic substrings (e.g. "12 weeks") from
+  // matching registry entries where they appear incidentally.
+  for (const r of sameType) {
+    const rv = r.claim_value.toLowerCase();
+    const minLen = Math.max(8, Math.ceil(rv.length * 0.25));
+    for (let len = Math.min(cv.length, rv.length); len >= minLen; len--) {
+      for (let i = 0; i <= cv.length - len; i++) {
+        if (rv.includes(cv.slice(i, i + len))) {
+          return { matched: true, registry_value: r.claim_value };
+        }
+      }
+    }
+  }
+
+  // 3. Numeric token match — same claim_type only.
+  // A distinctive numeric token (currency, time, distance, large number, period)
+  // appearing in both the claim and a registry entry is treated as a match.
+  const claimTokens = extractNumericTokens(cv);
+  if (claimTokens.size > 0) {
+    for (const r of sameType) {
+      const regTokens = extractNumericTokens(r.claim_value.toLowerCase());
+      if ([...claimTokens].some(t => regTokens.has(t))) {
+        return { matched: true, registry_value: r.claim_value };
+      }
+    }
+  }
 
   return { matched: false, registry_value: null };
 }
