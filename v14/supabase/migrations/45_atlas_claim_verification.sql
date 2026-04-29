@@ -67,10 +67,18 @@ ON CONFLICT (claim_type, claim_key) DO NOTHING;
 -- ── Seed: offer terms ─────────────────────────────────────────────────────────
 
 INSERT INTO psnm_atlas_fact_sources (claim_type, claim_key, claim_value, source, verified_by) VALUES
-  ('offer_terms', 'rate_peak',    '£3.95/pallet/week',   'manual', 'ben_greenwood'),
-  ('offer_terms', 'rate_mid',     '£3.45/pallet/week',   'manual', 'ben_greenwood'),
-  ('offer_terms', 'rate_off',     '£2.95/pallet/week',   'manual', 'ben_greenwood'),
-  ('offer_terms', 'commitment',   '12-week minimum',     'manual', 'ben_greenwood'),
-  ('offer_terms', 'notice',       '30-day notice',       'manual', 'ben_greenwood'),
-  ('offer_terms', 'trial',        '1-week trial option', 'manual', 'ben_greenwood')
+  ('offer_terms', 'rate_tier_1_100',    '£3.95/pallet/week (1-100 pallets)',               'manual', 'ben_greenwood'),
+  ('offer_terms', 'rate_tier_101_500',  '£3.50/pallet/week (101-500 pallets)',              'manual', 'ben_greenwood'),
+  ('offer_terms', 'rate_tier_500_plus', '£2.95/pallet/week (500+ pallets)',                 'manual', 'ben_greenwood'),
+  ('offer_terms', 'canonical_offer',    '1 week free WITH 12-week minimum commitment',      'manual', 'ben_greenwood'),
+  ('offer_terms', 'notice_period',      '30-day notice after initial 12 weeks',             'manual', 'ben_greenwood'),
+  ('offer_terms', 'goods_in_out',       '£3.50 per pallet movement',                        'manual', 'ben_greenwood'),
+  ('offer_terms', 'onboarding',         '3-5 working days from contract',                   'manual', 'ben_greenwood')
+ON CONFLICT (claim_type, claim_key) DO NOTHING;
+
+-- ── Seed: additional facility facts ──────────────────────────────────────────
+
+INSERT INTO psnm_atlas_fact_sources (claim_type, claim_key, claim_value, source, verified_by) VALUES
+  ('facility', 'no_fulfilment',  'no pick-pack, no fulfilment, no e-commerce dispatch', 'site_survey', 'ben_greenwood'),
+  ('facility', 'vat_registered', 'VAT registered',                                       'manual',      'ben_greenwood')
 ON CONFLICT (claim_type, claim_key) DO NOTHING;
