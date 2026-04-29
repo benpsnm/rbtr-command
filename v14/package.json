@@ -3,5 +3,8 @@
   "version": "14.0.0",
   "private": true,
   "description": "RBTR Command Centre V14 — JARVIS edition",
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "busboy": "^1.6.0"
+  }
 }

@@ -1171,6 +1171,39 @@ function isDistantLocation(location) {
   return false; // unknown — don't assume distant
 }
 
+// ── Multipart/form-data parser (SendGrid Inbound Parse) ──────────────────────
+// Vercel's default body parser cannot decode multipart — busboy handles it.
+// Skips attachments entirely; extracts only text fields.
+async function parseMultipart(req) {
+  const Busboy = require('busboy');
+  const { Readable } = require('stream');
+  return new Promise((resolve, reject) => {
+    const fields = {};
+    let bb;
+    try {
+      bb = Busboy({ headers: req.headers, limits: { fileSize: 0, parts: 50 } });
+    } catch (e) {
+      return resolve(fields); // headers missing or malformed — return empty
+    }
+    bb.on('field', (name, val) => { fields[name] = val; });
+    bb.on('file', (_name, stream) => stream.resume()); // discard attachments
+    bb.on('close', () => resolve(fields));
+    bb.on('error', (e) => { console.warn('[busboy]', e.message); resolve(fields); });
+
+    // Vercel may pre-buffer the body; handle both stream and buffered forms
+    const body = req.body;
+    if (body == null || (typeof body === 'object' && !Buffer.isBuffer(body) && Object.keys(body || {}).length === 0)) {
+      req.pipe(bb); // stream not yet consumed — pipe directly
+    } else if (Buffer.isBuffer(body)) {
+      Readable.from(body).pipe(bb);
+    } else if (typeof body === 'string') {
+      Readable.from(Buffer.from(body, 'binary')).pipe(bb);
+    } else {
+      resolve(fields); // can't recover body — return empty
+    }
+  });
+}
+
 // POST /api/atlas?action=inbound_email — SendGrid Inbound Parse webhook target.
 // Auth: SENDGRID_INBOUND_SECRET query param (bypasses x-rbtr-auth since SG has no custom headers).
 async function inboundEmail(req) {
@@ -1178,41 +1211,93 @@ async function inboundEmail(req) {
   const secret = process.env.SENDGRID_INBOUND_SECRET;
   if (secret && url.searchParams.get('secret') !== secret) return { ok: false, error: 'invalid webhook secret' };
 
-  const body = req.body || {};
-  const from = String(body.from || '');
-  const subject = String(body.subject || '').slice(0, 500);
-  const rawText = String(body.text || '').replace(/<[^>]+>/g, ' ');
-  const rawHtml = String(body.html || '');
-  const text = rawText || rawHtml.replace(/<[^>]+>/g, ' ');
-
-  // Detect WAM (WhichWarehouse Active Member) format
-  const isWAM = /\bWW-\d{4,}/i.test(text) && /whichwarehouse\s+member/i.test(text);
-
-  if (isWAM) {
-    return inboundWAM({ from, subject, text });
+  // Parse body — multipart/form-data (SendGrid) or JSON fallback
+  let from, subject, text;
+  const contentType = (req.headers['content-type'] || '').toLowerCase();
+  if (contentType.includes('multipart/form-data')) {
+    const fields = await parseMultipart(req);
+    from    = String(fields.from    || '');
+    subject = String(fields.subject || '').slice(0, 500);
+    const rawText = String(fields.text || '').replace(/<[^>]+>/g, ' ');
+    const rawHtml = String(fields.html || '');
+    text = rawText || rawHtml.replace(/<[^>]+>/g, ' ');
+  } else {
+    const body = req.body || {};
+    from    = String(body.from    || '');
+    subject = String(body.subject || '').slice(0, 500);
+    const rawText = String(body.text || '').replace(/<[^>]+>/g, ' ');
+    const rawHtml = String(body.html || '');
+    text = rawText || rawHtml.replace(/<[^>]+>/g, ' ');
   }
 
-  // ── Direct enquiry (existing WhichWarehouse forensics / other inbound) ──
+  // ── WhichWarehouse notification — simplified stub only, no parsing ─────────
+  // WW emails contain only a notification + link. WW reference lives in subject.
+  // e.g. "Ww WAM: 10 Pallets / Start Up Fulfilment / Yorkshire WW-11803"
+  const isWW = /whichwarehouse/i.test(from) || /\bWW-\d{4,6}\b/i.test(subject);
+  if (isWW) {
+    const wwRefMatch = subject.match(/\b(WW-\d{4,6})\b/i);
+    const ww_reference = wwRefMatch ? wwRefMatch[1].toUpperCase() : null;
+
+    const stubNotes = JSON.stringify({
+      stub: true,
+      ww_reference,
+      subject_line: subject,
+      sender_email: from,
+      note: 'Open WhichWarehouse directly to view enquiry details. No auto-parsing or quoting.',
+    });
+
+    const row = {
+      source:      'whichwarehouse_inbound',
+      company:     ww_reference || 'WW Enquiry',
+      raw_subject: subject,
+      notes:       stubNotes,
+      status:      'new',
+    };
+
+    const inserted = await sbInsert('psnm_ww_leads', [row]);
+    const leadId = inserted?.[0]?.id;
+
+    // Telegram: notification-only, no quote, no detail extraction
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    let telegramOk = false;
+    if (token && chatId) {
+      const lines = [
+        `🔔 <b>New WW enquiry</b>${ww_reference ? ' · ' + escHtml(ww_reference) : ''}`,
+        escHtml(subject || '(no subject)'),
+        ``,
+        `Open WhichWarehouse to view enquiry details.`,
+      ].join('\n');
+      const tg = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: lines, parse_mode: 'HTML', disable_web_page_preview: true }),
+      });
+      telegramOk = (await tg.json().catch(() => ({}))).ok;
+      if (telegramOk && leadId) await sbUpdate('psnm_ww_leads', { id: leadId }, { telegram_alerted: true }).catch(() => null);
+    }
+
+    return { ok: true, lead_id: leadId, source: 'whichwarehouse_inbound', ww_reference, subject, telegram_alerted: telegramOk };
+  }
+
+  // ── Non-WW inbound enquiry (direct, storage portals, etc.) ──────────────────
   const parsed = parseWWEmail(subject, text);
 
-  const source = /whichwarehouse/i.test(from) ? 'whichwarehouse'
-    : /storageseek|storagenet|easystore/i.test(from) ? 'storage_portal'
-    : 'email_inbound';
+  const source = /storageseek|storagenet|easystore/i.test(from) ? 'storage_portal' : 'email_inbound';
 
   const row = {
     source,
-    company:          parsed.company,
-    contact_name:     parsed.contact_name,
-    contact_email:    parsed.contact_email || (from.match(/<([^>]+)>/)?.[1] || from.split(/\s/)[0] || null),
-    contact_phone:    parsed.contact_phone,
-    pallet_count:     parsed.pallet_count,
-    location:         parsed.location,
-    goods_type:       parsed.goods_type,
-    start_date:       parsed.start_date,
-    notes:            text.slice(0, 2000),
-    raw_subject:      subject,
-    raw_body:         text.slice(0, 5000),
-    status:           'new',
+    company:       parsed.company,
+    contact_name:  parsed.contact_name,
+    contact_email: parsed.contact_email || (from.match(/<([^>]+)>/)?.[1] || from.split(/\s/)[0] || null),
+    contact_phone: parsed.contact_phone,
+    pallet_count:  parsed.pallet_count,
+    location:      parsed.location,
+    goods_type:    parsed.goods_type,
+    start_date:    parsed.start_date,
+    notes:         text.slice(0, 2000),
+    raw_subject:   subject,
+    status:        'new',
   };
 
   const inserted = await sbInsert('psnm_ww_leads', [row]);
@@ -1223,17 +1308,16 @@ async function inboundEmail(req) {
   let telegramOk = false;
   if (token && chatId) {
     const lines = [
-      `🔔 <b>NEW ${source === 'whichwarehouse' ? 'WW' : 'INBOUND'} LEAD</b>`,
+      `🔔 <b>NEW INBOUND LEAD</b>`,
       parsed.company      ? `<b>${escHtml(parsed.company)}</b>` : '(company not parsed)',
       parsed.contact_name ? `Contact: ${escHtml(parsed.contact_name)}` : null,
       parsed.pallet_count ? `Pallets: <b>${parsed.pallet_count}</b>` : null,
       parsed.location     ? `Location: ${escHtml(parsed.location)}` : null,
       parsed.goods_type   ? `Goods: ${escHtml(parsed.goods_type)}` : null,
-      parsed.start_date   ? `Start: ${escHtml(parsed.start_date)}` : null,
       ``,
       `📧 Subject: ${escHtml(subject.slice(0, 80))}`,
       ``,
-      `Review + respond: <i>rbtr-jarvis.vercel.app/wms.html</i> → Intelligence → WW Leads`,
+      `Review: <i>rbtr-jarvis.vercel.app/wms.html</i> → Intelligence → WW Leads`,
     ].filter(Boolean).join('\n');
     const tg = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
@@ -1241,9 +1325,7 @@ async function inboundEmail(req) {
       body: JSON.stringify({ chat_id: chatId, text: lines, parse_mode: 'HTML', disable_web_page_preview: true }),
     });
     telegramOk = (await tg.json().catch(() => ({}))).ok;
-    if (telegramOk && leadId) {
-      await sbUpdate('psnm_ww_leads', { id: leadId }, { telegram_alerted: true }).catch(() => null);
-    }
+    if (telegramOk && leadId) await sbUpdate('psnm_ww_leads', { id: leadId }, { telegram_alerted: true }).catch(() => null);
   }
 
   return { ok: true, lead_id: leadId, source, parsed, telegram_alerted: telegramOk };
