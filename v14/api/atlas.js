@@ -69,9 +69,22 @@ async function sendTelegramAlert(text) {
   }).catch(() => null);
 }
 
+// Cron actions that Vercel fires directly — no x-rbtr-auth header on these calls.
+const CRON_ACTIONS = new Set([
+  'intel_harvest_daily',
+  'intel_harvest_insolvency_daily',
+  'intel_harvest_defence_weekly',
+]);
+
 // ── Auth perimeter (matches supabase-proxy pattern) ─────────────────────────
-function checkAuth(req) {
+function checkAuth(req, action) {
   if (!RBTR_AUTH_TOKEN) return { ok: true };
+  // Vercel cron jobs fire with no x-rbtr-auth header — bypass for known cron actions.
+  if (action && CRON_ACTIONS.has(action)) return { ok: true };
+  // Vercel CRON_SECRET support (Authorization: Bearer <secret>).
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers?.authorization || '';
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) return { ok: true };
   const supplied = req.headers?.['x-rbtr-auth'];
   const origin = req.headers?.origin || '';
   const referer = req.headers?.referer || '';
@@ -1654,10 +1667,8 @@ module.exports = async function handler(req, res) {
 
   // inbound_email: auth via SENDGRID_INBOUND_SECRET query param (not x-rbtr-auth)
   if (action === 'inbound_email' && req.method === 'POST') return res.status(200).json(await inboundEmail(req));
-  // intel_harvest_daily: cron-only, no user auth (Vercel cron calls have no headers)
-  if (action === 'intel_harvest_daily' && req.method === 'POST') return res.status(200).json(await intelligence.harvestDaily());
 
-  const auth = checkAuth(req);
+  const auth = checkAuth(req, action);
   if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }
 
   try {
