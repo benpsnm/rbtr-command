@@ -1,5 +1,6 @@
 # PSNM Prospect Intelligence Engine — Architecture & Operations
-# v1.0 — 2026-04-28
+# v2.0 — Phase 2 live 2026-04-28
+# Sources: Companies House (Phase 1) | Gazette Insolvency (Phase 2a) | Defence Supplier (Phase 2b)
 
 ---
 
@@ -7,7 +8,7 @@
 
 Automated lead research system that harvests newly-incorporated UK companies from Companies House, scores them for warehousing need, enriches contact data via Claude web search, and dispatches A-tier prospects to the Atlas v2 approval queue.
 
-**Data flow:**
+**Phase 1 data flow (Companies House):**
 ```
 Companies House Advanced Search API
          ↓ (harvest — filter by SIC, date, address)
@@ -17,6 +18,34 @@ Claude web search (enrich — website, email, phone, LinkedIn)
          ↓ (dispatch — A-tier with email → psnm_atlas_drafts)
 Atlas Approval Queue (WMS Intelligence tab)
          ↓ (human reviews → approves → SendGrid dispatch)
+```
+
+**Phase 2 data flow (multi-source):**
+```
+CRON TRIGGERS (vercel.json)
+  06:00 daily  → intel_harvest_daily          (Companies House)
+  06:15 daily  → intel_harvest_insolvency_daily (Gazette insolvency)
+  06:30 Sunday → intel_harvest_defence_weekly  (Defence suppliers)
+          |
+          v
+  _intelligence_core.js
+    harvestCH()          → Companies House API → enrich() → score() → insert
+    harvestInsolvency()  → Gazette Atom feed → Claude web search → enrich() → insert
+    harvestDefence()     → Claude web search × 5 queries → CH verify → insert
+          |
+          v
+  scoreAndDispatch() — priority order:
+    1. urgentInsolvency  (gazette_insolvency, window ≤ 7 days)
+    2. chA               (companies_house, grade A)
+    3. defB              (defence_supplier, any grade)
+    4. chB               (companies_house, grade B)
+          |
+          v
+  generateDraftViaAtlas() — detects pitch_type → injects context
+  Atlas v2: INSOLVENCY RESCUE PITCH / DEFENCE SUPPLY CHAIN PITCH
+          |
+          v
+  _draft_validator.js → pending_approval or needs_revision
 ```
 
 ---
@@ -33,11 +62,18 @@ Absorbed into atlas.js to stay within Vercel Hobby 12-function limit.
 | `intel_enrich` | POST | Enrich missing contact data via Claude |
 | `intel_dispatch` | POST | Create Atlas drafts for A-tier prospects |
 | `intel_prospect` | GET + `&id=` | Full prospect detail |
-| `intel_harvest_daily` | POST | Cron combined run (no auth required) |
+| `intel_harvest_daily` | POST | Cron combined CH run (no auth required) |
+| `intel_harvest_insolvency` | POST | Manual insolvency harvest trigger |
+| `intel_harvest_defence` | POST | Manual defence harvest trigger |
+| `intel_harvest_insolvency_daily` | POST | Cron insolvency run (no auth required) |
+| `intel_harvest_defence_weekly` | POST | Cron defence run (no auth required) |
+| `validate_existing` | POST | Retroactive validator scan of queue |
 
 **Harvest params:** `{ batch_size: 100, days_back: 365 }` (caps: 500/day max)
 **Enrich params:** `{ limit: 50 }` (caps: 100/day max)
 **Dispatch params:** `{ limit: 10 }` (caps: 50 at once)
+**Insolvency params:** `{ days_back: 14 }` (Gazette lookback window)
+**Defence params:** `{ cap: 50 }` (max prospects per run)
 
 ---
 
@@ -106,12 +142,14 @@ Covers: Midlands/North, North West/West Midlands, North East, London, South/Sout
 |-----|-------|---------------|
 | Companies House | 600 req/5 min | ~1.4 req/sec (700ms gap between calls), 3x retry with exponential backoff |
 | Anthropic (enrichment) | 30k tokens/min | 2s sleep between enrichment calls, 50/day cap |
+| Gazette Atom feed | 30 req/min | 2.1s gap via `gazetteThrottle()`, max 20 notices per run |
+| Claude web search (defence) | 5 per harvest | 5 fixed queries, batched per run |
 | Supabase | Effectively unlimited for our volume | No throttling needed |
 
-Cron runs at 06:00 UK daily:
-- Harvest: 100 records from last 48hrs
-- Enrich: 50 A/B prospects
-- Dispatch: 10 A-tier with email
+Cron schedule:
+- 06:00 — CH harvest: 100 records from last 48hrs, enrich 50, dispatch 10 A-tier
+- 06:15 — Insolvency harvest: Gazette last 14 days, max 20 notices, max 50 candidates
+- 06:30 Sun — Defence harvest: 5 web search queries, max 50 prospects
 
 **Feature flag:** set `PSNM_INTELLIGENCE_AUTORUN=false` in Vercel env to pause cron instantly without code change.
 
@@ -176,9 +214,19 @@ Then click "Dispatch A-tier" from the WMS, or trigger via API.
 The "🔍 Prospect Intelligence Engine" card loads stats on every Intelligence tab open.
 
 **Buttons:**
-- ⬇ Harvest — triggers `/api/atlas?action=intel_harvest` with batch_size=100, days_back=365
+- ⬇ CH Harvest — triggers `/api/atlas?action=intel_harvest` with batch_size=100, days_back=365
 - 🔎 Enrich — triggers enrich on top 50 unenriched A/B prospects
 - ▶ Dispatch A-tier — creates Atlas drafts for A-tier with email, marks dispatched
+- 🚨 Insolvency — triggers `intel_harvest_insolvency` manually
+- 🛡 Defence — triggers `intel_harvest_defence` manually
+
+**Source filter dropdown:** filters prospect rows by source: All / Companies House / Insolvency Rescue / Defence Supplier.
+
+**Urgency banner:** appears at top of Intelligence tab when any insolvency prospect has ≤ 7 days remaining on their urgency window. Links to source filter = insolvency.
+
+**Source counter strip:** CH count | Insolvency count | Defence count — updates on every stats load.
+
+**Source badge on each row:** coloured badge showing source at a glance.
 
 **Prospect drawer:** click any row → right-panel drawer with full CH data, SIC codes, trigger signals, outreach hook, enrichment data, and dispatch button.
 
@@ -186,4 +234,79 @@ After dispatch, drafts appear in the Atlas Approval Queue. Review → approve �
 
 ---
 
-_Last updated: 2026-04-28. Maintained by: update whenever schema, scoring, or rate limits change._
+## Phase 2 Failure Modes — Insolvency Monitor
+
+| Failure Mode | Symptoms | Mitigation |
+|---|---|---|
+| Gazette Atom feed format change | XML parse errors, 0 notices | Check `fetchGazetteNotices()` regex if notices drop to 0 for 3+ consecutive days |
+| False positive — wrong company type | Non-logistics company in queue | SIC code filter (`LOGISTICS_SIC_CODES`) limits scope; Ben reviews before approval |
+| False positive — customer search too broad | Unrelated companies flagged | Claude prompt explicitly asks for companies that used the failed 3PL as their warehouse provider |
+| Duplicate notices across days | Same notice re-inserted | `_gazette_notice_id` in trigger_signals + Supabase upsert on CH number prevents duplicates |
+| Urgency window stale | Old insolvency prospect still in queue | `scoreAndDispatch()` deprioritises after window ends; WMS can filter by urgency |
+| Claude web search quota exhausted | 0 customers from valid notice | `findAffectedCustomers()` returns `[]` gracefully; notice logged, no prospects inserted for that run |
+
+---
+
+## trigger_signals Format Reference
+
+**Companies House (Phase 1) — JSON array:**
+```json
+["filed accounts late", "sector: wholesale trade", "headcount growth signal"]
+```
+
+**Gazette Insolvency (Phase 2a) — JSON object:**
+```json
+{
+  "_source": "gazette_insolvency",
+  "_failed_company": "Rotherham Storage Solutions Ltd",
+  "_insolvency_type": "administration",
+  "_notice_date": "2026-04-20",
+  "_urgency_window_ends": "2026-05-11",
+  "_gazette_notice_id": "gazette-2026-04-20-2430-001",
+  "outreach_hook": "Rotherham Storage Solutions entered administration this week — their customers are sorting alternatives."
+}
+```
+
+**Defence Supplier (Phase 2b) — JSON object:**
+```json
+{
+  "_source": "defence_supplier",
+  "_search_query": "UK SME defence supply chain logistics south yorkshire",
+  "_confidence": "medium",
+  "outreach_hook": "Supporting the UK defence supply chain from the M18/M1 corridor."
+}
+```
+
+The `Array.isArray()` check in `getSafeTriggers()` distinguishes Phase 1 arrays from Phase 2 objects.
+
+---
+
+## Schema Migration (when Supabase DDL access available)
+
+Currently all Phase 2 metadata lives in the existing `trigger_signals TEXT` column as a JSON object. When a proper upgrade is possible:
+
+```sql
+ALTER TABLE psnm_intelligence_prospects ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'companies_house';
+ALTER TABLE psnm_intelligence_prospects ADD COLUMN IF NOT EXISTS source_metadata JSONB;
+ALTER TABLE psnm_intelligence_prospects ADD COLUMN IF NOT EXISTS urgency_window_ends DATE;
+UPDATE psnm_intelligence_prospects SET source = 'companies_house' WHERE source IS NULL;
+CREATE INDEX IF NOT EXISTS idx_pip_source_grade ON psnm_intelligence_prospects (source, score_grade, urgency_window_ends);
+```
+
+After migration: update `getProspectSource()`, `getSourceMeta()`, `getUrgencyWindowEnds()` in `_intelligence_core.js` to read from dedicated columns.
+
+---
+
+## Phase 2C+ Roadmap
+
+| Source | Trigger | Pitch angle | Priority |
+|---|---|---|---|
+| Amazon FBA Refugees | FBA fee increase announcements | Transition 3PL — Hellaby M18 corridor for national distribution | High |
+| CCS Framework Suppliers | Crown Commercial Service data | Govt contract fulfilment — ambient storage for public sector supply | Medium |
+| Freight Forwarder Partnerships | BIFA/FIATA member directories | Joint offering — we store, they move | Medium |
+| Trade Body Members | FDF, UKWA, CBI regional chapters | Sector-specific outreach (food/FMCG, manufacturing) | Low |
+| Port Overflow Monitor | Felixstowe/Liverpool congestion signals | Emergency overflow storage — 3hr from Felixstowe | High |
+
+---
+
+_Last updated: 2026-04-28 (Phase 2 live). Maintained by: update whenever schema, scoring, sources, or rate limits change._

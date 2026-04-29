@@ -3818,16 +3818,30 @@ Pallet Storage Near Me
 
   <!-- Prospect Intelligence Engine -->
   <div class="card" id="pip-card">
+    <!-- Urgency banner — shown when insolvency rescue window closing -->
+    <div id="pip-urgency-banner" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:5px;padding:8px 12px;margin:0 0 8px;font-size:11px;cursor:pointer" onclick="pipSetSourceFilter('gazette_insolvency')">
+      <span style="color:var(--red);font-weight:700" id="pip-urgency-text">🚨 Insolvency rescue — outreach window closing within 7 days. Click to filter.</span>
+    </div>
     <div class="ct">
       🔍 Prospect Intelligence Engine
       <span class="bdg bg2" id="pip-a-count" style="margin-left:4px"></span>
       <span class="bdg bghost" id="pip-total-count" style="margin-left:4px;font-size:9px"></span>
-      <div class="flex mla" style="gap:6px">
-        <button class="btn sm bghost" onclick="runPipHarvest()" id="pip-harvest-btn">⬇ Harvest</button>
+      <div class="flex mla" style="gap:6px;align-items:center">
+        <select id="pip-source-filter" class="inp" style="padding:3px 6px;font-size:10px;width:auto;background:var(--bg3)" onchange="loadPipStats()">
+          <option value="">All sources</option>
+          <option value="companies_house">Companies House</option>
+          <option value="gazette_insolvency">🚨 Insolvency Rescue</option>
+          <option value="defence_supplier">🛡 Defence</option>
+        </select>
+        <button class="btn sm bghost" onclick="runPipHarvest()" id="pip-harvest-btn">⬇ CH Harvest</button>
+        <button class="btn sm bghost" onclick="runPipHarvestInsolvency()" id="pip-insolvency-btn">🚨 Insolvency</button>
+        <button class="btn sm bghost" onclick="runPipHarvestDefence()" id="pip-defence-btn">🛡 Defence</button>
         <button class="btn sm bghost" onclick="runPipEnrich()" id="pip-enrich-btn">🔎 Enrich</button>
-        <button class="btn sm bgreen" onclick="runPipDispatch()" id="pip-dispatch-btn">▶ Dispatch A-tier</button>
+        <button class="btn sm bgreen" onclick="runPipDispatch()" id="pip-dispatch-btn">▶ Dispatch</button>
       </div>
     </div>
+    <!-- Source counter strip -->
+    <div id="pip-source-strip" style="display:none;padding:6px 12px;border-bottom:1px solid var(--border);font-size:10px;color:var(--muted)"></div>
     <div id="pip-body"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
   </div>
 
@@ -4676,6 +4690,33 @@ async function loadIntelligence() {
 // ── Prospect Intelligence Engine ────────────────────────────────────────────
 const PIP_AUTH = { 'Content-Type': 'application/json' };
 
+function pipGetProspectSource(p) {
+  const ts = p.trigger_signals;
+  if (!ts) return 'companies_house';
+  try {
+    const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') return parsed._source || 'companies_house';
+  } catch {}
+  return 'companies_house';
+}
+
+function pipGetTriggers(p) {
+  const ts = p.trigger_signals;
+  if (!ts) return [];
+  try {
+    const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') return parsed.triggers || [];
+  } catch {}
+  return [];
+}
+
+function pipSetSourceFilter(val) {
+  const sel = document.getElementById('pip-source-filter');
+  if (sel) sel.value = val;
+  loadPipStats();
+}
+
 async function loadPipStats() {
   const el = document.getElementById('pip-body');
   try {
@@ -4683,28 +4724,70 @@ async function loadPipStats() {
     const d = await r.json();
     if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed'}</span>`; return; }
     const { counts, recent } = d;
+    const bySrc = counts.by_source || {};
+
+    // Urgency banner
+    const urgencyBanner = document.getElementById('pip-urgency-banner');
+    const urgencyText   = document.getElementById('pip-urgency-text');
+    if (urgencyBanner && counts.urgent_insolvency > 0) {
+      urgencyBanner.style.display = '';
+      if (urgencyText) urgencyText.textContent = `🚨 ${counts.urgent_insolvency} insolvency rescue${counts.urgent_insolvency > 1 ? 's' : ''} — outreach window closing within 7 days. Click to filter.`;
+    } else if (urgencyBanner) {
+      urgencyBanner.style.display = 'none';
+    }
+
+    // Source counter strip
+    const strip = document.getElementById('pip-source-strip');
+    if (strip) {
+      const parts = [
+        `CH: <b>${bySrc.companies_house || 0}</b>`,
+        bySrc.gazette_insolvency ? `🚨 Insolvency: <b style="color:var(--red)">${bySrc.gazette_insolvency}</b>` : null,
+        bySrc.defence_supplier   ? `🛡 Defence: <b style="color:var(--blue)">${bySrc.defence_supplier}</b>`    : null,
+        `Total: <b>${counts.total}</b> · Dispatched: <b>${counts.dispatched}</b>`,
+      ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+      strip.innerHTML = parts;
+      strip.style.display = '';
+    }
 
     document.getElementById('pip-a-count').textContent = counts.A ? `A: ${counts.A}` : '';
-    document.getElementById('pip-total-count').textContent = counts.total ? `${counts.total} total · ${counts.dispatched} dispatched` : '0 prospects';
+    document.getElementById('pip-total-count').textContent = counts.total ? `${counts.total} total` : '0 prospects';
 
-    if (!recent || recent.length === 0) {
-      el.innerHTML = `<span style="color:var(--muted);font-size:12px">No prospects yet — click ⬇ Harvest to pull from Companies House.</span>`;
+    // Source filter
+    const sourceFilter = (document.getElementById('pip-source-filter')?.value || '').toLowerCase();
+
+    // Filter and show recent prospects
+    let prospects = recent || [];
+    if (sourceFilter) {
+      prospects = prospects.filter(p => pipGetProspectSource(p) === sourceFilter);
+    }
+
+    if (!prospects.length) {
+      el.innerHTML = sourceFilter
+        ? `<span style="color:var(--muted);font-size:12px;padding:12px;display:block">No ${sourceFilter.replace(/_/g,' ')} prospects yet.</span>`
+        : `<span style="color:var(--muted);font-size:12px;padding:12px;display:block">No prospects yet — click ⬇ CH Harvest to pull from Companies House.</span>`;
       return;
     }
 
     const gradeColor = g => g === 'A' ? 'var(--green)' : g === 'B' ? '#f59e0b' : 'var(--muted)';
-    const rows = recent.map(p => {
-      const signals = JSON.parse(p.trigger_signals || '[]');
-      const chips = signals.map(s => `<span class="bdg bghost" style="font-size:9px;margin-right:2px">${s.replace(/_/g,' ')}</span>`).join('');
-      const emailDot = p.enriched_email ? `<span style="color:var(--green);margin-left:4px" title="${p.enriched_email}">✉</span>` : '';
-      const webDot  = p.enriched_website ? `<span style="color:var(--muted);margin-left:2px" title="${p.enriched_website}">🌐</span>` : '';
-      const dispDot = p.atlas_dispatched ? `<span style="color:var(--muted);margin-left:2px" title="Dispatched to Atlas">✓</span>` : '';
+    const sourceBadge = src => {
+      if (src === 'gazette_insolvency') return `<span class="bdg brd" style="font-size:8px;margin-left:3px">🚨 rescue</span>`;
+      if (src === 'defence_supplier')   return `<span class="bdg bbl" style="font-size:8px;margin-left:3px">🛡 defence</span>`;
+      return '';
+    };
+
+    const rows = prospects.map(p => {
+      const src = pipGetProspectSource(p);
+      const triggers = pipGetTriggers(p);
+      const chips = triggers.slice(0,3).map(s => `<span class="bdg bghost" style="font-size:9px;margin-right:2px">${escHtml(s.replace(/_/g,' '))}</span>`).join('');
+      const emailDot = p.enriched_email    ? `<span style="color:var(--green);margin-left:4px" title="${escAttr(p.enriched_email)}">✉</span>` : '';
+      const webDot   = p.enriched_website  ? `<span style="color:var(--muted);margin-left:2px" title="${escAttr(p.enriched_website)}">🌐</span>` : '';
+      const dispDot  = p.atlas_dispatched  ? `<span style="color:var(--muted);margin-left:2px" title="Dispatched to Atlas">✓</span>` : '';
       return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openPipDrawer('${p.id}')">
         <td style="padding:6px 8px;font-family:var(--mono);font-size:10px">
           <span style="color:${gradeColor(p.score_grade)};font-weight:700;font-size:13px">${p.score_grade || '?'}</span>
         </td>
         <td style="padding:6px 8px;font-size:12px;max-width:200px">
-          <div style="font-weight:500">${escHtml(p.company_name || '—')}</div>
+          <div style="font-weight:500">${escHtml(p.company_name || '—')}${sourceBadge(src)}</div>
           <div style="color:var(--muted);font-size:10px">${escHtml(p.postcode || '')} ${escHtml(p.region || '')}${emailDot}${webDot}${dispDot}</div>
         </td>
         <td style="padding:6px 8px;font-size:11px;color:var(--muted);max-width:220px">${chips}</td>
@@ -4712,9 +4795,6 @@ async function loadPipStats() {
     }).join('');
 
     el.innerHTML = `
-      <div style="margin-bottom:8px;font-size:11px;color:var(--muted)">
-        A: <b style="color:var(--green)">${counts.A}</b> &nbsp; B: <b style="color:#f59e0b">${counts.B}</b> &nbsp; C: <b style="color:var(--muted)">${counts.C}</b> &nbsp; Dispatched: <b>${counts.dispatched}</b>
-      </div>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">
           <th style="padding:4px 8px;text-align:left">Grade</th>
@@ -4793,7 +4873,51 @@ async function runPipDispatch() {
   } catch(e) {
     toast('Dispatch failed: ' + e.message, true);
   } finally {
-    btn.disabled = false; btn.textContent = '▶ Dispatch A-tier';
+    btn.disabled = false; btn.textContent = '▶ Dispatch';
+  }
+}
+
+async function runPipHarvestInsolvency() {
+  const btn = document.getElementById('pip-insolvency-btn');
+  btn.disabled = true; btn.textContent = '⏳ Scanning Gazette…';
+  try {
+    const r = await fetch('/api/atlas?action=intel_harvest_insolvency', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ days_back: 14 }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`🚨 Insolvency harvest: ${d.inserted} customers inserted from ${d.failed_companies_checked} failed 3PLs (${d.total_notices} Gazette notices)`);
+      loadPipStats();
+    } else {
+      toast('Insolvency harvest error: ' + (d.error || 'unknown'), true);
+    }
+  } catch(e) {
+    toast('Insolvency harvest failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🚨 Insolvency';
+  }
+}
+
+async function runPipHarvestDefence() {
+  const btn = document.getElementById('pip-defence-btn');
+  btn.disabled = true; btn.textContent = '⏳ Searching defence…';
+  try {
+    const r = await fetch('/api/atlas?action=intel_harvest_defence', {
+      method: 'POST', headers: PIP_AUTH,
+      body: JSON.stringify({ cap: 50 }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`🛡 Defence harvest: ${d.inserted} inserted from ${d.total_searched} candidates`);
+      loadPipStats();
+    } else {
+      toast('Defence harvest error: ' + (d.error || 'unknown'), true);
+    }
+  } catch(e) {
+    toast('Defence harvest failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🛡 Defence';
   }
 }
 
@@ -4807,7 +4931,7 @@ async function openPipDrawer(id) {
     const p = d.prospect;
     document.getElementById('pip-drawer-title').textContent = p.company_name || 'Prospect';
     const sics = JSON.parse(p.sic_codes || '[]').map(s => `${s.code} — ${s.description||s}`).join('<br>');
-    const signals = JSON.parse(p.trigger_signals || '[]').map(s => `<span class="bdg bghost">${s.replace(/_/g,' ')}</span>`).join(' ');
+    const signals = pipGetTriggers(p).map(s => `<span class="bdg bghost">${escHtml(s.replace(/_/g,' '))}</span>`).join(' ');
     const gradeColor = p.score_grade === 'A' ? 'var(--green)' : p.score_grade === 'B' ? '#f59e0b' : 'var(--muted)';
     const dispBtn = !p.atlas_dispatched ? `<button class="btn sm bgreen" onclick="runPipDispatchSingle('${p.id}','${(p.company_name||'').replace(/'/g,"\\'")}')">▶ Dispatch to Atlas</button>` : '<span style="color:var(--muted);font-size:11px">✓ Dispatched to Atlas</span>';
     document.getElementById('pip-drawer-body').innerHTML = `

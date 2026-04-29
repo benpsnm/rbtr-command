@@ -7,7 +7,9 @@
     { "path": "/api/cron-morning-brief?mode=psnm-brief",   "schedule": "0 6 * * *"  },
     { "path": "/api/cron-morning-brief?mode=evening",      "schedule": "0 21 * * *" },
     { "path": "/api/cron-backup",                          "schedule": "0 3 * * *"  },
-    { "path": "/api/atlas?action=intel_harvest_daily",     "schedule": "0 6 * * *"  }
+    { "path": "/api/atlas?action=intel_harvest_daily",              "schedule": "0 6 * * *"  },
+    { "path": "/api/atlas?action=intel_harvest_insolvency_daily",  "schedule": "15 6 * * *" },
+    { "path": "/api/atlas?action=intel_harvest_defence_weekly",    "schedule": "30 6 * * 0" }
   ],
   "headers": [
     {

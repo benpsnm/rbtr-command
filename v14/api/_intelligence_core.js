@@ -65,6 +65,13 @@ const SIC_BLOCKLIST = new Set([
   66110,66120,66190,66210,66220,66290,66300,
 ]);
 
+// ── Logistics SIC codes — for insolvency filter (3PL/warehouse companies failing) ─
+const LOGISTICS_SIC_CODES = new Set([
+  52100,52101,52102,52103,52211,52219,52220,52230,52240,52290,
+  52410,52411,52412,52419,52490,52610,52690,53100,53200,
+  49410,49420,49390, // Road freight / haulage
+]);
+
 // Company name keywords that indicate hazmat/pharma/chilled even if SIC slips through
 const NAME_BLOCKLIST = [
   /\bpharma\b/i,/\bpharmaceutical/i,/\bdrug\b/i,/\bmedical\b/i,/\bhealthcare\b/i,
@@ -148,6 +155,72 @@ async function chFetch(path, retries = 3) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Phase 2: Source helpers ───────────────────────────────────────────────────
+// trigger_signals for CH prospects: JSON array ["incorporated_under_90d", ...]
+// trigger_signals for Phase 2 prospects: JSON object { _source, _meta..., triggers: [...] }
+
+function getProspectSource(p) {
+  const ts = p.trigger_signals;
+  if (!ts) return 'companies_house';
+  try {
+    const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') {
+      return parsed._source || 'companies_house';
+    }
+  } catch {}
+  return 'companies_house';
+}
+
+function getSourceMeta(p) {
+  const ts = p.trigger_signals;
+  if (!ts) return {};
+  try {
+    const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') return parsed;
+  } catch {}
+  return {};
+}
+
+function getUrgencyWindowEnds(p) {
+  return getSourceMeta(p)._urgency_window_ends || null;
+}
+
+function getSafeTriggers(p) {
+  const ts = p.trigger_signals;
+  if (!ts) return [];
+  try {
+    const parsed = typeof ts === 'string' ? JSON.parse(ts) : ts;
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') return parsed.triggers || [];
+  } catch {}
+  return [];
+}
+
+function buildInsolvencyTriggers(meta) {
+  const d = new Date(meta.notice_date);
+  d.setDate(d.getDate() + 21);
+  const urgencyWindowEnds = d.toISOString().slice(0, 10);
+  return JSON.stringify({
+    _source: 'gazette_insolvency',
+    _failed_company: meta.failed_company_name,
+    _failed_company_number: meta.failed_company_number || null,
+    _insolvency_type: meta.insolvency_type,
+    _notice_date: meta.notice_date,
+    _urgency_window_ends: urgencyWindowEnds,
+    _gazette_url: meta.gazette_url || null,
+    triggers: ['insolvency_rescue', 'high_urgency'],
+  });
+}
+
+function buildDefenceTriggers(meta) {
+  return JSON.stringify({
+    _source: 'defence_supplier',
+    _scheme: meta.scheme || 'defence_supplier_overflow',
+    _source_directory: meta.source_directory || 'web_search',
+    triggers: ['defence_supply_chain', 'reliability_premium'],
+  });
+}
 
 // ── SIC code classification ──────────────────────────────────────────────────
 function classifySics(sicCodes) {
@@ -287,6 +360,91 @@ function scoreProspect({ companyAge, isResidential, sicClassification, isInLondo
   return { grade: null, reasoning: 'No trigger signals — deprioritised', hook: null };
 }
 
+// ── Phase 2: Gazette insolvency notice fetcher ───────────────────────────────
+// Fetches public Atom feed from The Gazette for recent insolvency notices.
+// Notice type codes: 2430=Administration, 2920=Creditors' winding-up, 2930=Compulsory, 2110=CVA
+let _gazetteLastCall = 0;
+async function gazetteThrottle() {
+  const gap = 2100; // 30 req/min = 2s gap
+  const now = Date.now();
+  if (now - _gazetteLastCall < gap) await sleep(gap - (now - _gazetteLastCall));
+  _gazetteLastCall = Date.now();
+}
+
+async function fetchGazetteNotices(days_back = 14) {
+  const notices = [];
+  const fromDate = new Date(Date.now() - days_back * 86400000).toISOString().slice(0, 10);
+
+  for (const ntypes of ['2430', '2920,2930', '2110']) {
+    try {
+      await gazetteThrottle();
+      const url = `https://www.thegazette.co.uk/all-notices/data.feed?noticetypes=${encodeURIComponent(ntypes)}&results-page=1&numberOfLocationRows=100`;
+      const r = await fetch(url, { headers: { Accept: 'application/atom+xml,text/xml,*/*', 'User-Agent': 'PSNMIntelBot/2.0' } });
+      if (!r.ok) continue;
+      const xml = await r.text();
+
+      const entries = xml.match(/<entry>([\s\S]*?)<\/entry>/g) || [];
+      for (const entry of entries) {
+        const rawTitle = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1] || '';
+        const title = rawTitle.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/, '$1').replace(/<[^>]+>/g, '').trim();
+        const updated = entry.match(/<updated>([\s\S]*?)<\/updated>/)?.[1]?.slice(0, 10);
+        const entryId = entry.match(/<id>([\s\S]*?)<\/id>/)?.[1]?.trim();
+        const summary = (entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/)?.[1] || '').toLowerCase();
+
+        if (!title || !updated || updated < fromDate) continue;
+
+        let insolvencyType = 'liquidation';
+        if (/administrat/i.test(title + summary)) insolvencyType = 'administration';
+        else if (/voluntary arrangement|CVA/i.test(title + summary)) insolvencyType = 'CVA';
+        else if (/winding.?up|wound.?up/i.test(title + summary)) insolvencyType = 'liquidation';
+        else if (/receivership/i.test(title + summary)) insolvencyType = 'receivership';
+
+        // Company number is often embedded in the notice
+        const companyNumber = (entry + summary).match(/company(?:\s+number|no\.?)?\s*:?\s*([0-9]{8})/i)?.[1] || null;
+        // Company name usually comes before " - " dash or is the whole title
+        const companyName = title.split(/\s+[-–]\s+/)[0].replace(/\s+\d+$/, '').trim();
+
+        if (companyName && companyName.length > 3) {
+          notices.push({ company_name: companyName, company_number: companyNumber, insolvency_type: insolvencyType, notice_date: updated, gazette_url: entryId || url });
+        }
+      }
+    } catch (e) {
+      console.warn(`Gazette fetch (ntypes=${ntypes}): ${e.message}`);
+    }
+  }
+
+  // Deduplicate
+  const seen = new Set();
+  return notices.filter(n => { if (seen.has(n.company_name)) return false; seen.add(n.company_name); return true; });
+}
+
+// ── Phase 2: Find affected customers via Claude web search ───────────────────
+async function findAffectedCustomers(failedCompanyName, insolvencyType, noticeDate) {
+  if (!ANTHROPIC_KEY) return [];
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-search-2025-03-05', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        messages: [{ role: 'user', content: `Search for companies that were customers or clients of "${failedCompanyName}", a UK logistics/warehouse company that entered ${insolvencyType} on ${noticeDate}. Search for news articles, trade press, LinkedIn mentions. Return ONLY a JSON array of UK company names: ["Company A Ltd", "Company B Ltd"]. Maximum 10. If none found, return [].` }],
+      }),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    const match = text.match(/\[[\s\S]*?\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    return Array.isArray(parsed) ? parsed.filter(n => typeof n === 'string' && n.length > 3) : [];
+  } catch (e) {
+    console.warn(`Customer search failed for ${failedCompanyName}: ${e.message}`);
+    return [];
+  }
+}
+
 // ── HARVEST ──────────────────────────────────────────────────────────────────
 async function harvest({ batch_size = 100, days_back = 365 } = {}) {
   if (!CH_API_KEY) return { ok: false, error: 'COMPANIES_HOUSE_API_KEY not set — add to Vercel env vars' };
@@ -402,6 +560,175 @@ async function harvest({ batch_size = 100, days_back = 365 } = {}) {
     errors: errors.slice(0, 10),
     from_date: fromDate,
   };
+}
+
+// ── HARVEST INSOLVENCY ───────────────────────────────────────────────────────
+// Scrapes Gazette insolvency notices → filters by logistics SIC → finds affected
+// customers via Claude web search → verifies via CH → inserts as Grade A urgency.
+async function harvestInsolvency({ days_back = 14 } = {}) {
+  if (!CH_API_KEY) return { ok: false, error: 'COMPANIES_HOUSE_API_KEY not set' };
+
+  const notices = await fetchGazetteNotices(days_back);
+  if (!notices.length) return { ok: true, inserted: 0, skipped: 0, failed_companies_checked: 0, message: 'No Gazette insolvency notices in period' };
+
+  let inserted = 0, skipped = 0;
+  const errors = [];
+  let failedCompaniesChecked = 0;
+
+  for (const notice of notices.slice(0, 20)) {
+    try {
+      let failedNum = notice.company_number;
+      if (!failedNum) {
+        const sr = await chFetch(`/search/companies?q=${encodeURIComponent(notice.company_name)}&items_per_page=1`);
+        failedNum = sr?.items?.[0]?.company_number || null;
+      }
+      if (!failedNum) { skipped++; continue; }
+
+      const profile = await chFetch(`/company/${failedNum}`);
+      if (!profile) { skipped++; continue; }
+
+      const failedSics = (profile.sic_codes || []).map(s => parseInt(s));
+      if (!failedSics.some(s => LOGISTICS_SIC_CODES.has(s))) { skipped++; continue; }
+
+      failedCompaniesChecked++;
+      const customerNames = await findAffectedCustomers(notice.company_name, notice.insolvency_type, notice.notice_date);
+
+      for (const custName of customerNames.slice(0, 10)) {
+        try {
+          const sr = await chFetch(`/search/companies?q=${encodeURIComponent(custName)}&items_per_page=3`);
+          for (const match of (sr?.items || []).slice(0, 2)) {
+            if (match.company_status !== 'active') continue;
+            const cProfile = await chFetch(`/company/${match.company_number}`);
+            if (!cProfile) continue;
+            const clf = classifySics(cProfile.sic_codes || []);
+            if (clf.blocked || !clf.allowed) continue;
+            if (NAME_BLOCKLIST.some(p => p.test(match.company_name || ''))) continue;
+            const postcode = cProfile.registered_office?.postal_code || null;
+            if (postcode?.startsWith('BT')) continue; // Northern Ireland
+            const addr = [cProfile.registered_office?.address_line_1, cProfile.registered_office?.address_line_2, cProfile.registered_office?.locality, cProfile.registered_office?.region, postcode].filter(Boolean).join(', ');
+            const region = assignRegion(postcode);
+            const sicFormatted = (cProfile.sic_codes || []).map(s => ({ code: s, description: SIC_DESCRIPTIONS[parseInt(s)] || s }));
+            const d = new Date(notice.notice_date); d.setDate(d.getDate() + 21);
+            const urgencyWindowEnds = d.toISOString().slice(0, 10);
+
+            const row = {
+              company_number: match.company_number,
+              company_name: match.company_name,
+              registered_address: addr,
+              postcode, region,
+              sic_codes: JSON.stringify(sicFormatted),
+              incorporation_date: cProfile.date_of_creation || null,
+              date_of_creation: cProfile.date_of_creation || null,
+              ambient_likely: clf.allowed,
+              trigger_signals: buildInsolvencyTriggers({ failed_company_name: notice.company_name, failed_company_number: failedNum, insolvency_type: notice.insolvency_type, notice_date: notice.notice_date, gazette_url: notice.gazette_url }),
+              score_grade: 'A',
+              score_reasoning: `Insolvency rescue: ${notice.company_name} (${notice.insolvency_type}, ${notice.notice_date}). Urgency window: ${urgencyWindowEnds}.`,
+              outreach_hook: `${notice.company_name} entered ${notice.insolvency_type} on ${notice.notice_date}. If your stock is still with them, we can move fast — typically 3-5 working days from contract.`,
+              estimated_pallet_volume: 'unknown',
+              updated_at: new Date().toISOString(),
+            };
+
+            const result = await sbUpsert(TABLE, [row]);
+            if (result?.error) { errors.push({ company: match.company_name, error: result.error.slice?.(0, 80) }); }
+            else { inserted++; break; } // one match per customer name
+          }
+        } catch (e) { errors.push({ company: custName, error: e.message.slice(0, 60) }); }
+        await sleep(700);
+      }
+      await sleep(2100); // Gazette rate limit
+    } catch (e) { errors.push({ gazette: notice.company_name, error: e.message.slice(0, 60) }); }
+  }
+
+  return { ok: true, inserted, skipped, failed_companies_checked: failedCompaniesChecked, total_notices: notices.length, errors: errors.slice(0, 10) };
+}
+
+// ── HARVEST DEFENCE SUPPLIERS ─────────────────────────────────────────────────
+// Uses Claude web search to find UK SME defence suppliers from public directories.
+// Verifies via CH, filters by SIC allowlist, inserts as Grade B reliability prospects.
+async function harvestDefence({ cap = 50 } = {}) {
+  if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+  if (!CH_API_KEY) return { ok: false, error: 'COMPANIES_HOUSE_API_KEY not set' };
+
+  const searches = [
+    'UK SME defence supplier ambient warehousing logistics company limited site:defencesuppliers.uk OR site:adsgroup.org.uk',
+    'MOD supplier UK limited company ambient storage supply chain SME manufacturer',
+    'UK defence supply chain SME manufacturer distributor ambient goods limited',
+    'ADS Group member UK SME aerospace defence manufacturer limited company',
+    'Crown Commercial Service supplier UK SME ambient goods manufacturer distributor limited',
+  ];
+
+  const companyNames = new Set();
+  for (const query of searches) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-search-2025-03-05', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6', max_tokens: 1000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+          messages: [{ role: 'user', content: `Search: ${query}. Extract UK limited company names that appear in the results. Only SMEs (not large multinationals — no BAE Systems, Rolls-Royce, Thales etc). Return ONLY a JSON array: ["Company A Ltd", "Company B Ltd"]. Maximum 15. If none, return [].` }],
+        }),
+      });
+      if (!res.ok) continue;
+      const json = await res.json();
+      const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+      const match = text.match(/\[[\s\S]*?\]/);
+      if (!match) continue;
+      const names = JSON.parse(match[0]);
+      if (Array.isArray(names)) names.forEach(n => typeof n === 'string' && n.length > 3 && companyNames.add(n));
+      await sleep(1500);
+    } catch (e) { console.warn(`Defence search error: ${e.message}`); }
+  }
+
+  if (!companyNames.size) return { ok: true, inserted: 0, skipped: 0, message: 'No defence suppliers found via web search' };
+
+  let inserted = 0, skipped = 0;
+  const errors = [];
+
+  for (const name of [...companyNames].slice(0, cap)) {
+    try {
+      const sr = await chFetch(`/search/companies?q=${encodeURIComponent(name)}&items_per_page=3`);
+      let inserted_this = false;
+      for (const match of (sr?.items || []).slice(0, 2)) {
+        if (match.company_status !== 'active' || inserted_this) continue;
+        const profile = await chFetch(`/company/${match.company_number}`);
+        if (!profile) continue;
+        const clf = classifySics(profile.sic_codes || []);
+        if (clf.blocked || !clf.allowed) { skipped++; continue; }
+        if (NAME_BLOCKLIST.some(p => p.test(match.company_name || ''))) { skipped++; continue; }
+        const postcode = profile.registered_office?.postal_code || null;
+        if (postcode?.startsWith('BT')) { skipped++; continue; } // Northern Ireland
+        if (isInnerLondon(postcode)) { skipped++; continue; } // inner London — local options exist
+        const addr = [profile.registered_office?.address_line_1, profile.registered_office?.address_line_2, profile.registered_office?.locality, profile.registered_office?.region, postcode].filter(Boolean).join(', ');
+        const region = assignRegion(postcode);
+        const sicFormatted = (profile.sic_codes || []).map(s => ({ code: s, description: SIC_DESCRIPTIONS[parseInt(s)] || s }));
+
+        const row = {
+          company_number: match.company_number,
+          company_name: match.company_name,
+          registered_address: addr, postcode, region,
+          sic_codes: JSON.stringify(sicFormatted),
+          incorporation_date: profile.date_of_creation || null,
+          date_of_creation: profile.date_of_creation || null,
+          ambient_likely: clf.allowed,
+          trigger_signals: buildDefenceTriggers({ scheme: 'defence_supplier_overflow', source_directory: 'web_search' }),
+          score_grade: 'B',
+          score_reasoning: `Defence supply chain prospect. Stable revenue, ambient goods warehousing need for MOD-adjacent supply chain.`,
+          outreach_hook: `You supply MOD/defence — they require reliable supply chain. Hellaby is GB's logistics heartland: Glasgow 4hr, London 3hr, Cardiff 3.5hr. If you need central UK overflow warehousing, worth a conversation.`,
+          estimated_pallet_volume: 'unknown',
+          updated_at: new Date().toISOString(),
+        };
+
+        const result = await sbUpsert(TABLE, [row]);
+        if (result?.error) { errors.push({ company: match.company_name, error: result.error.slice?.(0, 80) }); }
+        else { inserted++; inserted_this = true; }
+      }
+      if (!inserted_this) skipped++;
+      await sleep(700);
+    } catch (e) { errors.push({ company: name, error: e.message.slice(0, 60) }); }
+  }
+
+  return { ok: true, inserted, skipped, total_searched: companyNames.size, errors: errors.slice(0, 10) };
 }
 
 // ── ENRICH ────────────────────────────────────────────────────────────────────
@@ -565,13 +892,23 @@ async function generateDraftViaAtlas(p) {
   const distInfo = getDistanceInfo(p.postcode);
 
   const shortName = (p.company_name || '').replace(/\s+(LTD\.?|LIMITED|PLC|LLP)$/i, '').trim();
-  const triggers = JSON.parse(p.trigger_signals || '[]');
+  const source = getProspectSource(p);
+  const sourceMeta = getSourceMeta(p);
+  const pitchType = source === 'gazette_insolvency' ? 'insolvency_rescue'
+                  : source === 'defence_supplier'   ? 'defence_supplier'
+                  : 'standard';
+
+  const triggers = getSafeTriggers(p);
   const triggerText = triggers.map(t => ({
     incorporated_under_90d:  `incorporated just ${companyAge} days ago — very likely still setting up logistics`,
     incorporated_under_365d: `incorporated ${Math.round((companyAge||0)/30)} months ago — growth stage, probably reviewing storage options`,
     residential_address:     'registered at a residential address — suggests not yet in a warehouse',
     inner_london:            'London-registered — London storage is expensive; central GB argument is strong',
-  }[t] || t)).join('; ');
+    insolvency_rescue:       `URGENT: their 3PL (${sourceMeta._failed_company || 'unknown'}) has entered ${sourceMeta._insolvency_type || 'insolvency'}`,
+    high_urgency:            `urgency window closes ${sourceMeta._urgency_window_ends || 'soon'} — outreach is time-critical`,
+    defence_supply_chain:    'defence/MOD supply chain company — reliability-premium buyer',
+    reliability_premium:     'expects high standards, treats suppliers as operational partners',
+  }[t] || t)).filter(Boolean).join('; ');
 
   const gradeContext = {
     A: `Grade A: incorporated ${companyAge} days ago. Very high probability of needing warehousing imminently — decision is being made now.`,
@@ -609,6 +946,26 @@ async function generateDraftViaAtlas(p) {
     .replace(/\{\{touch_number\}\}/g, '1')
     .replace(/\{\{tone_mix\}\}/g, 'direct');
 
+  const insolvencyContext = pitchType === 'insolvency_rescue' ? [
+    ``,
+    `--- PITCH TYPE: insolvency_rescue ---`,
+    `Follow the INSOLVENCY RESCUE PITCH section of the system prompt.`,
+    `Failed company: ${sourceMeta._failed_company} (${sourceMeta._insolvency_type || 'insolvency'}, ${sourceMeta._notice_date || 'recent'})`,
+    `Urgency window closes: ${sourceMeta._urgency_window_ends || 'within 21 days'} — time-sensitive outreach`,
+    `TONE: empathetic, calm, professional. NOT vulturous. They've had bad news. PSNM is the calm, reliable option.`,
+    `DO NOT use urgency pressure language. DO reference that PSNM can move fast (3-5 working days) when they're ready.`,
+  ] : [];
+
+  const defenceContext = pitchType === 'defence_supplier' ? [
+    ``,
+    `--- PITCH TYPE: defence_supplier ---`,
+    `Follow the DEFENCE SUPPLY CHAIN PITCH section of the system prompt.`,
+    `This is a reliability-premium buyer who operates to defence-grade standards. Holmes Dream 100 tone at maximum. Peer treatment.`,
+    `MANDATORY: DO NOT claim ISO 9001 certification — say "ISO 9001 path on roadmap" only.`,
+    `MANDATORY: DO NOT claim Cyber Essentials Plus or any security clearance.`,
+    `MANDATORY: DO NOT exaggerate capabilities — honest description only.`,
+  ] : [];
+
   const userMsg = [
     `Generate a cold outreach email for ${shortName} (${industry}), based in ${city}.`,
     ``,
@@ -619,6 +976,8 @@ async function generateDraftViaAtlas(p) {
     ...(distanceContext ? [`- Geography: ${distanceContext}`] : []),
     ...(walesContext ? [`- Region note: ${walesContext}`] : []),
     `- SIC: ${sics[0]?.code} — ${sics[0]?.description || 'unknown'}`,
+    ...insolvencyContext,
+    ...defenceContext,
     ``,
     `Apply all six frameworks. Subject line must reference their specific situation, not generic. Return only valid JSON as specified.`,
   ].join('\n');
@@ -690,22 +1049,33 @@ async function generateDraftViaAtlas(p) {
 }
 
 // ── SCORE AND DISPATCH ────────────────────────────────────────────────────────
-// grade: 'A'|'B'|'C'|null (null = A-tier only, production default)
-// prospect_id: specific intelligence_prospect id to dispatch exactly one
+// Priority ordering (Phase 2):
+//   1. Insolvency prospects with urgency_window_ends < today+7 (rescue window)
+//   2. Companies House Grade A with enriched_email
+//   3. Defence supplier Grade B with enriched_email
+//   4. Companies House Grade B with enriched_email
 async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null } = {}) {
   if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
 
   const cap = Math.min(limit, 50);
-  let query;
+  let prospects = [];
+
   if (prospect_id) {
-    query = `id=eq.${prospect_id}&atlas_dispatched=eq.false&enriched_email=not.is.null&select=*`;
+    prospects = await sbSelect(TABLE, `id=eq.${prospect_id}&atlas_dispatched=eq.false&enriched_email=not.is.null&select=*`) || [];
   } else if (grade) {
-    query = `score_grade=eq.${grade}&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`;
+    prospects = await sbSelect(TABLE, `score_grade=eq.${grade}&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`) || [];
   } else {
-    query = `score_grade=eq.A&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`;
+    // Fetch all eligible across A+B grades, sort by priority in JS
+    const all = await sbSelect(TABLE, `atlas_dispatched=eq.false&enriched_email=not.is.null&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
+    const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+    const urgentInsolvency = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') <= sevenDaysOut);
+    const chA    = all.filter(p => getProspectSource(p) === 'companies_house' && p.score_grade === 'A');
+    const defB   = all.filter(p => getProspectSource(p) === 'defence_supplier');
+    const chB    = all.filter(p => getProspectSource(p) === 'companies_house' && p.score_grade === 'B');
+    prospects = [...urgentInsolvency, ...chA, ...defB, ...chB].slice(0, cap);
   }
 
-  const prospects = await sbSelect(TABLE, query);
   if (!prospects || prospects.length === 0) {
     return { ok: true, dispatched: 0, message: 'No matching undispatched prospects with email' };
   }
@@ -785,13 +1155,27 @@ async function harvestDaily() {
 
 // ── GET STATS ─────────────────────────────────────────────────────────────────
 async function getStats() {
-  const [allRows, gradeA, gradeB, gradeC, dispatched] = await Promise.all([
-    sbSelect(TABLE, 'select=id&limit=1&order=created_at.asc'), // just for existence check
+  const [gradeA, gradeB, gradeC, dispatched, allForSources] = await Promise.all([
     sbSelect(TABLE, 'score_grade=eq.A&select=id'),
     sbSelect(TABLE, 'score_grade=eq.B&select=id'),
     sbSelect(TABLE, 'score_grade=eq.C&select=id'),
     sbSelect(TABLE, 'atlas_dispatched=eq.true&select=id'),
+    sbSelect(TABLE, 'select=id,trigger_signals&limit=1000&order=created_at.desc'),
   ]);
+
+  // Source breakdown + urgency count (calculated client-side since trigger_signals is TEXT)
+  const sourceCounts = { companies_house: 0, gazette_insolvency: 0, defence_supplier: 0 };
+  let urgentInsolvencyCount = 0;
+  const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  (allForSources || []).forEach(p => {
+    const src = getProspectSource(p);
+    sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+    if (src === 'gazette_insolvency') {
+      const uw = getUrgencyWindowEnds(p);
+      if (uw && uw <= sevenDaysOut) urgentInsolvencyCount++;
+    }
+  });
+
   const recent = await sbSelect(TABLE, 'order=created_at.desc&limit=20&select=id,company_name,company_number,postcode,region,score_grade,score_reasoning,outreach_hook,trigger_signals,enriched_email,enriched_website,atlas_dispatched,created_at');
 
   return {
@@ -802,6 +1186,8 @@ async function getStats() {
       B: gradeB?.length || 0,
       C: gradeC?.length || 0,
       dispatched: dispatched?.length || 0,
+      by_source: sourceCounts,
+      urgent_insolvency: urgentInsolvencyCount,
     },
     recent: recent || [],
   };
@@ -832,4 +1218,21 @@ const SIC_DESCRIPTIONS = {
   47799: 'Retail sale of other second-hand goods in stores',
 };
 
-module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, getStats, getProspect };
+// ── HARVEST INSOLVENCY DAILY (cron 06:15) ────────────────────────────────────
+async function harvestInsolvencyDaily() {
+  const autorun = process.env.PSNM_INTELLIGENCE_AUTORUN;
+  if (autorun === 'false') return { ok: true, skipped: true, reason: 'PSNM_INTELLIGENCE_AUTORUN=false' };
+  const insolvency_result = await harvestInsolvency({ days_back: 14 });
+  const enrich_result     = await enrich({ limit: 20 });
+  const dispatch_result   = await scoreAndDispatch({ limit: 5 }); // urgency-priority dispatch
+  return { ok: true, insolvency: insolvency_result, enrich: enrich_result, dispatch: dispatch_result };
+}
+
+// ── HARVEST DEFENCE WEEKLY (cron Sunday 06:30) ────────────────────────────────
+async function harvestDefenceWeekly() {
+  const autorun = process.env.PSNM_INTELLIGENCE_AUTORUN;
+  if (autorun === 'false') return { ok: true, skipped: true, reason: 'PSNM_INTELLIGENCE_AUTORUN=false' };
+  return harvestDefence({ cap: 50 });
+}
+
+module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect };
