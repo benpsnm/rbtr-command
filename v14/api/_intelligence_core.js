@@ -5,6 +5,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { validateDraft } = require('./_draft_validator');
+const { buildFactBlock, verifyDraft } = require('./_claim_verifier');
 
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
@@ -956,9 +957,40 @@ function getDistanceInfo(postcode) {
   return { miles: dist, label: `~${dist} miles (~${hrs} drive)` };
 }
 
+// ── Fact registry loader ──────────────────────────────────────────────────────
+async function loadFactRegistry() {
+  try {
+    const rows = await sbSelect('psnm_atlas_fact_sources', 'select=claim_type,claim_key,claim_value,source&order=claim_type.asc,claim_key.asc');
+    if (rows && rows.length > 0) return rows;
+  } catch {}
+  // Fallback: inline static facts so pipeline never blocks on DB unavailability
+  return [
+    { claim_type: 'drive_time',  claim_key: 'glasgow',    claim_value: '4h 30min / 272 miles',  source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'london',     claim_value: '3h 15min / 170 miles',  source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'felixstowe', claim_value: '3h 30min / 190 miles',  source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'manchester', claim_value: '1h 15min / 60 miles',   source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'birmingham', claim_value: '1h 45min / 95 miles',   source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'leeds',      claim_value: '45min / 35 miles',      source: 'verified_static' },
+    { claim_type: 'drive_time',  claim_key: 'sheffield',  claim_value: '25min / 12 miles',      source: 'verified_static' },
+    { claim_type: 'facility',    claim_key: 'capacity',   claim_value: '1,602 pallet spaces',   source: 'site_survey' },
+    { claim_type: 'facility',    claim_key: 'spec',       claim_value: 'ambient only',           source: 'site_survey' },
+    { claim_type: 'facility',    claim_key: 'postcode',   claim_value: 'S66 8HR',               source: 'site_survey' },
+    { claim_type: 'facility',    claim_key: 'motorway_access', claim_value: 'M18/M1',           source: 'site_survey' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_1_100',    claim_value: '£3.95/pallet/week (1-100 pallets)',          source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_101_500',  claim_value: '£3.50/pallet/week (101-500 pallets)',         source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_500_plus', claim_value: '£2.95/pallet/week (500+ pallets)',            source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'canonical_offer',    claim_value: '1 week free WITH 12-week minimum commitment', source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'notice_period',      claim_value: '30-day notice after initial 12 weeks',       source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'goods_in_out',       claim_value: '£3.50 per pallet movement',                  source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'onboarding',         claim_value: '3-5 working days from contract',             source: 'manual' },
+    { claim_type: 'facility',    claim_key: 'no_fulfilment',      claim_value: 'no pick-pack, no fulfilment, no e-commerce dispatch', source: 'site_survey' },
+    { claim_type: 'facility',    claim_key: 'vat_registered',     claim_value: 'VAT registered',                             source: 'manual' },
+  ];
+}
+
 // ── Generate draft via Claude + Atlas v2 system prompt ────────────────────────
 // Unified with generateDrafts() in atlas.js — one source of truth for quality.
-async function generateDraftViaAtlas(p) {
+async function generateDraftViaAtlas(p, factRegistry = []) {
   let promptTemplate;
   try {
     promptTemplate = fs.readFileSync(path.join(__dirname, 'docs/_atlas_system_prompt.md'), 'utf8');
@@ -1048,8 +1080,16 @@ async function generateDraftViaAtlas(p) {
     `MANDATORY: DO NOT exaggerate capabilities — honest description only.`,
   ] : [];
 
+  const factBlock = buildFactBlock(factRegistry);
+
   const userMsg = [
     `Generate a cold outreach email for ${shortName} (${industry}), based in ${city}.`,
+    ``,
+    factBlock,
+    ``,
+    `STRICT INSTRUCTION: You may ONLY state facts that appear verbatim in the VERIFIED FACT REGISTRY above.`,
+    `Do NOT invent drive times, distances, capacities, rates, or any other factual claims.`,
+    `If you cannot write a convincing, accurate email using only verified facts, output exactly the text: INSUFFICIENT_DATA`,
     ``,
     `Intelligence Engine context — use to personalise this email:`,
     `- ${gradeContext}`,
@@ -1136,19 +1176,22 @@ async function generateDraftViaAtlas(p) {
 //   2. Companies House Grade A with enriched_email
 //   3. Defence supplier Grade B with enriched_email
 //   4. Companies House Grade B with enriched_email
-async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null } = {}) {
+async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null, dry_run = false } = {}) {
   if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
 
   const cap = Math.min(limit, 50);
   let prospects = [];
 
+  // dry_run relaxes enriched_email requirement — we're testing the generation pipeline, not email delivery
+  const emailFilter = dry_run ? '' : '&enriched_email=not.is.null';
+
   if (prospect_id) {
-    prospects = await sbSelect(TABLE, `id=eq.${prospect_id}&atlas_dispatched=eq.false&enriched_email=not.is.null&select=*`) || [];
+    prospects = await sbSelect(TABLE, `id=eq.${prospect_id}&atlas_dispatched=eq.false${emailFilter}&select=*`) || [];
   } else if (grade) {
-    prospects = await sbSelect(TABLE, `score_grade=eq.${grade}&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`) || [];
+    prospects = await sbSelect(TABLE, `score_grade=eq.${grade}&atlas_dispatched=eq.false${emailFilter}&order=created_at.asc&limit=${cap}&select=*`) || [];
   } else {
     // Fetch all eligible across A+B grades, sort by priority in JS
-    const all = await sbSelect(TABLE, `atlas_dispatched=eq.false&enriched_email=not.is.null&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
+    const all = await sbSelect(TABLE, `atlas_dispatched=eq.false${emailFilter}&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
     const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
     const urgentInsolvency  = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') <= sevenDaysOut);
@@ -1166,9 +1209,12 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
 
   let dispatched = 0;
   const errors = [];
+  const dry_run_log = [];
+
+  const factRegistry = await loadFactRegistry();
 
   for (const p of prospects) {
-    const draftData = await generateDraftViaAtlas(p);
+    const draftData = await generateDraftViaAtlas(p, factRegistry);
     if (!draftData) {
       errors.push({ company: p.company_name, error: 'Claude draft generation failed' });
       continue;
@@ -1177,10 +1223,23 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
     const confidenceMap = { A: 85, B: 70, C: 55 };
 
     const validation = validateDraft({ subject: draftData.subject, body: draftData.body });
-    const draftStatus = validation.pass ? 'pending_approval' : 'needs_revision';
+    let draftStatus = validation.pass ? 'pending_approval' : 'needs_revision';
     if (!validation.pass) {
       const errorRules = validation.issues.filter(i => i.severity === 'error').map(i => i.rule).join(', ');
       console.warn(`[Atlas validator] ${p.company_name} → needs_revision (${errorRules})`);
+    }
+
+    // Claim-source verification (only run if validator passed — no point verifying a failed draft)
+    let claimVerification = null;
+    if (draftStatus === 'pending_approval') {
+      claimVerification = await verifyDraft(draftData.body, factRegistry);
+      if (claimVerification.verdict === 'insufficient_data') {
+        draftStatus = 'enrichment_required';
+      } else if (claimVerification.verdict === 'has_red_claims') {
+        draftStatus = 'needs_source';
+      }
+      // all_green → stays pending_approval
+      console.log(`[Claim verifier] ${p.company_name} → ${claimVerification.verdict} → ${draftStatus}`);
     }
 
     const draft = {
@@ -1199,8 +1258,23 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
         company_name:             p.company_name,
         atlas_annotations:        draftData.framework_annotations || [],
         ...(validation.pass ? {} : { validation_issues: validation.issues }),
+        ...(claimVerification ? { claim_verification: claimVerification } : {}),
       }),
     };
+
+    if (dry_run) {
+      dry_run_log.push({
+        company:       p.company_name,
+        grade:         p.score_grade,
+        subject:       draftData.subject,
+        body:          draftData.body,
+        validator:     { pass: validation.pass, issues: validation.issues },
+        claim_verdict: claimVerification?.verdict || 'skipped',
+        claims:        claimVerification?.claims || [],
+        would_status:  draftStatus,
+      });
+      continue;
+    }
 
     const result = await sbInsert('psnm_atlas_drafts', [draft]);
     if (result && result.error) {
@@ -1214,6 +1288,10 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null }
       dispatched++;
     }
     await sleep(1000); // brief gap between consecutive Claude calls
+  }
+
+  if (dry_run) {
+    return { ok: true, dry_run: true, total_candidates: prospects.length, results: dry_run_log };
   }
 
   return { ok: true, dispatched, errors: errors.slice(0, 10), total_candidates: prospects.length };
@@ -1319,4 +1397,4 @@ async function harvestDefenceWeekly() {
   return harvestDefence({ cap: 50 });
 }
 
-module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect };
+module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect, loadFactRegistry };

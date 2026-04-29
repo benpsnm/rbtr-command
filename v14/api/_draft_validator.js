@@ -1,13 +1,32 @@
 // _draft_validator.js — Atlas v2 quality gate
-// Guards against regression on the locked template principles (v2.0, 2026-04-28).
+// Guards against regression on the locked template principles.
+// v2.0 — LOCKED 2026-04-28
+// v2.1 — 2026-04-29: canonical-offer enforcement, unsubstantiated social proof,
+//                    drive-time source tagging, speculative prospect claims.
 // Reference: api/docs/_atlas_v2_reference_email.md (POO-CH POUCH, 28 Apr 2026)
 //
 // Usage:
-//   const { validateDraft } = require('./_draft_validator');
-//   const result = validateDraft({ subject, body });
+//   const { validateDraft, VERIFIED_DRIVE_TIMES } = require('./_draft_validator');
+//   const result = validateDraft({ subject, body, drive_time_sources });
+//   // drive_time_sources: optional Array<{ destination, source: 'maps_api'|'verified_static' }>
 //   // result: { pass: boolean, issues: Array<{ rule, type, severity, description, offending? }> }
 
 'use strict';
+
+// ── Verified static drive-time table ──────────────────────────────────────────
+// Source: pre-verified by Ben (2026-04-29). Hellaby S66 8HR origin.
+// Any draft using a drive time outside this table requires source: 'maps_api'.
+// Times are in hours (decimal) and miles. Update only with verified data.
+
+const VERIFIED_DRIVE_TIMES = {
+  glasgow:    { hours: 4.5,  miles: 272, label: '4h 30min' },
+  london:     { hours: 3.25, miles: 170, label: '3h 15min' },  // central London
+  felixstowe: { hours: 3.5,  miles: 190, label: '3h 30min' },
+  manchester: { hours: 1.25, miles: 60,  label: '1h 15min' },
+  birmingham: { hours: 1.75, miles: 95,  label: '1h 45min' },
+  leeds:      { hours: 0.75, miles: 35,  label: '45min' },
+  sheffield:  { hours: 0.42, miles: 12,  label: '25min' },
+};
 
 // ── Forbidden patterns ────────────────────────────────────────────────────────
 // Things that must NEVER appear in a draft. Each is a regression against the
@@ -84,6 +103,62 @@ const FORBIDDEN = [
     pattern: /sorry (to bother|for (bothering|interrupting|reaching out))/i,
     description: 'Apologetic framing — Cardone principle: we believe in the offer, we don\'t apologise for it',
   },
+  // ── v2.1 · canonical offer enforcement ──────────────────────────────────────
+  // Locked offer = "first week free WITH 12-week commitment". Never a free walk-away.
+  {
+    rule: 'offer_walk_away',
+    pattern: /\bwalk[- ]away\b/i,
+    description: 'Contradicts canonical trial offer — offer is "first week free with 12-week commit", NOT a free walk-away',
+  },
+  {
+    rule: 'offer_week2_no_bill',
+    pattern: /week ?2 doesn'?t bill|week 2 won'?t bill|week 2 doesn'?t charge/i,
+    description: 'Contradicts canonical trial offer — week 2 onwards is committed under the 12-week minimum',
+  },
+  {
+    rule: 'offer_no_commitment',
+    pattern: /\bno commitment\b|\bcancel anytime in week ?1\b|\bcancel any time\b/i,
+    description: 'Contradicts canonical trial offer — 12-week commitment is part of the trial',
+  },
+  {
+    rule: 'offer_money_back',
+    pattern: /\b(only pay if|money[- ]back|refund (you|your money)|risk[- ]free trial)\b/i,
+    description: 'Contradicts canonical trial offer — no money-back/risk-free framing; commitment is structural',
+  },
+  // ── v2.1 · unsubstantiated social proof ─────────────────────────────────────
+  {
+    rule: 'social_proof_real_x',
+    pattern: /\breal (product|customers?|results|stock)\b/i,
+    description: 'Unsubstantiated social-proof claim — implies a customer base we cannot evidence; speak from operator perspective',
+  },
+  {
+    rule: 'social_proof_aggregated',
+    pattern: /\b(operators tell us|customers say|we hear from|customers tell us|operators say|clients tell us|users say)\b/i,
+    description: 'Aggregated-voice social proof — implies a customer base; use first-person operator framing instead ("I built this because…")',
+  },
+  // ── v2.1 · speculative prospect claims ──────────────────────────────────────
+  // We don't know the prospect's operations — never assert facts about them.
+  // Allowed: questions ("what does your dispatch profile look like?") and offers ("if X matters, here's ours").
+  {
+    rule: 'speculative_you_can_probably',
+    pattern: /\byou can probably\b/i,
+    description: 'Speculative prospect claim — assumes knowledge of prospect ops; reframe as a question or offer',
+  },
+  {
+    rule: 'speculative_youre_probably',
+    pattern: /\byou'?re probably (hitting|losing|wasting|paying|stuck|dealing with|overpaying|short on|running)\b/i,
+    description: 'Speculative prospect claim — assumes their state; reframe as a question or offer',
+  },
+  {
+    rule: 'speculative_youre_losing',
+    pattern: /\byou'?re losing \w+ on\b/i,
+    description: 'Speculative prospect claim — asserts a loss we cannot evidence; reframe as a question',
+  },
+  {
+    rule: 'speculative_your_setup_is',
+    pattern: /\byour current setup is (slow|expensive|inefficient|wrong|wasteful|too \w+)\b/i,
+    description: 'Speculative prospect claim — judges their setup we have not seen; reframe as a question',
+  },
 ];
 
 // ── Required patterns ─────────────────────────────────────────────────────────
@@ -123,7 +198,9 @@ const REQUIRED = [
   },
   {
     rule: 'drive_time_fact',
-    pattern: /\b(Glasgow|London|Cardiff|Liverpool|Felixstowe|Southampton)\b.{0,30}\b\d(\.\d)? ?h(ou?r|r)/i,
+    // Accept verified-label cities + the legacy regional ports.
+    // Match "4h 30min", "4 hours", "45min", "3h", "1h 15min", "3.5 hours", etc.
+    pattern: /\b(Glasgow|London|Cardiff|Liverpool|Felixstowe|Southampton|Manchester|Birmingham|Leeds|Sheffield)\b.{0,40}?\b(\d{1,2}(?:\.\d+)?\s?(?:hours?|hrs?|h\b)|\d{1,2}\s?min)/i,
     description: 'Missing drive-time fact — geographic argument is the core value prop',
   },
   {
@@ -208,9 +285,50 @@ const VOICE_DRIFT = [
   },
 ];
 
-// ── Main validator ────────────────────────────────────────────────────────────
+// ── Drive-time detection ──────────────────────────────────────────────────────
+// Catches phrases like "Glasgow is 4 hours from us", "London 3 hours", "Manchester 1h 15min",
+// "Felixstowe port 3 hours", "Glasgow 4hrs". Captures destination + stated time.
+// Returns Array<{ destination, stated_hours, raw }>.
 
-function validateDraft({ subject = '', body = '' }) {
+// Match city name (single word, capitalized) optionally followed by another
+// capitalized word ("New York") or " port" ("Felixstowe port"). Then up to 30
+// non-period chars, then a numeric duration. We do NOT extend the destination
+// across lowercase words like "is" or "from".
+const DRIVE_TIME_REGEX =
+  /\b([A-Z][a-zA-Z]+(?:[ -][A-Z][a-zA-Z]+)?(?: port)?)\b[^.,\n]{0,30}?\b(\d{1,2}(?:\.\d+)?)\s*(?:hours?|hrs?|h\b)(?:\s*(\d{1,2})\s*min(?:utes?)?)?/g;
+
+// Skip self-references: "Hellaby sits 4 hours from Glasgow" describes Glasgow,
+// not Hellaby, as the destination. Same for the company name and Rotherham.
+const ORIGIN_TOKENS = new Set(['hellaby', 'rotherham', 'psnm', 'pallet', 'we', 'i', 'ben']);
+
+function extractDriveTimeMentions(body) {
+  const out = [];
+  let m;
+  const re = new RegExp(DRIVE_TIME_REGEX.source, 'g');
+  while ((m = re.exec(body)) !== null) {
+    const dest = m[1].trim().toLowerCase();
+    const firstWord = dest.split(/\s+/)[0];
+    if (ORIGIN_TOKENS.has(firstWord)) continue; // origin reference, not a destination claim
+    const hours = parseFloat(m[2]) + (m[3] ? parseInt(m[3], 10) / 60 : 0);
+    out.push({ destination: dest, stated_hours: hours, raw: m[0] });
+  }
+  return out;
+}
+
+// Resolve a destination string against the verified table.
+// Returns the verified entry, or null if not in table.
+function lookupVerified(destination) {
+  // strip " port" suffix for matching ("felixstowe port" → "felixstowe")
+  const key = destination.replace(/\s+port$/, '').trim();
+  return VERIFIED_DRIVE_TIMES[key] || null;
+}
+
+// ── Main validator ────────────────────────────────────────────────────────────
+// Optional: drive_time_sources = [{ destination: 'glasgow', source: 'maps_api'|'verified_static' }]
+// When the generator wires Google Maps Distance Matrix, it can pass per-destination
+// source tags. Without sources, validator falls back to the verified static table only.
+
+function validateDraft({ subject = '', body = '', drive_time_sources = null }) {
   const issues = [];
 
   // 1. Forbidden patterns — hard errors
@@ -223,6 +341,61 @@ function validateDraft({ subject = '', body = '' }) {
         severity: 'error',
         description: rule.description,
         offending: match[0],
+      });
+    }
+  }
+
+  // 1a. Canonical-offer pairing: if "first week free" appears, "12 weeks" or
+  // "12-week commit" must appear in the same paragraph. Otherwise the trial
+  // is being framed without its commitment leg, which contradicts the offer.
+  const paragraphs = body.split(/\n\s*\n/);
+  for (const para of paragraphs) {
+    const hasFreeWeek = /\b(first week free|free first (storage )?week|free (storage )?week|week one free)\b/i.test(para);
+    if (!hasFreeWeek) continue;
+    const hasCommit = /\b12[- ]week(s)?\b|\b12[- ]week commit/i.test(para);
+    if (!hasCommit) {
+      issues.push({
+        rule: 'offer_free_week_missing_commit',
+        type: 'forbidden',
+        severity: 'error',
+        description: 'Canonical-offer rule: "first week free" must be paired with "12 weeks" / "12-week commit" in the same paragraph',
+        offending: para.slice(0, 100),
+      });
+    }
+  }
+
+  // 1b. Drive-time source check. Any numerical drive time must be either:
+  //   a) destination in VERIFIED_DRIVE_TIMES with stated hours within ±15% of verified, OR
+  //   b) explicitly tagged in drive_time_sources as source='maps_api'.
+  const dtMentions = extractDriveTimeMentions(body);
+  for (const m of dtMentions) {
+    const verified = lookupVerified(m.destination);
+    const taggedSource = (drive_time_sources || []).find(
+      s => s.destination?.toLowerCase().replace(/\s+port$/, '').trim() === m.destination.replace(/\s+port$/, '').trim()
+    );
+    if (taggedSource?.source === 'maps_api') {
+      continue; // Trusted: live maps lookup at compose time
+    }
+    if (!verified) {
+      issues.push({
+        rule: 'drive_time_unverified',
+        type: 'forbidden',
+        severity: 'error',
+        description: `Drive time to "${m.destination}" not in verified static table and not tagged source='maps_api' — likely LLM-fabricated. Add to VERIFIED_DRIVE_TIMES or pass drive_time_sources metadata.`,
+        offending: m.raw,
+      });
+      continue;
+    }
+    const tolerance = 0.10;
+    const lo = verified.hours * (1 - tolerance);
+    const hi = verified.hours * (1 + tolerance);
+    if (m.stated_hours < lo || m.stated_hours > hi) {
+      issues.push({
+        rule: 'drive_time_inaccurate',
+        type: 'forbidden',
+        severity: 'error',
+        description: `Drive time to "${m.destination}" stated as ${m.stated_hours}h, verified is ${verified.label} (${verified.hours}h). Use the verified value.`,
+        offending: m.raw,
       });
     }
   }
@@ -306,4 +479,4 @@ function validateDraft({ subject = '', body = '' }) {
   return { pass, issues, word_count: wordCount };
 }
 
-module.exports = { validateDraft };
+module.exports = { validateDraft, VERIFIED_DRIVE_TIMES, extractDriveTimeMentions };
