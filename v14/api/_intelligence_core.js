@@ -976,12 +976,15 @@ async function loadFactRegistry() {
     { claim_type: 'facility',    claim_key: 'spec',       claim_value: 'ambient only',           source: 'site_survey' },
     { claim_type: 'facility',    claim_key: 'postcode',   claim_value: 'S66 8HR',               source: 'site_survey' },
     { claim_type: 'facility',    claim_key: 'motorway_access', claim_value: 'M18/M1',           source: 'site_survey' },
-    { claim_type: 'offer_terms', claim_key: 'rate_peak',  claim_value: '£3.95/pallet/week',     source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'rate_mid',   claim_value: '£3.45/pallet/week',     source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'rate_off',   claim_value: '£2.95/pallet/week',     source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'commitment', claim_value: '12-week minimum',       source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'notice',     claim_value: '30-day notice',         source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'trial',      claim_value: '1-week trial option',   source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_1_100',    claim_value: '£3.95/pallet/week (1-100 pallets)',          source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_101_500',  claim_value: '£3.50/pallet/week (101-500 pallets)',         source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_500_plus', claim_value: '£2.95/pallet/week (500+ pallets)',            source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'canonical_offer',    claim_value: '1 week free WITH 12-week minimum commitment', source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'notice_period',      claim_value: '30-day notice after initial 12 weeks',       source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'goods_in_out',       claim_value: '£3.50 per pallet movement',                  source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'onboarding',         claim_value: '3-5 working days from contract',             source: 'manual' },
+    { claim_type: 'facility',    claim_key: 'no_fulfilment',      claim_value: 'no pick-pack, no fulfilment, no e-commerce dispatch', source: 'site_survey' },
+    { claim_type: 'facility',    claim_key: 'vat_registered',     claim_value: 'VAT registered',                             source: 'manual' },
   ];
 }
 
@@ -1179,13 +1182,16 @@ async function scoreAndDispatch({ limit = 10, grade = null, prospect_id = null, 
   const cap = Math.min(limit, 50);
   let prospects = [];
 
+  // dry_run relaxes enriched_email requirement — we're testing the generation pipeline, not email delivery
+  const emailFilter = dry_run ? '' : '&enriched_email=not.is.null';
+
   if (prospect_id) {
-    prospects = await sbSelect(TABLE, `id=eq.${prospect_id}&atlas_dispatched=eq.false&enriched_email=not.is.null&select=*`) || [];
+    prospects = await sbSelect(TABLE, `id=eq.${prospect_id}&atlas_dispatched=eq.false${emailFilter}&select=*`) || [];
   } else if (grade) {
-    prospects = await sbSelect(TABLE, `score_grade=eq.${grade}&atlas_dispatched=eq.false&enriched_email=not.is.null&order=created_at.asc&limit=${cap}&select=*`) || [];
+    prospects = await sbSelect(TABLE, `score_grade=eq.${grade}&atlas_dispatched=eq.false${emailFilter}&order=created_at.asc&limit=${cap}&select=*`) || [];
   } else {
     // Fetch all eligible across A+B grades, sort by priority in JS
-    const all = await sbSelect(TABLE, `atlas_dispatched=eq.false&enriched_email=not.is.null&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
+    const all = await sbSelect(TABLE, `atlas_dispatched=eq.false${emailFilter}&score_grade=in.(A,B)&order=created_at.asc&limit=${cap * 6}&select=*`) || [];
     const sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
     const urgentInsolvency  = all.filter(p => getProspectSource(p) === 'gazette_insolvency' && (getUrgencyWindowEnds(p) || '9999') <= sevenDaysOut);
