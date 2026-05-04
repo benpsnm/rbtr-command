@@ -66,6 +66,14 @@ const ALLOWED_TABLES = new Set([
   'contacts','contact_interactions','sops','sop_executions',
   // Phase 1.6 Workstream E (migration 35)
   'notifications',
+  // WMS Extensions Phase 1 (migration 46) + CRM soft-delete (migration 47)
+  'crm_prospects','crm_interactions',
+  'pricing_quotes',
+  'triage_enquiries','triage_audit_log',
+  'ops_tasks','ops_daily_metrics',
+  'cashflow_state','cashflow_snapshots',
+  'ek_estimates',
+  'email_sends',
 ]);
 
 // Classification-aware blocks. AUTH never goes through the browser proxy.

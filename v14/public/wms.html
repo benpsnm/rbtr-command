@@ -2094,6 +2094,7 @@ function showPane(id,btn){
   if(id==='customers')renderCustomers();
   if(id==='intelligence')loadIntelligence();
   if(id==='strategy')loadStrategy();
+  if(id==='sales-crm')crmLoad();
 }
 
 // ═══ MULTI-SELECT ═══
@@ -3991,12 +3992,55 @@ Pallet Storage Near Me
 
 <!-- ═══ SALES CRM (Phase 2) ═══ -->
 <div id="pane-sales-crm" class="pane">
-  <div class="card">
-    <div class="ct">📋 Sales CRM</div>
-    <div class="st">PSNM Sales Pipeline</div>
-    <div class="ss">COMING IN PHASE 2</div>
-    <p style="color:var(--muted);font-size:13px">Cold leads, warm prospects, Top 20 seed list, interaction log, follow-up scheduling. Data stored in <code>crm_prospects</code> + <code>crm_interactions</code> tables (migration 46).</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="st" style="margin:0">📋 SALES CRM</div>
+      <div class="ss">PSNM PIPELINE · crm_prospects · migration 46/47</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn bg" style="padding:6px 12px;font-size:11px" onclick="crmOpenAdd()">+ ADD</button>
+      <button class="btn bghost" style="padding:6px 12px;font-size:11px" onclick="crmSeed()" id="crm-seed-btn">🌱 SEED TOP 20</button>
+      <button class="btn bghost" style="padding:6px 12px;font-size:11px" id="crm-del-toggle" onclick="crmToggleDeleted()">SHOW DELETED</button>
+    </div>
   </div>
+
+  <!-- Stats bar -->
+  <div id="crm-stats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+    <input class="inp" id="crm-search" placeholder="Search company / contact / postcode…" style="max-width:240px;padding:6px 10px;font-size:12px" oninput="crmFilter()">
+    <select class="sb" id="crm-sf" onchange="crmFilter()" style="width:auto;margin:0;padding:6px 8px;font-size:12px">
+      <option value="">All statuses</option>
+      <option>new</option><option>contacted</option><option>replied</option>
+      <option>quoted</option><option>followup</option><option>won</option><option>lost</option>
+    </select>
+    <select class="sb" id="crm-pf" onchange="crmFilter()" style="width:auto;margin:0;padding:6px 8px;font-size:12px">
+      <option value="">All priorities</option>
+      <option>hot</option><option>warm</option><option>cold</option>
+    </select>
+    <select class="sb" id="crm-srcf" onchange="crmFilter()" style="width:auto;margin:0;padding:6px 8px;font-size:12px">
+      <option value="">All sources</option>
+      <option>leadinfo</option><option>whichwarehouse</option><option>referral</option>
+      <option>cold</option><option>inbound</option><option>website</option><option>other</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div style="overflow-x:auto">
+    <table class="dt" style="width:100%;min-width:960px">
+      <thead>
+        <tr>
+          <th>Company</th><th>Contact</th><th>Post</th><th>Pals</th>
+          <th>Src</th><th>Pri</th><th>Status</th>
+          <th>Next Action</th><th>Due</th><th>Int</th><th style="width:120px"></th>
+        </tr>
+      </thead>
+      <tbody id="crm-tbody"></tbody>
+    </table>
+  </div>
+  <div id="crm-empty"   style="display:none;color:var(--muted);padding:20px;text-align:center;font-size:12px;font-family:var(--mono)">No prospects match filters. Add one or seed the Top 20.</div>
+  <div id="crm-loading" style="color:var(--muted);padding:20px;text-align:center;font-size:12px;font-family:var(--mono)">Loading…</div>
 </div>
 
 <!-- ═══ QUOTE CALC (Phase 3) ═══ -->
@@ -4060,6 +4104,78 @@ Pallet Storage Near Me
 </div>
 
 
+
+<!-- ── CRM: Prospect add/edit modal ── -->
+<div class="mo" id="crm-prospect-mo" onclick="if(event.target===this)crmCloseMo('crm-prospect-mo')">
+  <div class="md" style="max-width:580px">
+    <button class="mc" onclick="crmCloseMo('crm-prospect-mo')">✕</button>
+    <div class="ct" id="crm-mo-title">ADD PROSPECT</div>
+    <div class="ms" id="crm-mo-sub">New CRM prospect · crm_prospects</div>
+    <input type="hidden" id="crm-mo-id">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="fl">Company *</div><input class="inp" id="crm-mo-company" placeholder="Acme Ltd" style="margin-top:3px"></div>
+      <div><div class="fl">Postcode</div><input class="inp" id="crm-mo-postcode" placeholder="S66 8HR" style="margin-top:3px;text-transform:uppercase"></div>
+      <div><div class="fl">Contact</div><input class="inp" id="crm-mo-contact" placeholder="Jane Smith" style="margin-top:3px"></div>
+      <div><div class="fl">Title / Role</div><input class="inp" id="crm-mo-title" placeholder="Logistics Manager" style="margin-top:3px"></div>
+      <div><div class="fl">Phone</div><input class="inp" id="crm-mo-phone" placeholder="01709 000000" style="margin-top:3px"></div>
+      <div><div class="fl">Email</div><input class="inp" id="crm-mo-email" placeholder="jane@acme.co.uk" style="margin-top:3px"></div>
+      <div><div class="fl">Pallet volume (est.)</div><input class="inp" id="crm-mo-pallets" type="number" min="0" placeholder="50" style="margin-top:3px"></div>
+      <div><div class="fl">Source</div>
+        <select class="inp" id="crm-mo-source" style="margin-top:3px">
+          <option>leadinfo</option><option>whichwarehouse</option><option>referral</option>
+          <option>cold</option><option>inbound</option><option>website</option><option>other</option>
+        </select>
+      </div>
+      <div><div class="fl">Priority</div>
+        <select class="inp" id="crm-mo-priority" style="margin-top:3px">
+          <option>warm</option><option>hot</option><option>cold</option>
+        </select>
+      </div>
+      <div><div class="fl">Status</div>
+        <select class="inp" id="crm-mo-status" style="margin-top:3px">
+          <option>new</option><option>contacted</option><option>replied</option>
+          <option>quoted</option><option>followup</option><option>won</option><option>lost</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:8px"><div class="fl">Next action</div><input class="inp" id="crm-mo-action" placeholder="Call to discuss quote" style="margin-top:3px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="fl">Due date</div><input class="inp" id="crm-mo-due" type="date" style="margin-top:3px"></div>
+    </div>
+    <div style="margin-bottom:12px"><div class="fl">Notes</div><textarea class="inp" id="crm-mo-notes" rows="3" placeholder="Leadinfo signals, seasonal angle, approach notes…" style="margin-top:3px;resize:vertical"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn bg" onclick="crmSave()" style="padding:7px 16px;font-size:12px">Save</button>
+      <button class="btn bghost" onclick="crmCloseMo('crm-prospect-mo')" style="padding:7px 16px;font-size:12px">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CRM: Interaction log modal ── -->
+<div class="mo" id="crm-int-mo" onclick="if(event.target===this)crmCloseMo('crm-int-mo')">
+  <div class="md" style="max-width:480px">
+    <button class="mc" onclick="crmCloseMo('crm-int-mo')">✕</button>
+    <div class="ct" id="crm-int-co">LOG INTERACTION</div>
+    <div class="ms" id="crm-int-sub">crm_interactions</div>
+    <input type="hidden" id="crm-int-pid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="fl">Type</div>
+        <select class="inp" id="crm-int-type" style="margin-top:3px">
+          <option>call</option><option>email_out</option><option>email_in</option>
+          <option>linkedin</option><option>meeting</option><option>visit</option><option>note</option>
+        </select>
+      </div>
+      <div><div class="fl">Date / time</div><input class="inp" id="crm-int-at" type="datetime-local" style="margin-top:3px"></div>
+    </div>
+    <div style="margin-bottom:10px"><div class="fl">Summary *</div>
+      <textarea class="inp" id="crm-int-summary" rows="3" placeholder="Left voicemail on mobile, tried office first…" style="margin-top:3px;resize:vertical"></textarea>
+    </div>
+    <div id="crm-int-history" style="margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn bg" onclick="crmSaveInteraction()" style="padding:7px 16px;font-size:12px">Log</button>
+      <button class="btn bghost" onclick="crmCloseMo('crm-int-mo')" style="padding:7px 16px;font-size:12px">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- BULK ASSIGN PANEL -->
 <div class="bulk-panel" id="bulkPanel">
@@ -5330,5 +5446,285 @@ async function declineWWLead(id, reason) {
   if (d.ok) { toast('Declined — marked as lost'); closeWWPanel(); loadWWLeads(); }
   else toast('Error: ' + d.error, true);
 }
+
+// ─── SALES CRM ────────────────────────────────────────────────────────────────
+
+let _crmData = [];
+let _crmShowDeleted = false;
+let _crmEditId = null;
+let _crmIntProspectId = null;
+
+function crmToday() { return new Date().toISOString().slice(0,10); }
+function crmAddDays(n) { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function crmEsc(s) {
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function crmCloseMo(id) { document.getElementById(id).style.display='none'; }
+
+async function crmLoad() {
+  document.getElementById('crm-loading').style.display='block';
+  document.getElementById('crm-empty').style.display='none';
+  document.getElementById('crm-tbody').innerHTML='';
+  try {
+    const showDel = _crmShowDeleted ? '&show_deleted=1' : '';
+    const [sr, lr] = await Promise.all([
+      fetch('/api/wms/crm?action=stats'),
+      fetch('/api/wms/crm?action=list'+showDel),
+    ]);
+    const [sd, ld] = await Promise.all([sr.json(), lr.json()]);
+    if (sd.ok) crmRenderStats(sd.stats);
+    if (ld.ok) {
+      _crmData = ld.prospects;
+      crmFilter();
+    } else toast('CRM load error: '+(ld.error||'unknown'), true);
+  } catch(e) { toast('CRM network error: '+e.message, true); }
+  document.getElementById('crm-loading').style.display='none';
+}
+
+function crmRenderStats(stats) {
+  const order = ['lead','contacted','quoted','won','lost','dormant'];
+  const labels = {lead:'Lead',contacted:'Contacted',quoted:'Quoted',won:'Won',lost:'Lost',dormant:'Dormant'};
+  const colours = {lead:'bbl',contacted:'bgy',quoted:'brd',won:'bg2',lost:'bgr',dormant:'bgy'};
+  const box = document.getElementById('crm-stats');
+  box.innerHTML = order.map(s => `
+    <div class="kpi">
+      <span class="kn">${stats[s]||0}</span>
+      <span class="kl"><span class="bdg ${colours[s]}">${labels[s]}</span></span>
+    </div>`).join('') +
+    `<div class="kpi"><span class="kn">${stats.total||0}</span><span class="kl">Total</span></div>` +
+    `<div class="kpi"><span class="kn">${stats.deleted||0}</span><span class="kl">Archived</span></div>`;
+}
+
+function crmFilter() {
+  const q = (document.getElementById('crm-search').value||'').toLowerCase();
+  const sf = document.getElementById('crm-sf').value;
+  const pf = document.getElementById('crm-pf').value;
+  const srcf = document.getElementById('crm-srcf').value;
+  let rows = _crmData.filter(p => {
+    if(sf && p.status !== sf) return false;
+    if(pf && p.priority !== pf) return false;
+    if(srcf && p.source !== srcf) return false;
+    if(q) {
+      const hay = [p.company_name,p.contact_name,p.email,p.postcode].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const tbody = document.getElementById('crm-tbody');
+  if(!rows.length) {
+    tbody.innerHTML='';
+    document.getElementById('crm-empty').style.display='block';
+    return;
+  }
+  document.getElementById('crm-empty').style.display='none';
+  tbody.innerHTML = rows.map(p => crmRow(p)).join('');
+}
+
+function crmRow(p) {
+  const statusColour = {lead:'bbl',contacted:'bgy',quoted:'brd',won:'bg2',lost:'bgr',dormant:'bgy'};
+  const priorityColour = {high:'bgr',medium:'brd',low:'bgy'};
+  const sc = statusColour[p.status]||'bgy';
+  const pc = priorityColour[p.priority]||'bgy';
+  let dueCell = '—';
+  if(p.next_action_due) {
+    const due = new Date(p.next_action_due);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.ceil((due-today)/(1000*60*60*24));
+    const cls = diff < 0 ? 'style="color:var(--red)"' : diff <= 3 ? 'style="color:var(--gold)"' : '';
+    dueCell = `<span ${cls}>${p.next_action_due}</span>`;
+  }
+  const archived = p.deleted_at ? true : false;
+  const actionBtns = archived
+    ? `<button class="btn bout" onclick="crmRestore('${p.id}')">Restore</button>`
+    : `<button class="btn bghost" onclick="crmOpenEdit('${p.id}')">Edit</button>
+       <button class="btn bghost" onclick="crmOpenInteraction('${p.id}')">Log</button>
+       <button class="btn bred" onclick="crmDelete('${p.id}')">Del</button>`;
+  return `<tr${archived?' style="opacity:0.5"':''}>
+    <td>${crmEsc(p.company_name)}</td>
+    <td>${crmEsc(p.contact_name||'')}</td>
+    <td><span class="bdg ${sc}">${p.status}</span></td>
+    <td><span class="bdg ${pc}">${p.priority}</span></td>
+    <td>${crmEsc(p.source||'')}</td>
+    <td>${p.interaction_count||0}</td>
+    <td>${dueCell}</td>
+    <td>${crmEsc(p.next_action||'')}</td>
+    <td>${actionBtns}</td>
+  </tr>`;
+}
+
+function crmToggleDeleted() {
+  _crmShowDeleted = !_crmShowDeleted;
+  const btn = document.getElementById('crm-del-toggle');
+  btn.textContent = _crmShowDeleted ? 'Hide Archived' : 'Show Archived';
+  btn.className = _crmShowDeleted ? 'btn bred' : 'btn bghost';
+  crmLoad();
+}
+
+function crmOpenAdd() {
+  _crmEditId = null;
+  document.getElementById('crm-mo-title').textContent = 'Add Prospect';
+  const form = document.getElementById('crm-prospect-form');
+  form.reset();
+  document.getElementById('crm-f-status').value = 'lead';
+  document.getElementById('crm-f-priority').value = 'medium';
+  document.getElementById('crm-f-source').value = 'cold_outreach';
+  document.getElementById('crm-f-due').value = crmAddDays(7);
+  document.getElementById('crm-prospect-mo').style.display='flex';
+}
+
+function crmOpenEdit(id) {
+  const p = _crmData.find(x=>x.id===id);
+  if(!p) return;
+  _crmEditId = id;
+  document.getElementById('crm-mo-title').textContent = 'Edit Prospect';
+  document.getElementById('crm-f-company').value = p.company_name||'';
+  document.getElementById('crm-f-postcode').value = p.postcode||'';
+  document.getElementById('crm-f-contact').value = p.contact_name||'';
+  document.getElementById('crm-f-title').value = p.contact_title||'';
+  document.getElementById('crm-f-phone').value = p.phone||'';
+  document.getElementById('crm-f-email').value = p.email||'';
+  document.getElementById('crm-f-pallets').value = p.estimated_pallets||'';
+  document.getElementById('crm-f-source').value = p.source||'cold_outreach';
+  document.getElementById('crm-f-priority').value = p.priority||'medium';
+  document.getElementById('crm-f-status').value = p.status||'lead';
+  document.getElementById('crm-f-next-action').value = p.next_action||'';
+  document.getElementById('crm-f-due').value = p.next_action_due||'';
+  document.getElementById('crm-f-notes').value = p.notes||'';
+  document.getElementById('crm-prospect-mo').style.display='flex';
+}
+
+async function crmSave() {
+  const company = document.getElementById('crm-f-company').value.trim();
+  if(!company) { toast('Company name is required', true); return; }
+  const payload = {
+    action: _crmEditId ? 'update' : 'create',
+    company_name: company,
+    postcode: document.getElementById('crm-f-postcode').value.trim()||null,
+    contact_name: document.getElementById('crm-f-contact').value.trim()||null,
+    contact_title: document.getElementById('crm-f-title').value.trim()||null,
+    phone: document.getElementById('crm-f-phone').value.trim()||null,
+    email: document.getElementById('crm-f-email').value.trim()||null,
+    estimated_pallets: parseInt(document.getElementById('crm-f-pallets').value)||null,
+    source: document.getElementById('crm-f-source').value,
+    priority: document.getElementById('crm-f-priority').value,
+    status: document.getElementById('crm-f-status').value,
+    next_action: document.getElementById('crm-f-next-action').value.trim()||null,
+    next_action_due: document.getElementById('crm-f-due').value||null,
+    notes: document.getElementById('crm-f-notes').value.trim()||null,
+  };
+  if(_crmEditId) payload.id = _crmEditId;
+  try {
+    const r = await fetch('/api/wms/crm', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if(d.ok) {
+      toast(_crmEditId ? 'Prospect updated' : 'Prospect added');
+      crmCloseMo('crm-prospect-mo');
+      crmLoad();
+    } else toast('Save error: '+(d.error||'unknown'), true);
+  } catch(e) { toast('Save failed: '+e.message, true); }
+}
+
+async function crmDelete(id) {
+  if(!confirm('Archive this prospect?')) return;
+  try {
+    const r = await fetch('/api/wms/crm', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'delete', id}),
+    });
+    const d = await r.json();
+    if(d.ok) { toast('Prospect archived'); crmLoad(); }
+    else toast('Delete error: '+(d.error||'unknown'), true);
+  } catch(e) { toast('Delete failed: '+e.message, true); }
+}
+
+async function crmRestore(id) {
+  try {
+    const r = await fetch('/api/wms/crm', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'restore', id}),
+    });
+    const d = await r.json();
+    if(d.ok) { toast('Prospect restored'); crmLoad(); }
+    else toast('Restore error: '+(d.error||'unknown'), true);
+  } catch(e) { toast('Restore failed: '+e.message, true); }
+}
+
+async function crmSeed() {
+  const btn = document.getElementById('crm-seed-btn');
+  btn.disabled = true;
+  btn.textContent = 'Seeding…';
+  try {
+    const r = await fetch('/api/wms/crm', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'seed'}),
+    });
+    const d = await r.json();
+    if(d.ok) {
+      toast(`Seed done — ${d.inserted} inserted, ${d.skipped} skipped`);
+      crmLoad();
+    } else toast('Seed error: '+(d.error||'unknown'), true);
+  } catch(e) { toast('Seed failed: '+e.message, true); }
+  btn.disabled = false;
+  btn.textContent = 'Seed Top 20';
+}
+
+async function crmOpenInteraction(prospectId) {
+  _crmIntProspectId = prospectId;
+  const p = _crmData.find(x=>x.id===prospectId);
+  document.getElementById('crm-int-mo-title').textContent =
+    'Log Interaction — '+(p ? crmEsc(p.company_name) : '');
+  document.getElementById('crm-int-type').value = 'call';
+  document.getElementById('crm-int-datetime').value =
+    new Date().toISOString().slice(0,16);
+  document.getElementById('crm-int-summary').value = '';
+  // Load history
+  const hist = document.getElementById('crm-int-history');
+  hist.innerHTML = '<em style="color:var(--muted)">Loading…</em>';
+  document.getElementById('crm-int-mo').style.display='flex';
+  try {
+    const r = await fetch(`/api/wms/crm?action=interactions&prospect_id=${prospectId}`);
+    const d = await r.json();
+    if(d.ok && d.interactions.length) {
+      hist.innerHTML = d.interactions.map(i => `
+        <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <span class="bdg bgy">${crmEsc(i.interaction_type)}</span>
+          <span style="color:var(--muted);font-size:0.8em;margin-left:6px">${(i.interaction_at||'').slice(0,16)}</span>
+          <div style="margin-top:4px">${crmEsc(i.summary)}</div>
+        </div>`).join('');
+    } else {
+      hist.innerHTML = '<em style="color:var(--muted)">No interactions yet.</em>';
+    }
+  } catch(e) { hist.innerHTML = '<em style="color:var(--red)">Failed to load history.</em>'; }
+}
+
+async function crmSaveInteraction() {
+  const summary = document.getElementById('crm-int-summary').value.trim();
+  if(!summary) { toast('Summary is required', true); return; }
+  const payload = {
+    action: 'log_interaction',
+    prospect_id: _crmIntProspectId,
+    interaction_type: document.getElementById('crm-int-type').value,
+    interaction_at: document.getElementById('crm-int-datetime').value||new Date().toISOString(),
+    summary,
+  };
+  try {
+    const r = await fetch('/api/wms/crm', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if(d.ok) {
+      toast('Interaction logged');
+      crmCloseMo('crm-int-mo');
+      crmLoad();
+    } else toast('Log error: '+(d.error||'unknown'), true);
+  } catch(e) { toast('Log failed: '+e.message, true); }
+}
+
+// ─── END SALES CRM ────────────────────────────────────────────────────────────
 </script>
 </body>
