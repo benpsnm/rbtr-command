@@ -469,6 +469,15 @@ body.cbm .aJ .cell.occupied { background:#E69F00!important; filter:brightness(0.
       <button class="tab" onclick="showPane('suppliers',this)">🚛 Suppliers</button>
   <button class="tab" onclick="showPane('intelligence',this)">🧠 Intelligence</button>
   <button class="tab" onclick="showPane('strategy',this)">📋 Strategy</button>
+  <div style="width:1px;background:var(--border);margin:8px 0;flex-shrink:0"></div>
+  <!-- ── WMS EXTENSIONS (Phase 1 scaffolding — feat/wms-extensions) ── -->
+  <button class="tab" onclick="showPane('sales-crm',this)">📋 Sales CRM</button>
+  <button class="tab" onclick="showPane('quote-calc',this)">💷 Quote Calc</button>
+  <button class="tab" onclick="showPane('ww-triage',this)">📥 WW Triage</button>
+  <button class="tab" onclick="showPane('daily-ops',this)">✅ Daily Ops</button>
+  <button class="tab" onclick="showPane('cashflow',this)">💸 Cashflow</button>
+  <button class="tab" onclick="showPane('ek-estimates',this)">🔧 EK Estimates</button>
+  <button class="tab" onclick="showPane('sponsors',this)">🚚 Sponsors</button>
 </div>
 
 <!-- ═══ MAP ═══ -->
@@ -3977,6 +3986,76 @@ Pallet Storage Near Me
 
   <div id="strat-content" class="card">
     <span style="color:var(--muted);font-size:12px">Loading…</span>
+  </div>
+</div>
+
+<!-- ═══ SALES CRM (Phase 2) ═══ -->
+<div id="pane-sales-crm" class="pane">
+  <div class="card">
+    <div class="ct">📋 Sales CRM</div>
+    <div class="st">PSNM Sales Pipeline</div>
+    <div class="ss">COMING IN PHASE 2</div>
+    <p style="color:var(--muted);font-size:13px">Cold leads, warm prospects, Top 20 seed list, interaction log, follow-up scheduling. Data stored in <code>crm_prospects</code> + <code>crm_interactions</code> tables (migration 46).</p>
+  </div>
+</div>
+
+<!-- ═══ QUOTE CALC (Phase 3) ═══ -->
+<div id="pane-quote-calc" class="pane">
+  <div class="card">
+    <div class="ct">💷 Quote Calc</div>
+    <div class="st">Pricing Calculator</div>
+    <div class="ss">COMING IN PHASE 3</div>
+    <p style="color:var(--muted);font-size:13px">Pallet count, dwell time, movement fees, total weekly/monthly cost. Quotes stored in <code>pricing_quotes</code> table (migration 46).</p>
+  </div>
+</div>
+
+<!-- ═══ WW TRIAGE (Phase 4) ═══ -->
+<div id="pane-ww-triage" class="pane">
+  <div class="card">
+    <div class="ct">📥 WW Triage</div>
+    <div class="st">WhichWarehouse Enquiry Triage</div>
+    <div class="ss">COMING IN PHASE 4</div>
+    <p style="color:var(--muted);font-size:13px">Inbound WW lead review, respond/call/decline verdict, one-click email dispatch. Data in <code>triage_enquiries</code> table (migration 46).</p>
+  </div>
+</div>
+
+<!-- ═══ DAILY OPS (Phase 5) ═══ -->
+<div id="pane-daily-ops" class="pane">
+  <div class="card">
+    <div class="ct">✅ Daily Ops</div>
+    <div class="st">Daily Operations Dashboard</div>
+    <div class="ss">COMING IN PHASE 5</div>
+    <p style="color:var(--muted);font-size:13px">Task management, daily metrics (occupancy, movements, revenue). Data in <code>ops_tasks</code> + <code>ops_daily_metrics</code> tables (migration 46).</p>
+  </div>
+</div>
+
+<!-- ═══ CASHFLOW (Phase 6) ═══ -->
+<div id="pane-cashflow" class="pane">
+  <div class="card">
+    <div class="ct">💸 Cashflow</div>
+    <div class="st">Cashflow Tracker</div>
+    <div class="ss">COMING IN PHASE 6</div>
+    <p style="color:var(--muted);font-size:13px">Revenue vs break-even vs RBTR target. Monthly snapshots. State in <code>cashflow_state</code> (seeded: rent £8,333, rate £3.95/pallet, break-even 827, RBTR target 142,990).</p>
+  </div>
+</div>
+
+<!-- ═══ EK ESTIMATES (Phase 7) ═══ -->
+<div id="pane-ek-estimates" class="pane">
+  <div class="card">
+    <div class="ct">🔧 EK Estimates</div>
+    <div class="st">EK Engineering Estimates</div>
+    <div class="ss">COMING IN PHASE 7</div>
+    <p style="color:var(--muted);font-size:13px">Job estimates with line items, labour, materials, margin. PDF export. Data in <code>ek_estimates</code> table (migration 46).</p>
+  </div>
+</div>
+
+<!-- ═══ SPONSORS (Phase 8) ═══ -->
+<div id="pane-sponsors" class="pane">
+  <div class="card">
+    <div class="ct">🚚 Sponsors</div>
+    <div class="st">RBTR Sponsor Tracker</div>
+    <div class="ss">COMING IN PHASE 8</div>
+    <p style="color:var(--muted);font-size:13px">55-sponsor pipeline seeded from stream-3-sponsor-outreach. 16-touch email sequencer, tier tracking (Title/Gold/Silver/Bronze/Partner). Extends existing <code>sponsor_targets</code> + <code>sponsor_contacts</code> tables.</p>
   </div>
 </div>
 
