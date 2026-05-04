@@ -39,6 +39,11 @@ const daysSince = (iso) => iso ? Math.floor((Date.now() - new Date(iso)) / 86400
 // ── Data getters (each returns null on miss) ─────────────────────────────────
 
 async function getBuiltDadDay() {
+  // Try dynamic calculation from start_date first; fall back to stored day_number
+  const withDate = await sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date');
+  if (withDate?.[0]?.start_date) {
+    return Math.floor((Date.now() - new Date(withDate[0].start_date)) / 86400000) + 1;
+  }
   const rows = await sbSelect('jarvis_builtdad', 'id=eq.1&select=day_number');
   return rows?.[0]?.day_number ?? null;
 }
@@ -78,6 +83,22 @@ async function getHouseJobsRemaining() {
   const rows = await sbSelect('house_jobs', "status=neq.done&select=id");
   if (Array.isArray(rows) && rows.length >= 0) return rows.length;
   return null;
+}
+
+// PSNM — warm leads (migration 32)
+async function getPsnmWarmLeads() {
+  const today_iso = today();
+  const [dueToday, hotLeads] = await Promise.all([
+    sbSelect('psnm_warm_leads',
+      `next_contact_date=lte.${today_iso}&temperature=neq.dead&status=neq.won&select=company,contact_name,temperature,pallets_count,last_contact_type&order=score.desc&limit=10`),
+    sbSelect('psnm_warm_leads',
+      `temperature=eq.hot&select=company,contact_name,pallets_count,quote_amount&order=score.desc&limit=5`),
+  ]);
+  return {
+    due_today: dueToday ?? null,
+    hot_count: Array.isArray(hotLeads) ? hotLeads.length : null,
+    hot_leads: hotLeads ?? null,
+  };
 }
 
 // PSNM — live from migration 15 tables.
@@ -293,6 +314,7 @@ module.exports = async function handler(req, res) {
     openGoals,
     moodLogGap,
     psnmPallets,
+    psnmWarmLeads,
     psnmNewEnq,
     psnmUrgent,
     psnmOverdue,
@@ -321,6 +343,7 @@ module.exports = async function handler(req, res) {
     getOpenGoalsToday(),
     getMoodLogGap(),
     getLatestPsnmOccupancy(),
+    getPsnmWarmLeads(),
     getNewPsnmEnquiries24h(),
     getUrgentPsnmEnquiries(),
     getOverduePsnmFollowups(),
@@ -361,6 +384,9 @@ module.exports = async function handler(req, res) {
     // PSNM
     psnm_pallets_current: psnmCurrent,
     psnm_pallets_to_breakeven: psnmCurrent != null ? PSNM_BREAKEVEN_PALLETS - psnmCurrent : null,
+    psnm_warm_leads_due_today: psnmWarmLeads?.due_today ?? null,
+    psnm_hot_leads: psnmWarmLeads?.hot_leads ?? null,
+    psnm_hot_lead_count: psnmWarmLeads?.hot_count ?? null,
     psnm_new_enquiries_24h: psnmNewEnq,
     psnm_urgent_enquiries: psnmUrgent,
     psnm_overdue_followups: psnmOverdue,

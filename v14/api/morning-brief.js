@@ -69,6 +69,7 @@ const daysSince = (iso) => iso ? Math.floor((Date.now() - new Date(iso)) / 86400
 
 // ── Data gathering (identical contract to /api/briefing-data) ─────────────────
 async function gatherAllData() {
+  const today_iso = new Date().toISOString().slice(0, 10);
   const [
     builtDad,
     yWins,
@@ -76,6 +77,7 @@ async function gatherAllData() {
     openGoals,
     moodGap,
     psnmPallets,
+    psnmWarmLeads,
     psnmNewEnq,
     psnmUrgent,
     psnmOverdue,
@@ -96,12 +98,28 @@ async function gatherAllData() {
     billsWk,
     weather,
   ] = await Promise.all([
-    sbSelect('jarvis_builtdad', 'id=eq.1&select=day_number').then(r => r?.[0]?.day_number ?? null),
+    // Dynamic Built Dad: try start_date first, fall back to stored day_number
+    sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
+      if (r?.[0]?.start_date) return Math.floor((Date.now() - new Date(r[0].start_date)) / 86400000) + 1;
+      const fb = await sbSelect('jarvis_builtdad', 'id=eq.1&select=day_number');
+      return fb?.[0]?.day_number ?? null;
+    }),
     sbSelect('jarvis_accomplishments', `achieved_at=gte.${yesterday()}T00:00:00&achieved_at=lt.${today()}T00:00:00&select=title,category`).then(r => r ?? []),
     sbSelect('evening_reflections', `reflection_date=eq.${yesterday()}&select=mood_score,one_line,one_line_reflection,tomorrow_priority`).then(r => r?.[0] || null),
     sbSelect('jarvis_goals', 'scope=eq.day&status=eq.open&select=title,priority&order=priority.asc&limit=10').then(r => r ?? []),
     sbSelect('evening_reflections', 'select=reflection_date&order=reflection_date.desc&limit=1').then(r => r?.[0] ? daysSince(r[0].reflection_date) : null),
     sbSelect('psnm_occupancy_snapshots', 'select=pallets,date&order=date.desc&limit=1').then(r => r?.[0]?.pallets ?? null),
+    // Warm leads: due for contact today + hot leads
+    Promise.all([
+      sbSelect('psnm_warm_leads',
+        `next_contact_date=lte.${today_iso}&temperature=neq.dead&status=neq.won&select=company,contact_name,temperature,pallets_count,last_contact_type&order=score.desc&limit=10`),
+      sbSelect('psnm_warm_leads',
+        `temperature=eq.hot&select=company,contact_name,pallets_count,quote_amount&order=score.desc&limit=5`),
+    ]).then(([dueToday, hot]) => ({
+      due_today: dueToday ?? null,
+      hot_count: Array.isArray(hot) ? hot.length : null,
+      hot_leads: hot ?? null,
+    })),
     sbSelect('psnm_enquiries', `created_at=gte.${new Date(Date.now()-86400000).toISOString()}&select=id,company,pallets,status,source`).then(r => r ?? null),
     sbSelect('psnm_enquiries', 'status=eq.urgent&select=id,company,pallets,start_date,contact_name').then(r => r ?? null),
     sbSelect('psnm_enquiries', `followup_date=lt.${today()}&status=not.in.(won,lost,complete)&select=id,company,followup_date,pallets`).then(r => r ?? null),
@@ -182,6 +200,9 @@ async function gatherAllData() {
     mood_log_gap_days: moodGap,
     psnm_pallets_current: psnmPallets,
     psnm_pallets_to_breakeven: psnmPallets != null ? PSNM_BREAKEVEN_PALLETS - psnmPallets : null,
+    psnm_warm_leads_due_today: psnmWarmLeads?.due_today ?? null,
+    psnm_hot_leads: psnmWarmLeads?.hot_leads ?? null,
+    psnm_hot_lead_count: psnmWarmLeads?.hot_count ?? null,
     psnm_new_enquiries_24h: psnmNewEnq,
     psnm_urgent_enquiries: psnmUrgent,
     psnm_overdue_followups: psnmOverdue,
@@ -223,7 +244,7 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 
 - data.date (YYYY-MM-DD), data.weekday, data.days_to_departure, data.built_dad_day, data.weather
 - data.overnight: { wins, flags, reflection_from_last_night, priority_set_yesterday, priority_completed }
-- data.psnm: { pallets_current, pallets_to_breakeven, new_enquiries_24h, urgent_enquiries, overdue_followups, outreach_batch_today }
+- data.psnm: { pallets_current, pallets_to_breakeven, warm_leads_due_today, hot_leads, hot_lead_count, new_enquiries_24h, urgent_enquiries, overdue_followups, outreach_batch_today }
 - data.sponsors: { hot_signals (array), replies_pending, touches_queued_today, approach_due_this_week }
 - data.build: { sections_in_progress (array), section_starting_this_week, photos_gap_days }
 - data.audience: { total, growth_24h, resurrection_day_number, resurrection_tasks_today }
@@ -241,7 +262,7 @@ Order of content (adapt naturally):
 
 2. Overnight. If anything meaningful happened overnight (yesterday's mood, reflection, priority status, unread messages, new enquiries), surface it briefly. If nothing, skip this section entirely — don't pad with "nothing much".
 
-3. Warehouse. Pallets current vs break-even. Today's enquiries, flag any urgent ones by company name. Outreach batch status. Overdue follow-ups — name them specifically.
+3. Warehouse. Pallets current vs break-even. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically.
 
 4. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week. Resurrection day number and what to post today. Audience movement in absolute numbers.
 

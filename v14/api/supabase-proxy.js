@@ -87,7 +87,7 @@ const LEGAL_SENSITIVE = new Set([
 // WS-C.8 · map every briefing-data field to its source table + query. Returned
 // by {action:'briefing_audit'} for debugging when a field unexpectedly goes null.
 const BRIEFING_AUDIT_MAP = {
-  built_dad_day:              { table: 'jarvis_builtdad',          query: "id=eq.1&select=day_number" },
+  built_dad_day:              { table: 'jarvis_builtdad',          query: "id=eq.1&select=start_date (dynamic) or day_number (fallback)" },
   yesterday_mood:             { table: 'evening_reflections',      query: "reflection_date=yesterday&select=mood_score" },
   yesterday_reflection:       { table: 'evening_reflections',      query: "reflection_date=yesterday&select=one_line,one_line_reflection" },
   yesterday_priority_set:     { table: 'evening_reflections',      query: "reflection_date=yesterday&select=tomorrow_priority" },
@@ -95,6 +95,8 @@ const BRIEFING_AUDIT_MAP = {
   mood_log_gap_days:          { table: 'evening_reflections',      query: "max(reflection_date)" },
   open_goals_today:           { table: 'jarvis_goals',             query: "scope=day&status=open" },
   psnm_pallets_current:       { table: 'psnm_occupancy_snapshots', query: "order=date.desc limit 1" },
+  psnm_warm_leads_due_today:  { table: 'psnm_warm_leads',          query: "next_contact_date<=today AND temperature!=dead AND status!=won" },
+  psnm_hot_leads:             { table: 'psnm_warm_leads',          query: "temperature=hot order=score.desc" },
   psnm_new_enquiries_24h:     { table: 'psnm_enquiries',           query: "created_at>=now()-24h" },
   psnm_urgent_enquiries:      { table: 'psnm_enquiries',           query: "status=urgent" },
   psnm_overdue_followups:     { table: 'psnm_enquiries',           query: "followup_date<today AND status NOT IN (won,lost,complete)" },
