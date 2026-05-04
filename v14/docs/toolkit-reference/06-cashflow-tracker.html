@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cashflow Tracker — Reference Spec</title>
+<style>
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green-text:#5cb85c;--red-text:#ff6b6b;--amber:#ffa500}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:7px 14px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  input{background:#111;color:var(--text);border:1px solid var(--border);padding:7px 10px;font-size:14px;font-family:inherit;width:100%}
+  input:focus{outline:1px solid var(--gold)}
+  input[type=password]{letter-spacing:4px;font-size:20px;text-align:center}
+  .card{background:var(--card);border:1px solid var(--border);padding:16px;margin-bottom:12px}
+  .ct{color:var(--gold);font-size:16px;font-weight:700;margin-bottom:8px}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+  /* PIN gate */
+  .pin-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:16px}
+  /* Summary tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+  .tile{background:var(--card);border:1px solid var(--border);padding:14px;text-align:center}
+  .tile-val{font-size:26px;font-weight:700}
+  .tile-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+  /* Progress bar */
+  .prog-wrap{background:#1a1a1a;height:24px;border-radius:2px;overflow:hidden;margin-top:6px;position:relative}
+  .prog-bar{height:100%;background:var(--gold);transition:width .4s}
+  .prog-text{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#000}
+  /* Inputs grid */
+  .inputs-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fg{margin-bottom:0}
+  .fg label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+  /* Rent strip */
+  .rent-strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+  .rent-item{background:#111;border:1px solid var(--border);padding:6px 10px;font-size:12px;text-align:center;min-width:120px}
+  .rent-item.active{border-color:var(--gold);background:#1e1a0a}
+  .rent-label{color:var(--muted);font-size:10px}
+  .rent-val{color:var(--gold);font-weight:700}
+  /* Snapshots table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);border-bottom:1px solid var(--border);padding:6px 8px;font-weight:400}
+  td{padding:6px 8px;border-bottom:1px solid #1a1a1a}
+  /* RBTR progress */
+  .rbtr-bar{background:#1a1a1a;height:32px;border-radius:2px;overflow:hidden;position:relative;margin-top:8px}
+  .rbtr-fill{height:100%;background:linear-gradient(90deg,#7a3a00,var(--gold));transition:width .4s}
+  .rbtr-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--text)}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>💸 Cashflow Tracker — Reference Spec</h1>
+<div class="sub">PIN-gated · runway calc · break-even 827 pallets · RBTR target £142,990 · Phase 6 reference</div>
+
+<!-- PIN gate -->
+<div id="pinGate" class="card">
+  <div class="pin-gate">
+    <div style="color:var(--gold);font-size:18px;font-weight:700">🔒 Enter PIN</div>
+    <input type="password" id="pinInput" maxlength="6" style="max-width:180px" placeholder="••••" onkeydown="if(event.key==='Enter')checkPin()">
+    <button class="gold" onclick="checkPin()">Unlock</button>
+    <div id="pinErr" style="color:var(--red-text);font-size:12px;display:none">Incorrect PIN</div>
+    <div style="color:var(--muted);font-size:11px">Default ref-spec PIN: 1234</div>
+  </div>
+</div>
+
+<!-- Main dashboard (hidden until PIN) -->
+<div id="dashboard" style="display:none">
+
+  <!-- Summary tiles -->
+  <div class="tiles" id="tilesBar"></div>
+
+  <!-- Break-even progress -->
+  <div class="card">
+    <div class="ct">Break-Even Progress</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+      <span style="font-size:13px">Pallets stored: <strong id="beStored">0</strong> of <strong>827</strong> target</span>
+      <span id="bePct" style="color:var(--gold);font-weight:700">0%</span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-bar" id="beBar" style="width:0%"></div>
+      <div class="prog-text" id="beBarText">0%</div>
+    </div>
+    <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+      £3.95/pallet × <span id="bePallets">0</span> = <strong id="beRevenue">£0</strong>/week ·
+      Break-even: £3,269/week (<span id="beShortfall" style="color:var(--amber)">—</span> short)
+    </div>
+  </div>
+
+  <!-- RBTR Fund -->
+  <div class="card">
+    <div class="ct">RBTR Fund — Target £142,990</div>
+    <div class="rbtr-bar">
+      <div class="rbtr-fill" id="rbtrFill" style="width:0%"></div>
+      <div class="rbtr-text" id="rbtrText">£0 / £142,990</div>
+    </div>
+    <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+      Saved: <strong id="rbtrSaved">£0</strong> · Remaining: <strong id="rbtrLeft">£142,990</strong> ·
+      At current rate: <strong id="rbtrMonths">—</strong> months
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <div style="flex:1">
+        <div class="label">Add to RBTR fund (£)</div>
+        <input type="number" id="rbtrAdd" placeholder="500" min="0">
+      </div>
+      <button class="gold" onclick="addToRbtr()" style="align-self:flex-end">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="card">
+    <div class="ct">Update Cashflow State</div>
+    <div class="inputs-grid" style="margin-bottom:12px">
+      <div class="fg"><label>Pallets stored</label><input type="number" id="i_pallets" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Rate £/pallet/week</label><input type="number" id="i_rate" step="0.01" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Rent (£/month)</label><input type="number" id="i_rent" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Other costs (£/month)</label><input type="number" id="i_other" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Utilities (£/month)</label><input type="number" id="i_utilities" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Personal expenses (£/month)</label><input type="number" id="i_personal" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>EK income (£/month)</label><input type="number" id="i_ek" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>AirBnB income (£/month)</label><input type="number" id="i_bnb" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Other income (£/month)</label><input type="number" id="i_otherinc" min="0" oninput="recalc()"></div>
+      <div class="fg"><label>Cash reserves (£)</label><input type="number" id="i_reserves" min="0" oninput="recalc()"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="gold" onclick="saveState()">💾 Save State</button>
+      <button onclick="takeSnapshot()">📸 Take Snapshot</button>
+    </div>
+  </div>
+
+  <!-- Stepped rent strip -->
+  <div class="card">
+    <div class="ct">Rent Strip — Stepped Schedule</div>
+    <div class="label" style="margin-bottom:6px">Edit in state to reflect actual agreement</div>
+    <div class="rent-strip">
+      <div class="rent-item active"><div class="rent-label">Current</div><div class="rent-val">£8,333/mo</div><div style="font-size:10px;color:var(--muted)">~£100k pa</div></div>
+      <div class="rent-item"><div class="rent-label">Step 2</div><div class="rent-val">TBC</div><div style="font-size:10px;color:var(--muted)">Add date</div></div>
+      <div class="rent-item"><div class="rent-label">Step 3</div><div class="rent-val">TBC</div><div style="font-size:10px;color:var(--muted)">Add date</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">
+      Phase 6: populate stepped rent schedule from lease. Break-even recalculates per step.
+    </div>
+  </div>
+
+  <!-- Snapshots -->
+  <div class="card">
+    <div class="ct">Monthly Snapshots</div>
+    <table>
+      <thead><tr><th>Date</th><th>Pallets</th><th>Monthly income</th><th>Monthly burn</th><th>Net</th><th>Runway</th></tr></thead>
+      <tbody id="snapshotTbody"><tr><td colspan="6" style="color:var(--muted);padding:12px">No snapshots yet.</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// ── PIN ────────────────────────────────────────────────────────────────────
+// Production: hash-compare server-side. Ref spec: plain comparison.
+const PIN = '1234';
+function checkPin(){
+  if(document.getElementById('pinInput').value === PIN){
+    document.getElementById('pinGate').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    loadState(); recalc(); loadSnapshots();
+  } else {
+    document.getElementById('pinErr').style.display='block';
+  }
+}
+
+// ── State (localStorage) ──────────────────────────────────────────────────
+const KEY_S = 'cashflow_state';
+const KEY_SNAPS = 'cashflow_snapshots';
+
+const DEFAULTS = {pallets:0, rate:3.95, rent:8333, other:0, utilities:0, personal:0, ek:0, bnb:0, otherinc:0, reserves:0, rbtr_saved:0};
+function loadState(){ return JSON.parse(localStorage.getItem(KEY_S)||JSON.stringify(DEFAULTS)); }
+function persistState(s){ localStorage.setItem(KEY_S, JSON.stringify(s)); }
+function loadSnapshots(){ return JSON.parse(localStorage.getItem(KEY_SNAPS)||'[]'); }
+function persistSnapshots(s){ localStorage.setItem(KEY_SNAPS, JSON.stringify(s)); }
+
+function populateInputs(){
+  const s = loadState();
+  document.getElementById('i_pallets').value   = s.pallets||0;
+  document.getElementById('i_rate').value      = s.rate||3.95;
+  document.getElementById('i_rent').value      = s.rent||8333;
+  document.getElementById('i_other').value     = s.other||0;
+  document.getElementById('i_utilities').value = s.utilities||0;
+  document.getElementById('i_personal').value  = s.personal||0;
+  document.getElementById('i_ek').value        = s.ek||0;
+  document.getElementById('i_bnb').value       = s.bnb||0;
+  document.getElementById('i_otherinc').value  = s.otherinc||0;
+  document.getElementById('i_reserves').value  = s.reserves||0;
+}
+
+function getInputs(){
+  return {
+    pallets:   parseFloat(document.getElementById('i_pallets').value)||0,
+    rate:      parseFloat(document.getElementById('i_rate').value)||3.95,
+    rent:      parseFloat(document.getElementById('i_rent').value)||8333,
+    other:     parseFloat(document.getElementById('i_other').value)||0,
+    utilities: parseFloat(document.getElementById('i_utilities').value)||0,
+    personal:  parseFloat(document.getElementById('i_personal').value)||0,
+    ek:        parseFloat(document.getElementById('i_ek').value)||0,
+    bnb:       parseFloat(document.getElementById('i_bnb').value)||0,
+    otherinc:  parseFloat(document.getElementById('i_otherinc').value)||0,
+    reserves:  parseFloat(document.getElementById('i_reserves').value)||0,
+    rbtr_saved:loadState().rbtr_saved||0,
+  };
+}
+
+function fmt(n){ return '£'+Math.round(n).toLocaleString('en-GB'); }
+
+function recalc(){
+  const s = getInputs();
+  const weeklyStorage = s.pallets * s.rate;
+  const monthlyStorage = weeklyStorage * 4.33;
+  const monthlyIncome = monthlyStorage + s.ek + s.bnb + s.otherinc;
+  const monthlyBurn = s.rent + s.other + s.utilities + s.personal;
+  const monthlyNet = monthlyIncome - monthlyBurn;
+  const runway = monthlyNet < 0 && s.reserves > 0 ? Math.floor(s.reserves / Math.abs(monthlyNet)) : null;
+
+  // Break-even target: 827 pallets at £3.95 = £3,268/wk = ~£14,150/mo
+  const BE_PALLETS = 827;
+  const beRevWeekly = s.pallets * s.rate;
+  const bePct = Math.min(100, (s.pallets / BE_PALLETS * 100));
+  const beShortfallPallets = Math.max(0, BE_PALLETS - s.pallets);
+  const beShortfallWeekly = beShortfallPallets * s.rate;
+
+  document.getElementById('beStored').textContent = s.pallets;
+  document.getElementById('bePct').textContent = bePct.toFixed(1)+'%';
+  document.getElementById('beBar').style.width = bePct+'%';
+  document.getElementById('beBarText').textContent = bePct.toFixed(0)+'%';
+  document.getElementById('bePallets').textContent = s.pallets;
+  document.getElementById('beRevenue').textContent = fmt(beRevWeekly);
+  document.getElementById('beShortfall').textContent = beShortfallPallets > 0
+    ? `${beShortfallPallets} pallets (${fmt(beShortfallWeekly)}/wk)` : '✓ Break-even reached';
+
+  // RBTR fund
+  const RBTR_TARGET = 142990;
+  const rbtrSaved = s.rbtr_saved||0;
+  const rbtrPct = Math.min(100, rbtrSaved / RBTR_TARGET * 100);
+  document.getElementById('rbtrFill').style.width = rbtrPct+'%';
+  document.getElementById('rbtrText').textContent = `${fmt(rbtrSaved)} / ${fmt(RBTR_TARGET)}`;
+  document.getElementById('rbtrSaved').textContent = fmt(rbtrSaved);
+  document.getElementById('rbtrLeft').textContent = fmt(Math.max(0,RBTR_TARGET-rbtrSaved));
+  const rbtrMonthly = monthlyNet > 0 ? Math.ceil((RBTR_TARGET-rbtrSaved)/monthlyNet) : null;
+  document.getElementById('rbtrMonths').textContent = rbtrMonthly ? rbtrMonthly+'mo' : '—';
+
+  // Tiles
+  document.getElementById('tilesBar').innerHTML = [
+    {val:fmt(monthlyIncome), lbl:'Monthly income', col:monthlyIncome>=monthlyBurn?'var(--green-text)':'var(--amber)'},
+    {val:fmt(monthlyBurn),   lbl:'Monthly burn',   col:'var(--text)'},
+    {val:fmt(monthlyNet),    lbl:'Monthly net',    col:monthlyNet>=0?'var(--green-text)':'var(--red-text)'},
+    {val:runway!==null?runway+'mo':'—', lbl:'Runway', col:runway!==null&&runway<3?'var(--red-text)':'var(--text)'},
+    {val:fmt(s.reserves),    lbl:'Cash reserves',  col:'var(--text)'},
+    {val:fmt(weeklyStorage), lbl:'Storage/week',   col:'var(--text)'},
+  ].map(t=>`<div class="tile"><div class="tile-val" style="color:${t.col}">${t.val}</div><div class="tile-lbl">${t.lbl}</div></div>`).join('');
+}
+
+function saveState(){
+  const s = {...getInputs(), updated_at: new Date().toISOString()};
+  persistState(s);
+  alert('State saved.');
+}
+
+function addToRbtr(){
+  const add = parseFloat(document.getElementById('rbtrAdd').value)||0;
+  if(add<=0) return;
+  const s = loadState();
+  s.rbtr_saved = (s.rbtr_saved||0)+add;
+  persistState(s);
+  document.getElementById('rbtrAdd').value='';
+  recalc();
+}
+
+function takeSnapshot(){
+  const s = getInputs();
+  const weeklyStorage = s.pallets * s.rate;
+  const monthlyStorage = weeklyStorage * 4.33;
+  const monthlyIncome = monthlyStorage + s.ek + s.bnb + s.otherinc;
+  const monthlyBurn = s.rent + s.other + s.utilities + s.personal;
+  const monthlyNet = monthlyIncome - monthlyBurn;
+  const runway = monthlyNet < 0 && s.reserves > 0 ? Math.floor(s.reserves / Math.abs(monthlyNet)) : null;
+  const date = new Date().toISOString().slice(0,10);
+  const snaps = loadSnapshots();
+  const idx = snaps.findIndex(x=>x.date===date);
+  const snap = {date, monthly_burn:monthlyBurn, monthly_income:monthlyIncome, monthly_net:monthlyNet, cash_reserves:s.reserves, pallets_stored:s.pallets, days_runway:runway?runway*30:null, created_at:new Date().toISOString()};
+  if(idx>=0) snaps[idx]=snap; else snaps.push(snap);
+  persistSnapshots(snaps);
+  renderSnapshots(snaps);
+  alert(`Snapshot saved for ${date}.`);
+}
+
+function renderSnapshots(snaps){
+  const tbody = document.getElementById('snapshotTbody');
+  if(!snaps.length){ tbody.innerHTML='<tr><td colspan="6" style="color:var(--muted);padding:12px">No snapshots yet.</td></tr>'; return; }
+  tbody.innerHTML = snaps.slice().reverse().map(s=>
+    `<tr><td>${s.date}</td><td>${s.pallets_stored}</td><td>${fmt(s.monthly_income)}</td><td>${fmt(s.monthly_burn)}</td><td style="color:${s.monthly_net>=0?'var(--green-text)':'var(--red-text)'}">${fmt(s.monthly_net)}</td><td>${s.days_runway?Math.ceil(s.days_runway/30)+'mo':'—'}</td></tr>`
+  ).join('');
+}
+
+function loadState(){
+  populateInputs();
+  renderSnapshots(loadSnapshots());
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Ops Dashboard — Reference Spec</title>
+<style>
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green:#3a7d44;--red:#8b2020;--green-text:#5cb85c;--red-text:#ff6b6b;--amber:#ffa500}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  button.sm{padding:4px 8px;font-size:11px}
+  input[type=number],input[type=text],input[type=date],textarea{background:#111;color:var(--text);border:1px solid var(--border);padding:6px 8px;font-size:13px;font-family:inherit;width:100%}
+  input:focus,textarea:focus{outline:1px solid var(--gold)}
+  .card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:12px}
+  .ct{color:var(--gold);font-size:15px;font-weight:700;margin-bottom:8px}
+  /* Metrics tiles */
+  .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}
+  .metric{background:var(--card);border:1px solid var(--border);padding:12px;text-align:center}
+  .metric-val{font-size:32px;font-weight:700;color:var(--gold)}
+  .metric-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+  .metric-inp{width:60px;text-align:center;font-size:20px;background:#111;border:1px solid var(--border);color:var(--gold);font-weight:700;margin-top:4px}
+  /* 7-day strip */
+  .strip{display:flex;gap:4px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+  .strip-day{flex:0 0 80px;background:var(--card);border:1px solid var(--border);padding:8px 6px;text-align:center;cursor:pointer;transition:border-color .15s}
+  .strip-day:hover{border-color:var(--gold)}
+  .strip-day.active{border-color:var(--gold);background:#1e1a0a}
+  .strip-day.today{border-color:#444}
+  .strip-date{font-size:11px;color:var(--muted)}
+  .strip-name{font-size:13px;font-weight:700}
+  .strip-score{font-size:20px;color:var(--gold);margin-top:2px}
+  .strip-done{font-size:10px;color:var(--muted)}
+  /* Tasks */
+  .task-item{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #1a1a1a}
+  .task-item:last-child{border-bottom:none}
+  .task-cb{width:16px;height:16px;margin-top:2px;accent-color:var(--gold);flex-shrink:0}
+  .task-text{flex:1}
+  .task-text.done{text-decoration:line-through;color:var(--muted)}
+  .badge{display:inline-block;padding:1px 5px;font-size:10px;border-radius:2px;margin-left:4px}
+  .badge-high{background:#3a0000;color:#ff6b6b}
+  .badge-medium{background:#2a1500;color:#ffa500}
+  .badge-low{background:#1a2a1a;color:#5cb85c}
+  /* Templates */
+  .tmpl-btn{margin-right:6px;margin-bottom:6px}
+  /* Add task form */
+  .add-row{display:flex;gap:6px;margin-top:10px}
+  .add-row input{flex:1}
+  .add-row select{width:auto}
+  /* Nav */
+  .nav-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .nav-date{font-size:18px;color:var(--gold)}
+  @media(max-width:600px){.metrics{grid-template-columns:repeat(3,1fr)}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>✅ Daily Ops Dashboard — Reference Spec</h1>
+<div class="sub">Task management · daily metrics · 7-day strip · Phase 5 reference</div>
+
+<!-- Day navigation -->
+<div class="nav-bar">
+  <button onclick="shiftDay(-1)">← Prev</button>
+  <div class="nav-date" id="navDate">—</div>
+  <button onclick="shiftDay(1)">Next →</button>
+  <button onclick="goToday()">Today</button>
+</div>
+
+<!-- 7-day strip -->
+<div class="strip" id="strip"></div>
+
+<!-- Metrics tiles -->
+<div class="metrics" id="metrics">
+  <div class="metric" id="m-calls">
+    <div class="metric-val" id="mv-calls">0</div>
+    <div class="metric-lbl">Calls</div>
+    <input class="metric-inp" type="number" id="mi-calls" min="0" value="0" oninput="saveMetric('calls')">
+  </div>
+  <div class="metric" id="m-emails">
+    <div class="metric-val" id="mv-emails">0</div>
+    <div class="metric-lbl">Emails</div>
+    <input class="metric-inp" type="number" id="mi-emails" min="0" value="0" oninput="saveMetric('emails')">
+  </div>
+  <div class="metric" id="m-linkedin">
+    <div class="metric-val" id="mv-linkedin">0</div>
+    <div class="metric-lbl">LinkedIn</div>
+    <input class="metric-inp" type="number" id="mi-linkedin" min="0" value="0" oninput="saveMetric('linkedin')">
+  </div>
+  <div class="metric" id="m-quotes">
+    <div class="metric-val" id="mv-quotes">0</div>
+    <div class="metric-lbl">Quotes</div>
+    <input class="metric-inp" type="number" id="mi-quotes" min="0" value="0" oninput="saveMetric('quotes')">
+  </div>
+  <div class="metric" id="m-meetings">
+    <div class="metric-val" id="mv-meetings">0</div>
+    <div class="metric-lbl">Meetings</div>
+    <input class="metric-inp" type="number" id="mi-meetings" min="0" value="0" oninput="saveMetric('meetings')">
+  </div>
+  <div class="metric" id="m-pallets">
+    <div class="metric-val" id="mv-pallets">0</div>
+    <div class="metric-lbl">Pallets</div>
+    <input class="metric-inp" type="number" id="mi-pallets" min="0" value="0" oninput="saveMetric('pallets_stored')">
+  </div>
+</div>
+
+<!-- Templates -->
+<div class="card">
+  <div class="ct">Add from Template</div>
+  <button class="tmpl-btn" onclick="applyTemplate('daily')">📋 Daily Ops</button>
+  <button class="tmpl-btn" onclick="applyTemplate('weekly')">📅 Weekly Review</button>
+  <button class="tmpl-btn" onclick="applyTemplate('monthly')">📊 Monthly Close</button>
+</div>
+
+<!-- Task list -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div class="ct" style="margin:0">Tasks — <span id="taskDateLbl">—</span></div>
+    <div>
+      <span id="taskProgress" style="color:var(--muted);font-size:12px"></span>
+    </div>
+  </div>
+  <div id="taskList"></div>
+  <div class="add-row">
+    <input id="newTaskText" placeholder="Add task…" onkeydown="if(event.key==='Enter')addTask()">
+    <select id="newTaskPriority" style="width:90px"><option>medium</option><option>high</option><option>low</option></select>
+    <select id="newTaskCategory" style="width:100px">
+      <option>custom</option><option>check</option><option>ww</option><option>atlas</option>
+      <option>calls</option><option>follow_up</option><option>social</option><option>ops</option>
+      <option>crm</option><option>review</option><option>plan</option><option>finance</option>
+      <option>leads</option><option>system</option><option>content</option><option>compliance</option>
+    </select>
+    <button class="gold" onclick="addTask()">+ Add</button>
+  </div>
+</div>
+
+<script>
+// ── Templates ──────────────────────────────────────────────────────────────
+const TEMPLATES = {
+  daily: [
+    {text:'Check WW portal for new enquiries',        priority:'high',   category:'ww'},
+    {text:'Check Atlas draft queue (needs_source)',    priority:'high',   category:'atlas'},
+    {text:'Morning call block (9–11am)',               priority:'medium', category:'calls'},
+    {text:'Log all interactions in CRM',              priority:'medium', category:'crm'},
+    {text:'Check floor — pallet count + any issues',  priority:'high',   category:'check'},
+    {text:'Follow up any quotes sent yesterday',      priority:'medium', category:'follow_up'},
+    {text:'LinkedIn connection requests (5 min)',      priority:'low',    category:'social'},
+    {text:'Reply to any email / LinkedIn messages',   priority:'medium', category:'ops'},
+  ],
+  weekly: [
+    {text:'Review pipeline — update all CRM statuses',priority:'high',   category:'crm'},
+    {text:'Cashflow update — log current pallet count',priority:'high',  category:'finance'},
+    {text:'Pull WW report — leads received this week',priority:'medium', category:'ww'},
+    {text:'Atlas: review sent emails, check replies', priority:'medium', category:'atlas'},
+    {text:'Plan outreach for next week (Top 20 check)',priority:'medium',category:'leads'},
+    {text:'RBTR sponsor check — any follow-ups due',  priority:'low',    category:'review'},
+    {text:'Content: post weekly update (LinkedIn/IG)', priority:'low',   category:'content'},
+    {text:'System: check Vercel / Supabase logs',     priority:'low',    category:'system'},
+  ],
+  monthly: [
+    {text:'Monthly cashflow close — snapshot P&L',    priority:'high',   category:'finance'},
+    {text:'Update Sheffield fixtures in pricing CSV',  priority:'medium', category:'ops'},
+    {text:'Sponsor tracker — update contact notes',   priority:'medium', category:'review'},
+    {text:'Review Top 20 list — swap any dead leads', priority:'high',   category:'leads'},
+    {text:'VAT return check (if applicable)',          priority:'high',   category:'compliance'},
+    {text:'AirBnB occupancy review + pricing update', priority:'medium', category:'review'},
+    {text:'EK estimates — invoice any accepted jobs', priority:'high',   category:'finance'},
+    {text:'Monthly reflection note (voice memo/text)', priority:'low',   category:'plan'},
+  ],
+};
+
+// ── State ──────────────────────────────────────────────────────────────────
+const KEY_T = 'ops_tasks';
+const KEY_M = 'ops_metrics';
+let currentDate = todayStr();
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function loadTasks(d){ return JSON.parse(localStorage.getItem(KEY_T+'_'+d)||'[]'); }
+function saveTasks(d,t){ localStorage.setItem(KEY_T+'_'+d, JSON.stringify(t)); }
+function loadMetrics(d){ return JSON.parse(localStorage.getItem(KEY_M+'_'+d)||'{}'); }
+function saveMetrics(d,m){ localStorage.setItem(KEY_M+'_'+d, JSON.stringify(m)); }
+
+function shiftDay(n){
+  const d = new Date(currentDate);
+  d.setDate(d.getDate()+n);
+  currentDate = d.toISOString().slice(0,10);
+  renderAll();
+}
+function goToday(){ currentDate = todayStr(); renderAll(); }
+
+// ── Render ─────────────────────────────────────────────────────────────────
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function renderAll(){
+  const d = new Date(currentDate+'T12:00:00');
+  document.getElementById('navDate').textContent =
+    `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById('taskDateLbl').textContent =
+    `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  renderStrip();
+  renderMetrics();
+  renderTasks();
+}
+
+function renderStrip(){
+  const today = todayStr();
+  const days = [];
+  for(let i=-3;i<=3;i++){
+    const dt = new Date(currentDate+'T12:00:00');
+    dt.setDate(dt.getDate()+i);
+    days.push(dt.toISOString().slice(0,10));
+  }
+  document.getElementById('strip').innerHTML = days.map(dt => {
+    const d = new Date(dt+'T12:00:00');
+    const tasks = loadTasks(dt);
+    const done = tasks.filter(t=>t.done).length;
+    const isActive = dt===currentDate;
+    const isToday = dt===today;
+    return `<div class="strip-day ${isActive?'active':''} ${isToday&&!isActive?'today':''}" onclick="currentDate='${dt}';renderAll()">
+      <div class="strip-date">${DAYS[d.getDay()]}</div>
+      <div class="strip-name">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
+      <div class="strip-score">${done}</div>
+      <div class="strip-done">${tasks.length?`${done}/${tasks.length}`:'-'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderMetrics(){
+  const m = loadMetrics(currentDate);
+  const keys = ['calls','emails','linkedin','quotes','meetings','pallets_stored'];
+  const ids = ['calls','emails','linkedin','quotes','meetings','pallets'];
+  keys.forEach((k,i) => {
+    const v = m[k]||0;
+    document.getElementById('mv-'+ids[i]).textContent = v;
+    document.getElementById('mi-'+ids[i]).value = v;
+  });
+}
+
+function saveMetric(key){
+  const idMap = {calls:'calls',emails:'emails',linkedin:'linkedin',quotes:'quotes',meetings:'meetings',pallets_stored:'pallets'};
+  const m = loadMetrics(currentDate);
+  m[key] = parseInt(document.getElementById('mi-'+idMap[key]).value)||0;
+  saveMetrics(currentDate, m);
+  document.getElementById('mv-'+idMap[key]).textContent = m[key];
+}
+
+function renderTasks(){
+  const tasks = loadTasks(currentDate);
+  const done = tasks.filter(t=>t.done).length;
+  document.getElementById('taskProgress').textContent = tasks.length ? `${done}/${tasks.length} done` : '';
+  document.getElementById('taskList').innerHTML = tasks.length
+    ? tasks.sort((a,b)=>{const o={high:0,medium:1,low:2};return o[a.priority]-o[b.priority];}).map(t =>
+        `<div class="task-item">
+          <input type="checkbox" class="task-cb" ${t.done?'checked':''} onchange="toggleTask('${t.id}')">
+          <div class="task-text ${t.done?'done':''}">${esc(t.text)} <span class="badge badge-${t.priority}">${t.priority}</span> <span style="color:var(--muted);font-size:11px">${t.category}</span></div>
+          <button class="sm" onclick="deleteTask('${t.id}')">✕</button>
+        </div>`
+      ).join('')
+    : '<div style="color:var(--muted);padding:8px 0">No tasks. Add one or load a template.</div>';
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Task CRUD ──────────────────────────────────────────────────────────────
+function addTask(){
+  const text = document.getElementById('newTaskText').value.trim();
+  if(!text) return;
+  const tasks = loadTasks(currentDate);
+  tasks.push({
+    id:uid(), text,
+    priority: document.getElementById('newTaskPriority').value,
+    category: document.getElementById('newTaskCategory').value,
+    done:false,
+    task_date: currentDate,
+    created_at: new Date().toISOString(),
+  });
+  saveTasks(currentDate, tasks);
+  document.getElementById('newTaskText').value='';
+  renderAll();
+}
+
+function toggleTask(id){
+  const tasks = loadTasks(currentDate);
+  const t = tasks.find(x=>x.id===id);
+  if(t) t.done = !t.done;
+  saveTasks(currentDate, tasks);
+  renderAll();
+}
+
+function deleteTask(id){
+  saveTasks(currentDate, loadTasks(currentDate).filter(t=>t.id!==id));
+  renderAll();
+}
+
+function applyTemplate(name){
+  const tasks = loadTasks(currentDate);
+  const tmpl = TEMPLATES[name]||[];
+  const now = new Date().toISOString();
+  tmpl.forEach(t => tasks.push({...t, id:uid(), done:false, task_date:currentDate, created_at:now}));
+  saveTasks(currentDate, tasks);
+  renderAll();
+}
+
+renderAll();
+</script>
+</body>
+</html>

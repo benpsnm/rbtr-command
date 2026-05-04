@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PSNM Pallet Storage — Quote Calculator</title>
+<style>
+  /* Cream/gold editorial style as per brief */
+  :root{--cream:#faf6ef;--ink:#1a1a1a;--gold:#b8960c;--gold-dark:#8a6f08;--border:#d4c4a0;--muted:#6b5f4a;--card:#fff;--accent:#f0e8d4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--cream);color:var(--ink);font-family:'Georgia',serif;min-height:100vh}
+  .header{background:var(--ink);color:var(--cream);padding:28px 32px;text-align:center}
+  .header h1{font-size:28px;font-weight:normal;letter-spacing:2px;text-transform:uppercase}
+  .header p{font-size:13px;color:#aaa;margin-top:4px;letter-spacing:1px}
+  .container{max-width:860px;margin:0 auto;padding:32px 20px}
+  .section{background:var(--card);border:1px solid var(--border);padding:28px 32px;margin-bottom:20px}
+  .section h2{font-size:16px;text-transform:uppercase;letter-spacing:2px;color:var(--gold-dark);border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:20px;font-weight:normal}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  .fg{margin-bottom:0}
+  .fg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  .fg input,.fg select,.fg textarea{width:100%;border:1px solid var(--border);background:var(--cream);color:var(--ink);padding:10px 12px;font-size:15px;font-family:inherit}
+  .fg input:focus,.fg select:focus,.fg textarea:focus{outline:2px solid var(--gold);outline-offset:0}
+  .range-wrap{display:flex;align-items:center;gap:12px}
+  .range-wrap input[type=range]{flex:1}
+  .range-val{width:60px;text-align:right;font-size:18px;font-weight:bold;color:var(--gold-dark)}
+  /* Quote result */
+  .result{background:var(--ink);color:var(--cream);padding:28px 32px;margin-bottom:20px}
+  .result h2{font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--gold);margin-bottom:16px}
+  .result-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333}
+  .result-row:last-child{border-bottom:none}
+  .result-row .label{color:#aaa;font-size:14px}
+  .result-row .value{font-size:16px;font-weight:bold}
+  .result-total{background:var(--gold-dark);padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center}
+  .result-total .label{font-size:13px;text-transform:uppercase;letter-spacing:1px}
+  .result-total .value{font-size:26px;font-weight:bold}
+  .tier-badge{display:inline-block;background:var(--gold);color:var(--ink);font-size:11px;padding:2px 8px;text-transform:uppercase;letter-spacing:1px;margin-left:8px}
+  /* Pricing table */
+  .pricing-table{width:100%;border-collapse:collapse;font-size:14px}
+  .pricing-table th{text-align:left;font-weight:normal;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-bottom:2px solid var(--border);padding:8px}
+  .pricing-table td{padding:10px 8px;border-bottom:1px solid var(--border)}
+  .pricing-table tr.active-tier td{background:var(--accent);font-weight:bold}
+  /* CTA */
+  button.cta{background:var(--gold-dark);color:#fff;border:none;padding:14px 32px;font-size:15px;font-family:inherit;cursor:pointer;text-transform:uppercase;letter-spacing:2px;width:100%;margin-top:8px}
+  button.cta:hover{background:#6b5008}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--border);padding:10px 20px;font-size:13px;font-family:inherit;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+  button.ghost:hover{border-color:var(--gold)}
+  .success-msg{background:#1a4a1a;color:#a0f0a0;padding:16px;margin-top:12px;display:none;text-align:center}
+  .fine-print{font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6}
+  @media(max-width:600px){.grid2,.grid3{grid-template-columns:1fr}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="header">
+  <h1>Pallet Northern Storage Midlands</h1>
+  <p>Ambient Pallet Storage · Hellaby, Rotherham · S66 8HR</p>
+</div>
+
+<div class="container">
+
+  <!-- Pricing tiers reference -->
+  <div class="section">
+    <h2>Storage Rates</h2>
+    <table class="pricing-table" id="pricingTable">
+      <thead>
+        <tr><th>Volume</th><th>Rate per Pallet / Week</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr id="tier1"><td>1 – 100 pallets</td><td>£3.95</td><td>Standard rate</td></tr>
+        <tr id="tier2"><td>101 – 500 pallets</td><td>£3.50</td><td>Volume discount</td></tr>
+        <tr id="tier3"><td>500+ pallets</td><td>£2.95</td><td>High-volume rate</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px">
+      + £3.50 per pallet movement (in or out) · Ambient only · No chilled, hazmat, lithium, or allergen-controlled goods
+    </p>
+  </div>
+
+  <!-- Calculator inputs -->
+  <div class="section">
+    <h2>Calculate Your Quote</h2>
+    <div class="grid3" style="margin-bottom:20px">
+      <div class="fg">
+        <label>Pallets stored</label>
+        <div class="range-wrap">
+          <input type="range" id="palletSlider" min="1" max="600" value="50" oninput="syncPallets('slider')">
+          <span class="range-val" id="palletVal">50</span>
+        </div>
+        <input type="number" id="palletInput" value="50" min="1" max="9999" oninput="syncPallets('input')" style="margin-top:8px">
+      </div>
+      <div class="fg">
+        <label>Duration (weeks)</label>
+        <input type="number" id="durInput" value="12" min="1" max="52" oninput="calc()">
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">Minimum 12 weeks · First week free</p>
+      </div>
+      <div class="fg">
+        <label>Est. movements / week</label>
+        <input type="number" id="movInput" value="0" min="0" oninput="calc()">
+        <p style="font-size:11px;color:var(--muted);margin-top:4px">In + out combined</p>
+      </div>
+    </div>
+    <button class="ghost" onclick="calc()">Calculate</button>
+  </div>
+
+  <!-- Result -->
+  <div class="result" id="resultBlock">
+    <h2>Your Estimated Quote <span class="tier-badge" id="tierLabel">Standard</span></h2>
+    <div class="result-row"><span class="label">Pallets</span><span class="value" id="rPallets">—</span></div>
+    <div class="result-row"><span class="label">Rate</span><span class="value" id="rRate">—</span></div>
+    <div class="result-row"><span class="label">Storage (weekly)</span><span class="value" id="rWeekly">—</span></div>
+    <div class="result-row"><span class="label">Duration</span><span class="value" id="rDuration">—</span></div>
+    <div class="result-row"><span class="label">Storage subtotal</span><span class="value" id="rStorage">—</span></div>
+    <div class="result-row"><span class="label">Movements</span><span class="value" id="rMov">—</span></div>
+    <div class="result-row"><span class="label">First week free (12-week commit)</span><span class="value" id="rDiscount">—</span></div>
+    <div class="result-total">
+      <span class="label">Total for period</span>
+      <span class="value" id="rTotal">—</span>
+    </div>
+  </div>
+
+  <!-- Lead capture -->
+  <div class="section">
+    <h2>Request a Formal Quote</h2>
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="fg"><label>Your name</label><input id="l_name" placeholder="Jane Smith"></div>
+      <div class="fg"><label>Company</label><input id="l_company" placeholder="Acme Ltd"></div>
+    </div>
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="fg"><label>Email *</label><input id="l_email" type="email" placeholder="jane@acme.co.uk"></div>
+      <div class="fg"><label>Phone</label><input id="l_phone" type="tel" placeholder="07700 000000"></div>
+    </div>
+    <div class="fg" style="margin-bottom:16px">
+      <label>Anything else we should know?</label>
+      <textarea id="l_notes" rows="3" placeholder="Goods type, access requirements, timing…"></textarea>
+    </div>
+    <button class="cta" onclick="submitLead()">Request Quote</button>
+    <div class="success-msg" id="successMsg">✓ Thanks — we'll be in touch within one working day.</div>
+    <p class="fine-print">
+      Quotes valid 30 days · All rates ex-VAT · Ambient pallet storage only · Hellaby, S66 8HR<br>
+      M18 J1 / M1 J32 · Sheffield 25min · Leeds 45min · Manchester 1h15min · Birmingham 1h45min
+    </p>
+  </div>
+
+</div>
+
+<script>
+// ── Pricing tiers ──────────────────────────────────────────────────────────
+function getRate(n){
+  if(n <= 100)  return { rate: 3.95, tier: 'Standard',    id: 'tier1' };
+  if(n <= 500)  return { rate: 3.50, tier: 'Volume',      id: 'tier2' };
+  return             { rate: 2.95, tier: 'High-volume', id: 'tier3' };
+}
+
+function syncPallets(src){
+  const slider = document.getElementById('palletSlider');
+  const input  = document.getElementById('palletInput');
+  const valEl  = document.getElementById('palletVal');
+  if(src==='slider'){ input.value = slider.value; valEl.textContent = slider.value; }
+  else              { const v=Math.min(Math.max(parseInt(input.value)||1,1),9999); slider.value=Math.min(v,600); valEl.textContent=v; input.value=v; }
+  calc();
+}
+
+function fmt(n){ return '£'+n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function calc(){
+  const pallets  = parseInt(document.getElementById('palletInput').value) || 50;
+  const weeks    = parseInt(document.getElementById('durInput').value)    || 12;
+  const movs     = parseInt(document.getElementById('movInput').value)    || 0;
+
+  const {rate, tier, id} = getRate(pallets);
+  const weekly   = pallets * rate;
+  const storage  = weekly * weeks;
+  const movCost  = movs * weeks * 3.50;
+  const discount = weeks >= 12 ? weekly : 0;  // first week free on 12-week commit
+  const total    = storage + movCost - discount;
+
+  // Tier highlight
+  ['tier1','tier2','tier3'].forEach(t => document.getElementById(t).classList.remove('active-tier'));
+  document.getElementById(id).classList.add('active-tier');
+
+  document.getElementById('tierLabel').textContent = tier;
+  document.getElementById('rPallets').textContent  = pallets;
+  document.getElementById('rRate').textContent     = fmt(rate)+' / pallet / week';
+  document.getElementById('rWeekly').textContent   = fmt(weekly);
+  document.getElementById('rDuration').textContent = weeks+' weeks';
+  document.getElementById('rStorage').textContent  = fmt(storage);
+  document.getElementById('rMov').textContent      = movs ? `${movs} movs/wk × £3.50 × ${weeks}wks = ${fmt(movCost)}` : '—';
+  document.getElementById('rDiscount').textContent = discount ? `−${fmt(discount)}` : '—';
+  document.getElementById('rTotal').textContent    = fmt(total);
+}
+
+// ── Lead capture (logs to console in ref spec — Phase 3 writes to pricing_quotes table) ──
+function submitLead(){
+  const email = document.getElementById('l_email').value.trim();
+  if(!email){ alert('Email required'); return; }
+
+  const pallets = parseInt(document.getElementById('palletInput').value)||50;
+  const weeks   = parseInt(document.getElementById('durInput').value)||12;
+  const movs    = parseInt(document.getElementById('movInput').value)||0;
+  const {rate}  = getRate(pallets);
+  const weekly  = pallets*rate;
+  const storage = weekly*weeks;
+  const movCost = movs*weeks*3.50;
+  const discount= weeks>=12?weekly:0;
+  const total   = storage+movCost-discount;
+
+  const lead = {
+    lead_name:    document.getElementById('l_name').value.trim(),
+    lead_company: document.getElementById('l_company').value.trim(),
+    lead_email:   email,
+    lead_phone:   document.getElementById('l_phone').value.trim(),
+    pallet_count: pallets,
+    duration_weeks: weeks,
+    movements:    movs,
+    rate_per_pallet: rate,
+    total_quoted: total,
+    notes:        document.getElementById('l_notes').value.trim(),
+    source:       'website',
+    status:       'new',
+  };
+
+  // Phase 3 production: POST to /api/pricing-quote with this payload → inserts into pricing_quotes table
+  console.log('[QUOTE LEAD]', lead);
+
+  document.getElementById('successMsg').style.display='block';
+  document.getElementById('l_name').value='';
+  document.getElementById('l_company').value='';
+  document.getElementById('l_email').value='';
+  document.getElementById('l_phone').value='';
+  document.getElementById('l_notes').value='';
+}
+
+calc();
+</script>
+</body>
+</html>

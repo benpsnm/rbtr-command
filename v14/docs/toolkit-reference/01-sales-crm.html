@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sales CRM — Reference Spec</title>
+<style>
+  /* Reference spec — matches wms.html design tokens */
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green:#3a7d44;--red:#8b2020;--amber:#7a5c1e}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  .toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  button.red{background:var(--red);border-color:var(--red)}
+  select,input,textarea{background:#111;color:var(--text);border:1px solid var(--border);padding:6px 8px;font-size:13px;font-family:inherit;width:100%}
+  select:focus,input:focus,textarea:focus{outline:1px solid var(--gold)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);border-bottom:1px solid var(--border);padding:6px 8px;font-weight:400}
+  td{padding:6px 8px;border-bottom:1px solid #1a1a1a;vertical-align:top}
+  tr:hover td{background:#111}
+  .badge{display:inline-block;padding:2px 6px;font-size:11px;font-weight:700;border-radius:2px}
+  .badge-hot{background:#5a1010;color:#ff6b6b}
+  .badge-warm{background:#4a3000;color:#ffa500}
+  .badge-cold{background:#1a2a4a;color:#7ab3ff}
+  .badge-new{background:#1e1e1e;color:var(--muted)}
+  .badge-contacted{background:#1a3a2a;color:#5cb85c}
+  .badge-replied{background:#2a3a1a;color:#8bc34a}
+  .badge-quoted{background:#1a2a4a;color:#64b5f6}
+  .badge-followup{background:#3a2a1a;color:#ff9800}
+  .badge-won{background:#1a4a1a;color:#4caf50}
+  .badge-lost{background:#2a1a1a;color:#666}
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;align-items:center;justify-content:center}
+  .modal.open{display:flex}
+  .modal-box{background:var(--card);border:1px solid var(--border);padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+  .modal-box h2{color:var(--gold);margin-bottom:12px;font-size:16px}
+  .fg{margin-bottom:10px}
+  .fg label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .stat{background:var(--card);border:1px solid var(--border);padding:10px 16px;min-width:80px;text-align:center}
+  .stat-val{font-size:24px;color:var(--gold);font-weight:700}
+  .stat-lbl{font-size:11px;color:var(--muted)}
+  .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .filter-bar select{width:auto}
+  .filter-bar input{width:200px}
+  .int-log{margin-top:8px;font-size:12px;color:var(--muted)}
+  .int-log .int{padding:4px 0;border-bottom:1px solid #1a1a1a}
+  #noProspects{color:var(--muted);padding:20px;text-align:center}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>📋 Sales CRM — Reference Spec</h1>
+<div class="sub">PSNM Warehouse Sales Pipeline · localStorage · Phase 2 reference</div>
+
+<div class="toolbar">
+  <button class="gold" onclick="openAdd()">+ Add Prospect</button>
+  <button onclick="seedTop20()">🌱 Seed Top 20</button>
+  <button onclick="exportCSV()">↓ Export CSV</button>
+  <button onclick="clearAll()" class="red">✕ Clear All</button>
+</div>
+
+<div class="stats" id="statsBar"></div>
+
+<div class="filter-bar">
+  <input id="searchInp" placeholder="Search company / contact / postcode…" oninput="render()">
+  <select id="statusFil" onchange="render()">
+    <option value="">All statuses</option>
+    <option>new</option><option>contacted</option><option>replied</option>
+    <option>quoted</option><option>followup</option><option>won</option><option>lost</option>
+  </select>
+  <select id="priorityFil" onchange="render()">
+    <option value="">All priorities</option>
+    <option>hot</option><option>warm</option><option>cold</option>
+  </select>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Company</th><th>Contact</th><th>Postcode</th><th>Pallets</th>
+      <th>Priority</th><th>Status</th><th>Next Action</th><th>Due</th><th></th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+<div id="noProspects" style="display:none">No prospects. Add one or seed the Top 20.</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h2 id="modalTitle">Add Prospect</h2>
+    <input type="hidden" id="m_id">
+    <div class="row2">
+      <div class="fg"><label>Company *</label><input id="m_company" placeholder="Acme Ltd"></div>
+      <div class="fg"><label>Contact</label><input id="m_contact" placeholder="Jane Smith"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Title</label><input id="m_title" placeholder="Logistics Manager"></div>
+      <div class="fg"><label>Postcode</label><input id="m_postcode" placeholder="S66 8HR"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Phone</label><input id="m_phone" placeholder="07700 000000"></div>
+      <div class="fg"><label>Email</label><input id="m_email" placeholder="jane@acme.co.uk"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Pallet Volume (est.)</label><input id="m_pallets" type="number" placeholder="50"></div>
+      <div class="fg"><label>Source</label>
+        <select id="m_source">
+          <option>leadinfo</option><option>whichwarehouse</option><option>referral</option>
+          <option>cold</option><option>inbound</option><option>website</option><option>other</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Status</label>
+        <select id="m_status">
+          <option>new</option><option>contacted</option><option>replied</option>
+          <option>quoted</option><option>followup</option><option>won</option><option>lost</option>
+        </select>
+      </div>
+      <div class="fg"><label>Priority</label>
+        <select id="m_priority">
+          <option>warm</option><option>hot</option><option>cold</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>Next Action</label><input id="m_nextAction" placeholder="Call to discuss quote"></div>
+    <div class="fg"><label>Next Action Date</label><input id="m_nextDate" type="date"></div>
+    <div class="fg"><label>Notes</label><textarea id="m_notes" rows="3" placeholder="Any relevant notes…"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="gold" onclick="saveProspect()">Save</button>
+      <button onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Interaction Modal -->
+<div class="modal" id="intModal">
+  <div class="modal-box">
+    <h2>Log Interaction — <span id="intCompany"></span></h2>
+    <input type="hidden" id="int_pid">
+    <div class="fg"><label>Type</label>
+      <select id="int_type">
+        <option>call</option><option>email_out</option><option>email_in</option>
+        <option>linkedin</option><option>meeting</option><option>visit</option><option>note</option>
+      </select>
+    </div>
+    <div class="fg"><label>Summary *</label>
+      <textarea id="int_summary" rows="3" placeholder="Left voicemail, tried mobile…"></textarea>
+    </div>
+    <div class="fg"><label>Date/Time</label><input id="int_date" type="datetime-local"></div>
+    <div id="prevInts" class="int-log"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="gold" onclick="saveInteraction()">Log</button>
+      <button onclick="document.getElementById('intModal').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data layer (localStorage) ──────────────────────────────────────────────
+const KEY_P = 'crm_prospects';
+const KEY_I = 'crm_interactions';
+
+function loadProspects(){ return JSON.parse(localStorage.getItem(KEY_P)||'[]'); }
+function saveProspects(d){ localStorage.setItem(KEY_P, JSON.stringify(d)); }
+function loadInteractions(){ return JSON.parse(localStorage.getItem(KEY_I)||'[]'); }
+function saveInteractions(d){ localStorage.setItem(KEY_I, JSON.stringify(d)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+// ── Top 20 seed ────────────────────────────────────────────────────────────
+// Source: PSNM Master Brief Top 20 — ambient pallet storage prospects,
+// Yorkshire / Midlands / North England, ranked by likelihood & volume.
+const TOP20 = [
+  {company:'Meadow Fresh Foods Ltd',     contact:'Dave Hartley',    title:'Ops Director',        postcode:'S63 7RQ', phone:'01709 000001', email:'d.hartley@meadowfresh.co.uk',  pallets:120, source:'leadinfo', priority:'hot',  status:'new', nextAction:'Call re ambient ambient space', notes:'Ships ambient grocery; seasonal peaks Q4'},
+  {company:'Steel City Imports Ltd',     contact:'Priya Patel',     title:'Logistics Manager',   postcode:'S9 2GH',  phone:'01142 000002', email:'p.patel@scimports.co.uk',      pallets:80,  source:'leadinfo', priority:'hot',  status:'new', nextAction:'Email intro + quote',          notes:'Import/distribution, own unit too small Oct–Dec'},
+  {company:'Northern Gift Co Ltd',       contact:'Karen Walsh',     title:'Supply Chain Mgr',    postcode:'LS1 4PA', phone:'01132 000003', email:'k.walsh@northerngift.com',      pallets:200, source:'whichwarehouse', priority:'hot', status:'new', nextAction:'Follow up WW enquiry',  notes:'Heavy seasonal — Christmas stock May–Aug'},
+  {company:'Yorkshire Brew Supply',      contact:'Tom Ackroyd',     title:'Director',            postcode:'HX1 2AB', phone:'07700 000004', email:'tom@ybsupply.co.uk',            pallets:60,  source:'cold',    priority:'warm', status:'new', nextAction:'LinkedIn connect first',        notes:'Brewing equipment distributor, steady volume'},
+  {company:'Doncaster Homeware Ltd',     contact:'Sarah Baines',    title:'Warehouse Manager',   postcode:'DN4 5JE', phone:'01302 000005', email:'s.baines@doncahome.co.uk',      pallets:150, source:'leadinfo', priority:'hot', status:'new', nextAction:'Call direct',                  notes:'Homeware / white goods ambient. Confirmed need.'},
+  {company:'Rotherham Retail Group',     contact:'Mike Chen',       title:'Head of Logistics',   postcode:'S60 1BQ', phone:'01709 000006', email:'m.chen@rrgroup.co.uk',          pallets:90,  source:'leadinfo', priority:'warm', status:'contacted', nextAction:'Chase call',            notes:'Initial call booked, awaiting confirmation'},
+  {company:'Sheffield Safety Supplies',  contact:'Julie Nolan',     title:'Procurement',         postcode:'S1 3GG',  phone:'01142 000007', email:'j.nolan@sheffield-safety.co.uk', pallets:40, source:'cold',   priority:'warm', status:'new', nextAction:'Email intro',                   notes:'PPE / workwear. Small vol but steady.'},
+  {company:'Harrogate Wellness Ltd',     contact:'Anna Fox',        title:'Operations',          postcode:'HG1 1AA', phone:'01423 000008', email:'a.fox@hgwellness.com',           pallets:70,  source:'leadinfo', priority:'warm', status:'new', nextAction:'Call — ask about Q3 plans',    notes:'Health supplements, ambient. Growth brand.'},
+  {company:'Bradford Textile Supplies',  contact:'Imran Hussain',   title:'Director',            postcode:'BD1 1HH', phone:'01274 000009', email:'i.hussain@btextiles.co.uk',     pallets:100, source:'leadinfo', priority:'warm', status:'new', nextAction:'Email — quote request',        notes:'Fabric / textile wholesale. Uses Leeds currently.'},
+  {company:'Leeds Outdoor Co',           contact:'Chris Bower',     title:'Logistics',           postcode:'LS2 7HB', phone:'01132 000010', email:'c.bower@leedsoutdoor.com',       pallets:55,  source:'cold',    priority:'warm', status:'new', nextAction:'LinkedIn + call',              notes:'Camping/outdoor retail, growing fast.'},
+  {company:'Wakefield Industrial Ltd',   contact:'Paul Grayson',    title:'MD',                  postcode:'WF1 2QQ', phone:'01924 000011', email:'p.grayson@wakey-ind.co.uk',     pallets:130, source:'leadinfo', priority:'hot', status:'new', nextAction:'Direct call to MD',            notes:'Industrial hardware, confirmed over-capacity.'},
+  {company:'Huddersfield Sports Ltd',    contact:'Rachel Hirst',    title:'Supply Chain',        postcode:'HD1 3AA', phone:'01484 000012', email:'r.hirst@huddssports.co.uk',     pallets:85,  source:'leadinfo', priority:'warm', status:'new', nextAction:'Email intro',                  notes:'Sporting goods, seasonal — peaks March & Sept.'},
+  {company:'Chesterfield Electronics',   contact:'Neil Burton',     title:'Warehouse Mgr',       postcode:'S40 1AX', phone:'01246 000013', email:'n.burton@cheselec.co.uk',        pallets:45,  source:'cold',    priority:'cold', status:'new', nextAction:'LinkedIn first',               notes:'Consumer electronics accessories. Light vol.'},
+  {company:'Mansfield Footwear Ltd',     contact:'Lisa Trueman',    title:'Ops Manager',         postcode:'NG18 1DP', phone:'01623 000014', email:'l.trueman@mansfieldfw.com',    pallets:95,  source:'leadinfo', priority:'warm', status:'new', nextAction:'Call re spring range storage',  notes:'Footwear wholesale, seasonal spikes spring.'},
+  {company:'Derby Distribution Svcs',    contact:'James Eaton',     title:'Director',            postcode:'DE1 2QQ', phone:'01332 000015', email:'j.eaton@derbyds.co.uk',          pallets:180, source:'leadinfo', priority:'hot', status:'new', nextAction:'Arrange site visit',           notes:'PSNM competitor said losing a client. Check.'},
+  {company:'Peak District Trading Co',   contact:'Helen Sharp',     title:'Logistics',           postcode:'DE45 1PP', phone:'01629 000016', email:'h.sharp@peaktrade.co.uk',      pallets:35,  source:'cold',    priority:'cold', status:'new', nextAction:'Email — introduce PSNM',       notes:'Small seasonal gifts brand. Potentially worth nurturing.'},
+  {company:'Lincoln Craft Supplies',     contact:'Gary Cole',       title:'Director',            postcode:'LN1 3BT', phone:'01522 000017', email:'g.cole@lincraft.co.uk',          pallets:50,  source:'cold',    priority:'cold', status:'new', nextAction:'Email campaign first',         notes:'Hobby/craft wholesale. No urgency confirmed.'},
+  {company:'Hull Trading Co Ltd',        contact:'Sandra Kirk',     title:'Supply Chain',        postcode:'HU1 2AP', phone:'01482 000018', email:'s.kirk@hulltrading.co.uk',       pallets:110, source:'leadinfo', priority:'warm', status:'new', nextAction:'Call + WW portal check',      notes:'General ambient distribution. Inbound query noted.'},
+  {company:'Scunthorpe Builders Merch',  contact:'Tony Pearce',     title:'Warehouse',           postcode:'DN15 6XA', phone:'01724 000019', email:'t.pearce@scunthbuilders.co.uk', pallets:65, source:'cold',   priority:'warm', status:'new', nextAction:'Call — confirm ambient spec',   notes:'Building materials (ambient lines only). Confirm before quoting.'},
+  {company:'Grimsby Ambient Foods Ltd',  contact:'Mark Hooper',     title:'Ops Director',        postcode:'DN31 1TA', phone:'01472 000020', email:'m.hooper@grimbyambient.co.uk',  pallets:140, source:'leadinfo', priority:'hot', status:'new', nextAction:'Priority call this week',     notes:'Ambient grocery. High vol, confirmed interest via WW.'},
+];
+
+function seedTop20(){
+  if(!confirm('This will ADD the Top 20 to your current list. Continue?')) return;
+  const prospects = loadProspects();
+  const now = new Date().toISOString();
+  TOP20.forEach(t => {
+    prospects.push({...t, id:uid(), created_at:now, updated_at:now, nextDate:''});
+  });
+  saveProspects(prospects);
+  render();
+  renderStats();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render(){
+  const prospects = loadProspects();
+  const search = document.getElementById('searchInp').value.toLowerCase();
+  const sf = document.getElementById('statusFil').value;
+  const pf = document.getElementById('priorityFil').value;
+
+  const filtered = prospects.filter(p => {
+    if(sf && p.status !== sf) return false;
+    if(pf && p.priority !== pf) return false;
+    if(search){
+      const hay = (p.company+' '+p.contact+' '+p.postcode+' '+(p.notes||'')).toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = filtered.map(p => `
+    <tr>
+      <td><strong>${esc(p.company)}</strong></td>
+      <td>${esc(p.contact||'—')}<br><span style="color:var(--muted);font-size:11px">${esc(p.title||'')}</span></td>
+      <td>${esc(p.postcode||'—')}</td>
+      <td>${p.pallets||'?'}</td>
+      <td><span class="badge badge-${p.priority}">${p.priority}</span></td>
+      <td><span class="badge badge-${p.status}">${p.status}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nextAction||'—')}</td>
+      <td style="color:${dueFmt(p.nextDate)}">${p.nextDate||'—'}</td>
+      <td>
+        <button onclick="openEdit('${p.id}')" style="padding:3px 7px;font-size:11px">Edit</button>
+        <button onclick="openInteraction('${p.id}')" style="padding:3px 7px;font-size:11px">+ Log</button>
+        <button onclick="deleteProspect('${p.id}')" style="padding:3px 7px;font-size:11px;color:var(--muted)">✕</button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('noProspects').style.display = filtered.length ? 'none' : 'block';
+  renderStats();
+}
+
+function renderStats(){
+  const p = loadProspects();
+  const counts = {};
+  ['new','contacted','replied','quoted','followup','won','lost'].forEach(s => counts[s]=0);
+  p.forEach(x => { if(counts[x.status]!==undefined) counts[x.status]++; });
+  document.getElementById('statsBar').innerHTML = Object.entries(counts).map(([s,n]) =>
+    `<div class="stat"><div class="stat-val">${n}</div><div class="stat-lbl">${s}</div></div>`
+  ).join('') + `<div class="stat"><div class="stat-val">${p.length}</div><div class="stat-lbl">total</div></div>`;
+}
+
+function dueFmt(d){
+  if(!d) return 'var(--muted)';
+  const diff = new Date(d) - new Date();
+  if(diff < 0) return '#ff4444';
+  if(diff < 86400000*2) return '#ff9800';
+  return 'var(--text)';
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── CRUD ───────────────────────────────────────────────────────────────────
+function openAdd(){
+  document.getElementById('modalTitle').textContent='Add Prospect';
+  ['m_id','m_company','m_contact','m_title','m_postcode','m_phone','m_email','m_nextAction','m_notes'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  document.getElementById('m_pallets').value='';
+  document.getElementById('m_status').value='new';
+  document.getElementById('m_priority').value='warm';
+  document.getElementById('m_source').value='other';
+  document.getElementById('m_nextDate').value='';
+  document.getElementById('modal').classList.add('open');
+}
+function openEdit(id){
+  const p = loadProspects().find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('modalTitle').textContent='Edit Prospect';
+  document.getElementById('m_id').value=p.id;
+  document.getElementById('m_company').value=p.company||'';
+  document.getElementById('m_contact').value=p.contact||'';
+  document.getElementById('m_title').value=p.title||'';
+  document.getElementById('m_postcode').value=p.postcode||'';
+  document.getElementById('m_phone').value=p.phone||'';
+  document.getElementById('m_email').value=p.email||'';
+  document.getElementById('m_pallets').value=p.pallets||'';
+  document.getElementById('m_source').value=p.source||'other';
+  document.getElementById('m_status').value=p.status||'new';
+  document.getElementById('m_priority').value=p.priority||'warm';
+  document.getElementById('m_nextAction').value=p.nextAction||'';
+  document.getElementById('m_nextDate').value=p.nextDate||'';
+  document.getElementById('m_notes').value=p.notes||'';
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+
+function saveProspect(){
+  const company = document.getElementById('m_company').value.trim();
+  if(!company){ alert('Company name required'); return; }
+  const prospects = loadProspects();
+  const now = new Date().toISOString();
+  const id = document.getElementById('m_id').value || uid();
+  const rec = {
+    id, company,
+    contact:    document.getElementById('m_contact').value.trim(),
+    title:      document.getElementById('m_title').value.trim(),
+    postcode:   document.getElementById('m_postcode').value.trim(),
+    phone:      document.getElementById('m_phone').value.trim(),
+    email:      document.getElementById('m_email').value.trim(),
+    pallets:    parseInt(document.getElementById('m_pallets').value)||null,
+    source:     document.getElementById('m_source').value,
+    status:     document.getElementById('m_status').value,
+    priority:   document.getElementById('m_priority').value,
+    nextAction: document.getElementById('m_nextAction').value.trim(),
+    nextDate:   document.getElementById('m_nextDate').value,
+    notes:      document.getElementById('m_notes').value.trim(),
+    updated_at: now,
+  };
+  const idx = prospects.findIndex(x=>x.id===id);
+  if(idx>=0) prospects[idx]={...prospects[idx],...rec};
+  else prospects.push({...rec, created_at:now});
+  saveProspects(prospects);
+  closeModal();
+  render();
+}
+
+function deleteProspect(id){
+  if(!confirm('Delete this prospect?')) return;
+  saveProspects(loadProspects().filter(p=>p.id!==id));
+  const ints = loadInteractions().filter(i=>i.prospect_id!==id);
+  saveInteractions(ints);
+  render();
+}
+
+// ── Interactions ───────────────────────────────────────────────────────────
+function openInteraction(pid){
+  const p = loadProspects().find(x=>x.id===pid);
+  if(!p) return;
+  document.getElementById('int_pid').value=pid;
+  document.getElementById('intCompany').textContent=p.company;
+  document.getElementById('int_type').value='call';
+  document.getElementById('int_summary').value='';
+  document.getElementById('int_date').value=new Date().toISOString().slice(0,16);
+  const ints = loadInteractions().filter(i=>i.prospect_id===pid).sort((a,b)=>b.occurred_at.localeCompare(a.occurred_at)).slice(0,5);
+  document.getElementById('prevInts').innerHTML = ints.length
+    ? '<div style="margin-top:12px;color:var(--muted);font-size:11px;text-transform:uppercase;margin-bottom:4px">Recent interactions</div>'+
+      ints.map(i=>`<div class="int"><strong>${i.type}</strong> — ${i.summary} <span style="float:right">${i.occurred_at.slice(0,10)}</span></div>`).join('')
+    : '<div style="margin-top:8px;color:var(--muted);font-size:12px">No interactions logged yet.</div>';
+  document.getElementById('intModal').classList.add('open');
+}
+
+function saveInteraction(){
+  const pid = document.getElementById('int_pid').value;
+  const summary = document.getElementById('int_summary').value.trim();
+  if(!summary){ alert('Summary required'); return; }
+  const ints = loadInteractions();
+  ints.push({
+    id: uid(),
+    prospect_id: pid,
+    type: document.getElementById('int_type').value,
+    summary,
+    occurred_at: document.getElementById('int_date').value || new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  });
+  saveInteractions(ints);
+  document.getElementById('intModal').classList.remove('open');
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────
+function exportCSV(){
+  const heads = ['company','contact','title','postcode','phone','email','pallets','source','status','priority','nextAction','nextDate','notes'];
+  const rows = loadProspects().map(p => heads.map(h => `"${(p[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+  const blob = new Blob([heads.join(',')+'\n'+rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='crm-prospects.csv'; a.click();
+}
+
+function clearAll(){
+  if(!confirm('Delete ALL prospect and interaction data?')) return;
+  localStorage.removeItem(KEY_P); localStorage.removeItem(KEY_I); render();
+}
+
+render();
+</script>
+</body>
+</html>

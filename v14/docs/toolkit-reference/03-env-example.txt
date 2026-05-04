@@ -1,0 +1,38 @@
+# 03-email-sequencer.js — environment variables
+# Copy this to .env and fill in your values.
+# Never commit a populated .env file.
+
+# ── Adapter selection ──────────────────────────────────────────────────────
+# Options: console (default, no send), sendgrid, postmark, smtp
+EMAIL_ADAPTER=console
+
+# ── DRY RUN (default: true) ────────────────────────────────────────────────
+# Set to false ONLY when ready to send live emails.
+DRY_RUN=true
+
+# ── Sender identity ────────────────────────────────────────────────────────
+FROM_EMAIL=ben@pstoragemidlands.co.uk
+FROM_NAME=Ben Greenwood
+
+# BCC yourself on every send (optional but recommended for audit trail)
+BCC_EMAIL=
+
+# ── CSV input ──────────────────────────────────────────────────────────────
+CSV_PATH=03-prospects-sample.csv
+
+# ── Pacing (ms between sends, 0 = no delay) ───────────────────────────────
+PACE_MS=3000
+
+# ── SendGrid ──────────────────────────────────────────────────────────────
+SENDGRID_KEY=
+
+# ── Postmark ──────────────────────────────────────────────────────────────
+POSTMARK_KEY=
+
+# ── SMTP (e.g. Gmail, Zoho, custom) ───────────────────────────────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+# For Gmail: use an App Password, not your account password.
+# See: https://support.google.com/accounts/answer/185833

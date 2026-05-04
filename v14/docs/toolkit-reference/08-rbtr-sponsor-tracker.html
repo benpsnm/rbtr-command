@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RBTR Sponsor Tracker — Reference Spec</title>
+<style>
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green-text:#5cb85c;--red-text:#ff6b6b;--amber:#ffa500}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  button.sm{padding:3px 8px;font-size:11px}
+  input,select,textarea{background:#111;color:var(--text);border:1px solid var(--border);padding:6px 8px;font-size:13px;font-family:inherit;width:100%}
+  input:focus,select:focus,textarea:focus{outline:1px solid var(--gold)}
+  .card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:12px}
+  .ct{color:var(--gold);font-size:15px;font-weight:700;margin-bottom:8px}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+  /* Pipeline */
+  .pipe{display:flex;gap:8px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+  .pipe-col{flex:0 0 200px;background:var(--card);border:1px solid var(--border);padding:10px}
+  .pipe-hdr{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .pipe-card{background:#0d0d0d;border:1px solid #222;padding:8px;margin-bottom:6px;cursor:pointer;font-size:12px}
+  .pipe-card:hover{border-color:var(--gold)}
+  .pipe-card .name{font-weight:700;color:var(--text)}
+  .pipe-card .cat{color:var(--muted);font-size:11px}
+  .pipe-card .val{color:var(--gold);font-size:11px}
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);border-bottom:1px solid var(--border);padding:6px 8px;font-weight:400;font-size:11px;text-transform:uppercase}
+  td{padding:6px 8px;border-bottom:1px solid #1a1a1a;vertical-align:top}
+  tr:hover td{background:#111}
+  .badge{display:inline-block;padding:2px 6px;font-size:11px;font-weight:700;border-radius:2px}
+  .badge-prospect{background:#1e1e1e;color:var(--muted)}
+  .badge-contacted{background:#1a2a4a;color:#64b5f6}
+  .badge-in_talks{background:#1a3a1a;color:var(--green-text)}
+  .badge-agreed{background:#2a3a00;color:#cddc39}
+  .badge-signed{background:#0a2a0a;color:var(--green-text);border:1px solid var(--green-text)}
+  .badge-declined{background:#2a0a0a;color:var(--red-text)}
+  .badge-cold{background:#1a1a2a;color:#888}
+  .tier-T{color:#ffd700}
+  .tier-G{color:#c0c0c0}
+  .tier-S{color:#cd7f32}
+  .tier-B{color:#4caf50}
+  .tier-P{color:var(--muted)}
+  /* Stats */
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .stat{background:var(--card);border:1px solid var(--border);padding:10px 14px;text-align:center;min-width:80px}
+  .stat-val{font-size:22px;font-weight:700;color:var(--gold)}
+  .stat-lbl{font-size:11px;color:var(--muted)}
+  /* Modal */
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;align-items:center;justify-content:center}
+  .modal.open{display:flex}
+  .modal-box{background:var(--card);border:1px solid var(--border);padding:20px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto}
+  .modal-box h2{color:var(--gold);margin-bottom:12px;font-size:16px}
+  .fg{margin-bottom:10px}
+  .fg label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .view-toggle{display:flex;gap:6px;margin-bottom:12px}
+  .due-soon{color:var(--amber)}
+  .overdue{color:var(--red-text)}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>🚚 RBTR Sponsor Tracker — Reference Spec</h1>
+<div class="sub">53-sponsor seed · 16-touch sequencer · tier tracking · value pipeline · Phase 8 reference</div>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+  <button class="gold" onclick="seedSponsors()">🌱 Seed 53 Sponsors</button>
+  <button onclick="openAdd()">+ Add Sponsor</button>
+  <button onclick="exportCSV()">↓ Export CSV</button>
+  <input id="searchInp" placeholder="Search…" oninput="render()" style="width:200px">
+  <select id="statusFil" onchange="render()"><option value="">All statuses</option>
+    <option>prospect</option><option>contacted</option><option>in_talks</option>
+    <option>agreed</option><option>signed</option><option>declined</option><option>cold</option>
+  </select>
+  <select id="tierFil" onchange="render()"><option value="">All tiers</option>
+    <option>Title</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>Partner</option>
+  </select>
+</div>
+
+<div class="view-toggle">
+  <button onclick="setView('table')" id="vBtn-table" class="gold">Table</button>
+  <button onclick="setView('pipe')"  id="vBtn-pipe">Pipeline</button>
+</div>
+
+<div class="stats" id="statsBar"></div>
+
+<div id="tableView">
+  <table>
+    <thead><tr>
+      <th>Company</th><th>Category</th><th>Contact</th><th>Tier</th><th>Status</th>
+      <th>Touch</th><th>Value (£)</th><th>Next follow-up</th><th></th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div id="pipeView" style="display:none">
+  <div class="pipe" id="pipeBoard"></div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h2 id="modalTitle">Add Sponsor</h2>
+    <input type="hidden" id="m_id">
+    <div class="row2">
+      <div class="fg"><label>Company *</label><input id="m_company" placeholder="Michelin UK Ltd"></div>
+      <div class="fg"><label>Category</label>
+        <select id="m_category">
+          <option>Tyres</option><option>Fuel & Lubricants</option><option>Recovery</option>
+          <option>Navigation & Comms</option><option>Power & Electrical</option><option>Camp & Comfort</option>
+          <option>Tools & Equipment</option><option>Clothing & PPE</option><option>Nutrition</option>
+          <option>Medical</option><option>Insurance & Legal</option><option>Media & Content</option>
+          <option>Truck / Powertrain</option><option>Charity Partner</option><option>Logistics & Support</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Contact name</label><input id="m_contact" placeholder="Jane Smith"></div>
+      <div class="fg"><label>Contact role</label><input id="m_role" placeholder="Head of Partnerships"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Email</label><input id="m_email" placeholder="jane@company.com"></div>
+      <div class="fg"><label>Phone</label><input id="m_phone" placeholder="020 0000 0000"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Tier</label>
+        <select id="m_tier">
+          <option>Partner</option><option>Bronze</option><option>Silver</option>
+          <option>Gold</option><option>Title</option>
+        </select>
+      </div>
+      <div class="fg"><label>Target value (£)</label><input type="number" id="m_value" placeholder="5000" min="0"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Status</label>
+        <select id="m_status">
+          <option>prospect</option><option>contacted</option><option>in_talks</option>
+          <option>agreed</option><option>signed</option><option>declined</option><option>cold</option>
+        </select>
+      </div>
+      <div class="fg"><label>Touch # (1–16)</label><input type="number" id="m_touch" min="1" max="16" value="1"></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Next follow-up</label><input type="date" id="m_next"></div>
+      <div class="fg"><label>Actual value agreed (£)</label><input type="number" id="m_agreed" min="0" placeholder="0"></div>
+    </div>
+    <div class="fg"><label>Notes</label><textarea id="m_notes" rows="3" placeholder="Pitch angle, previous contact, specific interest…"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="gold" onclick="saveSponsor()">Save</button>
+      <button onclick="closeModal()">Cancel</button>
+      <button class="sm" onclick="logTouch()" style="margin-left:auto">📞 Log Touch</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 53-sponsor seed ───────────────────────────────────────────────────────
+// Source: RBTR truck spec categories. Status set to 'prospect' for all seed data.
+// Production: cross-reference with stream-3-sponsor-outreach branch for actual
+// contact history, email templates (01–20 files), and SPONSOR_TIER_RANKING.md.
+const SEED_SPONSORS = [
+  // Tyres (4)
+  {company:'Michelin UK Ltd',           category:'Tyres',              contact:'', role:'Partnerships Manager', email:'',  phone:'', tier:'Gold',   value:15000, notes:'XZY / CrossClimate for expedition. Pitch: endurance + high-mileage narrative.'},
+  {company:'BFGoodrich Tyres (Michelin)',category:'Tyres',              contact:'', role:'Brand Manager',        email:'',  phone:'', tier:'Silver', value:8000,  notes:'All-Terrain T/A — overlanding credibility.'},
+  {company:'Cooper Tyres UK',           category:'Tyres',              contact:'', role:'Marketing',            email:'',  phone:'', tier:'Bronze', value:4000,  notes:'Discoverer AT3 range. UK-based team.'},
+  {company:'Continental Tyres UK',      category:'Tyres',              contact:'', role:'Fleet & Events',       email:'',  phone:'', tier:'Silver', value:7000,  notes:'HeavyTruck range. Strong fleet narrative.'},
+  // Fuel & Lubricants (5)
+  {company:'Shell UK Ltd',              category:'Fuel & Lubricants',  contact:'', role:'Partnerships',         email:'',  phone:'', tier:'Gold',   value:20000, notes:'Shell Rimula diesel engine oil + fuel card. Strong global logistics brand.'},
+  {company:'Millers Oils Ltd',          category:'Fuel & Lubricants',  contact:'', role:'Marketing Manager',    email:'',  phone:'', tier:'Silver', value:6000,  notes:'UK-based, Brighouse. Motorsport/expedition heritage.'},
+  {company:'Total Energies UK',         category:'Fuel & Lubricants',  contact:'', role:'Sponsorship',          email:'',  phone:'', tier:'Silver', value:7000,  notes:'Quartz / Rubia lubricant range.'},
+  {company:'Comma Oil & Chemicals',     category:'Fuel & Lubricants',  contact:'', role:'Brand',                email:'',  phone:'', tier:'Bronze', value:3000,  notes:'UK lubricants brand. Easy to approach.'},
+  {company:'Morris Lubricants',         category:'Fuel & Lubricants',  contact:'', role:'Export & Marketing',   email:'',  phone:'', tier:'Bronze', value:2500,  notes:'Shrewsbury-based, family business. Truck-specific range.'},
+  // Recovery (4)
+  {company:'WARN Industries (Europe)',   category:'Recovery',           contact:'', role:'European Sales',       email:'',  phone:'', tier:'Gold',   value:10000, notes:'Winch + recovery kit. Iconic overlanding brand. Must-have.'},
+  {company:'ARB 4x4 Accessories',       category:'Recovery',           contact:'', role:'UK Distributor',       email:'',  phone:'', tier:'Silver', value:6000,  notes:'MAXTRAX, compressors, recovery boards — full kit pitch.'},
+  {company:'Hi-Lift Jack Co',           category:'Recovery',           contact:'', role:'UK Sales',             email:'',  phone:'', tier:'Bronze', value:2000,  notes:'Jack + accessories. Affordable in-kind sponsorship option.'},
+  {company:'Tirfor (Yale Industrial)',   category:'Recovery',           contact:'', role:'Product Manager',      email:'',  phone:'', tier:'Partner', value:1000, notes:'Hand-powered winch for recovery. Niche but credible.'},
+  // Navigation & Comms (4)
+  {company:'Garmin UK Ltd',             category:'Navigation & Comms', contact:'', role:'Partnerships',         email:'',  phone:'', tier:'Gold',   value:12000, notes:'Overlander GPS + inReach satellite comms. Perfect brand fit.'},
+  {company:'Iridium Communications',    category:'Navigation & Comms', contact:'', role:'EMEA Marketing',       email:'',  phone:'', tier:'Silver', value:8000,  notes:'Satellite phone / PTT for remote comms.'},
+  {company:'Motorola Solutions UK',     category:'Navigation & Comms', contact:'', role:'Partner Sales',        email:'',  phone:'', tier:'Bronze', value:4000,  notes:'MOTOTRBO radios for convoy comms.'},
+  {company:'Ordnance Survey',           category:'Navigation & Comms', contact:'', role:'Commercial Partnerships',email:'', phone:'', tier:'Partner',value:1500, notes:'OS Maps app + paper map editorial. Great UK-leg coverage.'},
+  // Power & Electrical (3)
+  {company:'Victron Energy UK',         category:'Power & Electrical', contact:'', role:'UK Distributor Mgr',   email:'',  phone:'', tier:'Silver', value:6000,  notes:'Solar MPPT + lithium battery systems. Technical credibility.'},
+  {company:'CTEK UK Ltd',              category:'Power & Electrical', contact:'', role:'Marketing',            email:'',  phone:'', tier:'Bronze', value:3000,  notes:'Dual-battery charging. Easy UK approach.'},
+  {company:'Ring Automotive',          category:'Power & Electrical', contact:'', role:'Brand Manager',        email:'',  phone:'', tier:'Bronze', value:2500,  notes:'Jump starters, compressors. UK manufacturer. Good fit.'},
+  // Camp & Comfort (4)
+  {company:'Dometic UK Ltd',           category:'Camp & Comfort',     contact:'', role:'Overlanding Segment',  email:'',  phone:'', tier:'Gold',   value:10000, notes:'CFX fridge/freezer + sleeping systems. Strong overlanding presence.'},
+  {company:'Rhino-Rack UK',            category:'Camp & Comfort',     contact:'', role:'UK Distributor',       email:'',  phone:'', tier:'Silver', value:5000,  notes:'Roof racks + awnings. Visual on truck build.'},
+  {company:'Tuff Stuff Overland',      category:'Camp & Comfort',     contact:'', role:'UK Sales',             email:'',  phone:'', tier:'Bronze', value:3000,  notes:'Rooftop tents + camp furniture. In-kind option.'},
+  {company:'MSR (Cascade Designs)',    category:'Camp & Comfort',     contact:'', role:'EMEA Distribution',    email:'',  phone:'', tier:'Bronze', value:2000,  notes:'Stoves + water treatment. Lightweight expedition kit.'},
+  // Tools & Equipment (4)
+  {company:'Snap-on Tools UK',         category:'Tools & Equipment',  contact:'', role:'Marketing Manager',    email:'',  phone:'', tier:'Silver', value:8000,  notes:'Full tool kit. Premium brand, strong tradesperson narrative.'},
+  {company:'Halfords Fleet Solutions', category:'Tools & Equipment',  contact:'', role:'Commercial Partnerships',email:'', phone:'', tier:'Bronze', value:4000,  notes:'Tool storage + consumables. UK-wide credibility.'},
+  {company:'Draper Tools',             category:'Tools & Equipment',  contact:'', role:'Sponsorship',          email:'',  phone:'', tier:'Bronze', value:2500,  notes:'Eastleigh-based UK manufacturer. Expedition toolkit.'},
+  {company:'Milwaukee Tool UK',        category:'Tools & Equipment',  contact:'', role:'Brand & Events',       email:'',  phone:'', tier:'Silver', value:5000,  notes:'Power tools + M18 system. Good trade audience crossover.'},
+  // Clothing & PPE (4)
+  {company:'Rab Equipment (Equip OD)', category:'Clothing & PPE',     contact:'', role:'Partnerships',         email:'',  phone:'', tier:'Silver', value:5000,  notes:'Sleeping bags + insulation layers. Sheffield-based — local angle.'},
+  {company:'Berghaus Ltd',             category:'Clothing & PPE',     contact:'', role:'Brand Manager',        email:'',  phone:'', tier:'Silver', value:5000,  notes:'Expedition outerwear. Strong adventure brand.'},
+  {company:'Portwest Ltd',             category:'Clothing & PPE',     contact:'', role:'UK Marketing',         email:'',  phone:'', tier:'Bronze', value:2000,  notes:'PPE / workwear. Good for workshop scenes + practical kit.'},
+  {company:'Sealskinz Ltd',            category:'Clothing & PPE',     contact:'', role:'Partnerships',         email:'',  phone:'', tier:'Bronze', value:1500,  notes:'Waterproof gloves + socks. Small but perfect fit.'},
+  // Nutrition (4)
+  {company:'Firepot Nutrition',        category:'Nutrition',          contact:'', role:'Director',             email:'',  phone:'', tier:'Silver', value:3000,  notes:'Freeze-dried expedition meals. Content-rich pitch.'},
+  {company:'Wayfayrer Foods',          category:'Nutrition',          contact:'', role:'Commercial Director',  email:'',  phone:'', tier:'Bronze', value:2000,  notes:'UK ration packs. Long shelf-life, expedition staple.'},
+  {company:'TREK Bar (Natural Balance)',category:'Nutrition',          contact:'', role:'Sponsorship',          email:'',  phone:'', tier:'Bronze', value:1500,  notes:'Snack bars. Easy in-kind + social content.'},
+  {company:'Mountain Fuel',            category:'Nutrition',          contact:'', role:'Founder',              email:'',  phone:'', tier:'Partner', value:1000,  notes:'UK endurance nutrition. Adventure community fit.'},
+  // Medical (3)
+  {company:'Medi-Kit Ltd',             category:'Medical',            contact:'', role:'Commercial',           email:'',  phone:'', tier:'Silver', value:4000,  notes:'Professional expedition first aid kits. Safety credibility.'},
+  {company:'Lifeline Fire & Safety',   category:'Medical',            contact:'', role:'UK Sales',             email:'',  phone:'', tier:'Bronze', value:2000,  notes:'Fire suppression + medical. Race/rally heritage.'},
+  {company:'Adventure Medical Kits',   category:'Medical',            contact:'', role:'EMEA Distribution',    email:'',  phone:'', tier:'Bronze', value:1500,  notes:'AMK wilderness kits. US brand, EMEA distributor approach.'},
+  // Insurance & Legal (3)
+  {company:'Chris Knott Insurance',    category:'Insurance & Legal',  contact:'', role:'Director',             email:'',  phone:'', tier:'Partner', value:2000,  notes:'Classic + expedition vehicle insurance. Niche fit.'},
+  {company:'Doris Expedition Cover',   category:'Insurance & Legal',  contact:'', role:'Founder',              email:'',  phone:'', tier:'Partner', value:1500,  notes:'Specialist overlanding insurance broker.'},
+  {company:'Blacks Solicitors LLP',    category:'Insurance & Legal',  contact:'', role:'Commercial Partner',   email:'',  phone:'', tier:'Partner', value:1000,  notes:'Leeds-based legal. Possible pro-bono commercial advice.'},
+  // Media & Content (4)
+  {company:'GoPro UK',                 category:'Media & Content',    contact:'', role:'Brand Partnerships',   email:'',  phone:'', tier:'Gold',   value:10000, notes:'Camera + stabilisation kit. Flagship content partnership.'},
+  {company:'DJI Europe',               category:'Media & Content',    contact:'', role:'Content Partnerships', email:'',  phone:'', tier:'Gold',   value:10000, notes:'Drone footage. Cinematic aerial essential.'},
+  {company:'Insta360 UK',              category:'Media & Content',    contact:'', role:'Creator Partnerships', email:'',  phone:'', tier:'Silver', value:5000,  notes:'360 + action cams. Strong creator community.'},
+  {company:'Adobe UK',                 category:'Media & Content',    contact:'', role:'Creator Sponsorship',  email:'',  phone:'', tier:'Silver', value:4000,  notes:'Creative Cloud for content production pipeline.'},
+  // Charity Partners (3)
+  {company:'Transaid (Truckers Aid)',  category:'Charity Partner',    contact:'', role:'Partnership Manager',  email:'',  phone:'', tier:'Partner', value:0,    notes:'Official charity partner. Transport / Africa mission alignment.'},
+  {company:'Truckers Against Trafficking',category:'Charity Partner', contact:'', role:'UK Lead',              email:'',  phone:'', tier:'Partner', value:0,    notes:'Awareness campaign during expedition.'},
+  {company:'Scope',                    category:'Charity Partner',    contact:'', role:'Corporate Partnerships',email:'', phone:'', tier:'Partner', value:0,    notes:'Disability charity. Potential cause narrative.'},
+  // Title Sponsor (1)
+  {company:'[Title Sponsor — TBC]',    category:'Other',              contact:'', role:'',                     email:'',  phone:'', tier:'Title',   value:50000, notes:'Primary naming rights. Target: major logistics, fuel, or tyre brand. Approach after initial media traction.'},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
+const KEY = 'rbtr_sponsors';
+function load(){ return JSON.parse(localStorage.getItem(KEY)||'[]'); }
+function save(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+let currentView = 'table';
+
+// ── Seed ──────────────────────────────────────────────────────────────────
+function seedSponsors(){
+  if(!confirm(`Seed ${SEED_SPONSORS.length} sponsors? This ADDS to your current list.`)) return;
+  const existing = load();
+  const now = new Date().toISOString();
+  // Auto follow-up: first follow-up 7 days from today for all seeded sponsors
+  const nextDate = new Date(); nextDate.setDate(nextDate.getDate()+7);
+  const nextStr = nextDate.toISOString().slice(0,10);
+  SEED_SPONSORS.forEach(s => {
+    existing.push({
+      ...s, id:uid(), status:'prospect', touch:0,
+      agreed_value:0, next_followup:nextStr, created_at:now, updated_at:now,
+    });
+  });
+  save(existing);
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+const STATUS_ORDER = ['prospect','contacted','in_talks','agreed','signed','declined','cold'];
+
+function getFiltered(){
+  const all = load();
+  const search = document.getElementById('searchInp').value.toLowerCase();
+  const sf = document.getElementById('statusFil').value;
+  const tf = document.getElementById('tierFil').value;
+  return all.filter(s => {
+    if(sf && s.status!==sf) return false;
+    if(tf && s.tier!==tf) return false;
+    if(search && !((s.company+' '+(s.contact||'')+' '+s.category).toLowerCase().includes(search))) return false;
+    return true;
+  });
+}
+
+function render(){
+  const filtered = getFiltered();
+  renderStats(load());
+  if(currentView==='table') renderTable(filtered);
+  else renderPipe(filtered);
+}
+
+function setView(v){
+  currentView=v;
+  document.getElementById('tableView').style.display=v==='table'?'block':'none';
+  document.getElementById('pipeView').style.display=v==='pipe'?'block':'none';
+  document.getElementById('vBtn-table').className=v==='table'?'gold':'';
+  document.getElementById('vBtn-pipe').className=v==='pipe'?'gold':'';
+  render();
+}
+
+function renderStats(all){
+  const total = all.length;
+  const signed = all.filter(s=>s.status==='signed').length;
+  const pipeline = all.filter(s=>['contacted','in_talks','agreed'].includes(s.status)).length;
+  const totalVal = all.filter(s=>s.status==='signed').reduce((s,x)=>s+(x.agreed_value||0),0);
+  const pipeVal  = all.filter(s=>['in_talks','agreed'].includes(s.status)).reduce((s,x)=>s+(x.value||0),0);
+  const today = new Date().toISOString().slice(0,10);
+  const due = all.filter(s=>s.next_followup&&s.next_followup<=today&&!['signed','declined','cold'].includes(s.status)).length;
+  document.getElementById('statsBar').innerHTML = [
+    {val:total, lbl:'Total'},
+    {val:pipeline, lbl:'In pipeline'},
+    {val:signed, lbl:'Signed'},
+    {val:`£${(totalVal/1000).toFixed(0)}k`, lbl:'Secured'},
+    {val:`£${(pipeVal/1000).toFixed(0)}k`, lbl:'Pipeline val'},
+    {val:due, lbl:'Due today', col:due>0?'var(--amber)':null},
+  ].map(t=>`<div class="stat"><div class="stat-val" ${t.col?`style="color:${t.col}"`:''}}>${t.val}</div><div class="stat-lbl">${t.lbl}</div></div>`).join('');
+}
+
+function touchClass(next){
+  if(!next) return '';
+  const today = new Date().toISOString().slice(0,10);
+  if(next<today) return 'overdue';
+  const soon = new Date(); soon.setDate(soon.getDate()+3);
+  if(next<=soon.toISOString().slice(0,10)) return 'due-soon';
+  return '';
+}
+
+function renderTable(items){
+  const tbody = document.getElementById('tbody');
+  if(!items.length){ tbody.innerHTML='<tr><td colspan="9" style="color:var(--muted);padding:12px">No sponsors. Seed or add one.</td></tr>'; return; }
+  tbody.innerHTML = items.map(s => {
+    const tc = touchClass(s.next_followup);
+    return `<tr>
+      <td><strong>${esc(s.company)}</strong></td>
+      <td style="color:var(--muted);font-size:12px">${esc(s.category)}</td>
+      <td>${esc(s.contact||'—')}<br><span style="color:var(--muted);font-size:11px">${esc(s.role||'')}</span></td>
+      <td class="tier-${(s.tier||'P')[0]}" style="font-weight:700">${s.tier||'Partner'}</td>
+      <td><span class="badge badge-${s.status||'prospect'}">${s.status||'prospect'}</span></td>
+      <td style="text-align:center">${s.touch||0}/16</td>
+      <td style="color:var(--gold)">£${(s.value||0).toLocaleString()}</td>
+      <td class="${tc}">${s.next_followup||'—'}</td>
+      <td>
+        <button class="sm" onclick="openEdit('${s.id}')">Edit</button>
+        <button class="sm" onclick="advanceTouch('${s.id}')">+Touch</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPipe(items){
+  const board = document.getElementById('pipeBoard');
+  const stages = ['prospect','contacted','in_talks','agreed','signed'];
+  board.innerHTML = stages.map(stage => {
+    const cards = items.filter(s=>s.status===stage);
+    return `<div class="pipe-col">
+      <div class="pipe-hdr" style="color:${stage==='signed'?'var(--green-text)':'var(--gold)'}">${stage.replace('_',' ')} (${cards.length})</div>
+      ${cards.map(s=>`
+        <div class="pipe-card" onclick="openEdit('${s.id}')">
+          <div class="name">${esc(s.company)}</div>
+          <div class="cat">${s.category} · <span class="tier-${(s.tier||'P')[0]}">${s.tier}</span></div>
+          <div class="val">£${(s.value||0).toLocaleString()} · T${s.touch||0}/16</div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── CRUD ──────────────────────────────────────────────────────────────────
+function openAdd(){
+  document.getElementById('modalTitle').textContent='Add Sponsor';
+  document.getElementById('m_id').value='';
+  ['m_company','m_contact','m_role','m_email','m_phone','m_notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m_category').value='Other';
+  document.getElementById('m_tier').value='Partner';
+  document.getElementById('m_status').value='prospect';
+  document.getElementById('m_touch').value=0;
+  document.getElementById('m_value').value='';
+  document.getElementById('m_agreed').value='0';
+  document.getElementById('m_next').value='';
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEdit(id){
+  const s = load().find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById('modalTitle').textContent='Edit Sponsor';
+  document.getElementById('m_id').value=s.id;
+  document.getElementById('m_company').value=s.company||'';
+  document.getElementById('m_contact').value=s.contact||'';
+  document.getElementById('m_role').value=s.role||'';
+  document.getElementById('m_email').value=s.email||'';
+  document.getElementById('m_phone').value=s.phone||'';
+  document.getElementById('m_category').value=s.category||'Other';
+  document.getElementById('m_tier').value=s.tier||'Partner';
+  document.getElementById('m_status').value=s.status||'prospect';
+  document.getElementById('m_touch').value=s.touch||0;
+  document.getElementById('m_value').value=s.value||'';
+  document.getElementById('m_agreed').value=s.agreed_value||0;
+  document.getElementById('m_next').value=s.next_followup||'';
+  document.getElementById('m_notes').value=s.notes||'';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+
+function saveSponsor(){
+  const company = document.getElementById('m_company').value.trim();
+  if(!company){ alert('Company required'); return; }
+  const all = load();
+  const id = document.getElementById('m_id').value || uid();
+  const now = new Date().toISOString();
+  const rec = {
+    id, company,
+    category:      document.getElementById('m_category').value,
+    contact:       document.getElementById('m_contact').value.trim(),
+    role:          document.getElementById('m_role').value.trim(),
+    email:         document.getElementById('m_email').value.trim(),
+    phone:         document.getElementById('m_phone').value.trim(),
+    tier:          document.getElementById('m_tier').value,
+    status:        document.getElementById('m_status').value,
+    touch:         parseInt(document.getElementById('m_touch').value)||0,
+    value:         parseFloat(document.getElementById('m_value').value)||0,
+    agreed_value:  parseFloat(document.getElementById('m_agreed').value)||0,
+    next_followup: document.getElementById('m_next').value,
+    notes:         document.getElementById('m_notes').value.trim(),
+    updated_at:    now,
+  };
+  const idx = all.findIndex(x=>x.id===id);
+  if(idx>=0) all[idx]={...all[idx],...rec};
+  else all.push({...rec, created_at:now});
+  save(all); closeModal(); render();
+}
+
+function advanceTouch(id){
+  // 16-touch follow-up sequence — auto-schedules next contact
+  // Touch intervals (days): 7,7,14,14,21,21,30,30,30,60,60,60,60,90,90,90
+  const INTERVALS = [7,7,14,14,21,21,30,30,30,60,60,60,60,90,90,90];
+  const all = load();
+  const s = all.find(x=>x.id===id);
+  if(!s) return;
+  const touch = (s.touch||0)+1;
+  s.touch = touch;
+  const interval = INTERVALS[Math.min(touch-1, INTERVALS.length-1)];
+  const next = new Date(); next.setDate(next.getDate()+interval);
+  s.next_followup = next.toISOString().slice(0,10);
+  if(s.status==='prospect') s.status='contacted';
+  s.updated_at = new Date().toISOString();
+  save(all); render();
+}
+
+function logTouch(){
+  const id = document.getElementById('m_id').value;
+  if(id) advanceTouch(id);
+  closeModal();
+}
+
+function exportCSV(){
+  const heads = ['company','category','tier','status','touch','value','agreed_value','contact','email','next_followup','notes'];
+  const rows = load().map(s=>heads.map(h=>`"${(s[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+  const blob = new Blob([heads.join(',')+'\n'+rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rbtr-sponsors.csv';a.click();
+}
+
+render();
+</script>
+</body>
+</html>

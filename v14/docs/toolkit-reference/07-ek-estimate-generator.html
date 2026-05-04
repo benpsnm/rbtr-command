@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EK Estimate Generator — Reference Spec</title>
+<style>
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green-text:#5cb85c;--red-text:#ff6b6b}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px;max-width:1000px;margin:0 auto}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  button.sm{padding:3px 8px;font-size:11px}
+  button.red{background:#3a0000;border-color:var(--red-text);color:var(--red-text)}
+  input,select,textarea{background:#111;color:var(--text);border:1px solid var(--border);padding:6px 8px;font-size:13px;font-family:inherit;width:100%}
+  input:focus,select:focus,textarea:focus{outline:1px solid var(--gold)}
+  .card{background:var(--card);border:1px solid var(--border);padding:16px;margin-bottom:12px}
+  .ct{color:var(--gold);font-size:15px;font-weight:700;margin-bottom:10px}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .fg{margin-bottom:0}
+  .fg label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+  /* Line item tables */
+  table.li{width:100%;border-collapse:collapse;font-size:13px}
+  table.li th{text-align:left;color:var(--muted);border-bottom:1px solid var(--border);padding:5px 6px;font-weight:400;font-size:11px;text-transform:uppercase}
+  table.li td{padding:4px 6px;border-bottom:1px solid #1a1a1a;vertical-align:middle}
+  table.li input{background:#0d0d0d;border:1px solid #222;padding:4px 6px;font-size:13px}
+  table.li td:last-child{width:30px;text-align:right}
+  /* Totals */
+  .totals{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-top:12px;font-size:14px}
+  .totals .row{display:flex;justify-content:space-between;width:280px;padding:4px 0;border-bottom:1px solid #222}
+  .totals .row.grand{border-top:2px solid var(--gold);font-size:18px;font-weight:700;color:var(--gold);border-bottom:none}
+  /* Status badge */
+  .badge{padding:2px 8px;font-size:11px;font-weight:700}
+  .badge-draft{background:#1e1e1e;color:var(--muted)}
+  .badge-sent{background:#1a2a4a;color:#64b5f6}
+  .badge-accepted{background:#0a2a0a;color:var(--green-text)}
+  .badge-rejected{background:#2a0a0a;color:var(--red-text)}
+  .badge-completed{background:#1a1a3a;color:#9c88ff}
+  /* List view */
+  .est-item{background:var(--card);border:1px solid var(--border);padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+  .est-item:hover{border-color:var(--gold)}
+  .est-num{color:var(--gold);font-weight:700;font-size:13px}
+  /* Print */
+  @media print{
+    body{background:#fff;color:#000;font-size:12px}
+    .no-print{display:none!important}
+    .card{border:1px solid #ccc}
+    .ct{color:#000}
+    .fg label,.label{color:#444}
+    input,select,textarea{border:none;background:transparent;padding:0}
+    button{display:none}
+    h1,.sub,.sub{display:none}
+    #listView{display:none}
+  }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>🔧 EK Estimate Generator — Reference Spec</h1>
+<div class="sub">Customer estimate + internal cost sheet · auto-numbered EK-2026-XXXX · print-to-PDF · Phase 7 reference</div>
+
+<!-- List view -->
+<div id="listView">
+  <div class="no-print" style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="gold" onclick="newEstimate()">+ New Estimate</button>
+    <button onclick="exportAllCSV()">↓ Export CSV</button>
+  </div>
+  <div id="estimateList"></div>
+  <div id="noEst" style="color:var(--muted);padding:20px;text-align:center;display:none">No estimates yet. Create one.</div>
+</div>
+
+<!-- Form view -->
+<div id="formView" style="display:none">
+  <div class="no-print" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button onclick="showList()">← Back to List</button>
+    <button class="gold" onclick="saveEstimate()">💾 Save</button>
+    <button onclick="printEstimate()">🖨 Print / PDF</button>
+    <select id="statusSel" onchange="updateStatus()">
+      <option value="draft">Draft</option><option value="sent">Sent</option>
+      <option value="accepted">Accepted</option><option value="rejected">Rejected</option>
+      <option value="completed">Completed</option>
+    </select>
+  </div>
+
+  <!-- Header -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:22px;font-weight:700;color:var(--gold)">EK ENGINEERING</div>
+        <div style="color:var(--muted);font-size:12px">Customer Estimate</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:20px;font-weight:700" id="estNumDisplay">EK-2026-0001</div>
+        <div style="font-size:12px;color:var(--muted)" id="estDateDisplay">—</div>
+        <span class="badge badge-draft" id="estStatusBadge">draft</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer + vehicle -->
+  <div class="grid2" style="margin-bottom:12px">
+    <div class="card">
+      <div class="ct">Customer</div>
+      <div class="grid2" style="gap:8px">
+        <div class="fg"><label>Name</label><input id="c_name" placeholder="John Smith"></div>
+        <div class="fg"><label>Phone</label><input id="c_phone" placeholder="07700 000000"></div>
+        <div class="fg" style="grid-column:1/-1"><label>Email</label><input id="c_email" placeholder="john@example.com"></div>
+        <div class="fg" style="grid-column:1/-1"><label>Address</label><textarea id="c_addr" rows="2" placeholder="123 Main St, Sheffield, S1 1AA"></textarea></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">Vehicle</div>
+      <div class="grid2" style="gap:8px">
+        <div class="fg"><label>Year</label><input id="v_year" placeholder="2019"></div>
+        <div class="fg"><label>Reg</label><input id="v_reg" placeholder="SH19 XYZ" style="text-transform:uppercase"></div>
+        <div class="fg"><label>Make / Model</label><input id="v_make" placeholder="Ford Transit Custom"></div>
+        <div class="fg"><label>Colour</label><input id="v_colour" placeholder="White"></div>
+        <div class="fg" style="grid-column:1/-1"><label>Scope of work</label><textarea id="v_scope" rows="3" placeholder="Full respray, dent repair panels 2-3, clear coat…"></textarea></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Materials -->
+  <div class="card">
+    <div class="ct">Materials</div>
+    <table class="li" id="matTable">
+      <thead><tr><th>Description</th><th style="width:70px">Qty</th><th style="width:90px">Unit (£)</th><th style="width:90px">Total</th><th></th></tr></thead>
+      <tbody id="matBody"></tbody>
+    </table>
+    <button class="sm no-print" onclick="addRow('mat')" style="margin-top:8px">+ Add Material</button>
+  </div>
+
+  <!-- Labour -->
+  <div class="card">
+    <div class="ct">Labour</div>
+    <table class="li" id="labTable">
+      <thead><tr><th>Description</th><th style="width:70px">Hours</th><th style="width:90px">Rate (£/hr)</th><th style="width:90px">Total</th><th></th></tr></thead>
+      <tbody id="labBody"></tbody>
+    </table>
+    <button class="sm no-print" onclick="addRow('lab')" style="margin-top:8px">+ Add Labour</button>
+  </div>
+
+  <!-- Sublet -->
+  <div class="card">
+    <div class="ct">Sublet / External</div>
+    <table class="li" id="subTable">
+      <thead><tr><th>Description</th><th style="width:90px">Cost (£)</th><th style="width:80px">Markup %</th><th style="width:90px">Charged</th><th></th></tr></thead>
+      <tbody id="subBody"></tbody>
+    </table>
+    <button class="sm no-print" onclick="addRow('sub')" style="margin-top:8px">+ Add Sublet</button>
+  </div>
+
+  <!-- Adjustments + totals -->
+  <div class="card">
+    <div class="ct">Adjustments</div>
+    <div class="grid3" style="margin-bottom:12px;gap:10px">
+      <div class="fg"><label>Complexity %</label><input type="number" id="adj_complexity" value="0" min="0" max="100" oninput="calcTotals()"></div>
+      <div class="fg"><label>Discount %</label><input type="number" id="adj_discount" value="0" min="0" max="100" oninput="calcTotals()"></div>
+      <div class="fg"><label>VAT %</label><input type="number" id="adj_vat" value="20" min="0" max="100" oninput="calcTotals()"></div>
+    </div>
+    <div class="totals" id="totalsBlock"></div>
+  </div>
+
+  <!-- Admin -->
+  <div class="card">
+    <div class="ct">Admin</div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Timescale</label><input id="a_timescale" placeholder="5–7 working days"></div>
+      <div class="fg"><label>Deposit (£)</label><input type="number" id="a_deposit" value="0" oninput="calcTotals()"></div>
+      <div class="fg"><label>Authorised by</label><input id="a_auth" placeholder="Customer signature / name"></div>
+      <div class="fg"><label>Auth date</label><input type="date" id="a_authdate"></div>
+      <div class="fg" style="grid-column:1/-1"><label>Notes</label><textarea id="a_notes" rows="2" placeholder="Any special instructions…"></textarea></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State (localStorage) ──────────────────────────────────────────────────
+const KEY = 'ek_estimates';
+function loadAll(){ return JSON.parse(localStorage.getItem(KEY)||'[]'); }
+function saveAll(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+let currentId = null;
+let matRows=[], labRows=[], subRows=[];
+
+// ── Auto-numbering ────────────────────────────────────────────────────────
+// Production: queries MAX(estimate_number) from ek_estimates table.
+// Ref spec: derives from localStorage list.
+function nextNumber(){
+  const all = loadAll();
+  if(!all.length) return 'EK-2026-0001';
+  const nums = all.map(e=>parseInt((e.estimate_number||'EK-2026-0000').split('-')[2])||0);
+  const next = Math.max(...nums)+1;
+  return `EK-2026-${String(next).padStart(4,'0')}`;
+}
+
+// ── List view ─────────────────────────────────────────────────────────────
+function showList(){
+  document.getElementById('listView').style.display='block';
+  document.getElementById('formView').style.display='none';
+  renderList();
+}
+function renderList(){
+  const all = loadAll();
+  document.getElementById('noEst').style.display = all.length?'none':'block';
+  document.getElementById('estimateList').innerHTML = all.slice().reverse().map(e=>
+    `<div class="est-item" onclick="openEstimate('${e.id}')">
+      <div>
+        <span class="est-num">${e.estimate_number||'—'}</span>
+        <span class="badge badge-${e.status||'draft'}" style="margin-left:8px">${e.status||'draft'}</span>
+        <span style="color:var(--muted);font-size:12px;margin-left:12px">${e.customer_name||'No customer'}</span>
+        <span style="color:var(--muted);font-size:12px;margin-left:8px">${e.vehicle_make||''} ${e.vehicle_reg||''}</span>
+      </div>
+      <div style="text-align:right">
+        <div style="color:var(--gold);font-weight:700">£${(e._total||0).toLocaleString('en-GB',{minimumFractionDigits:2})}</div>
+        <div style="color:var(--muted);font-size:11px">${(e.created_at||'').slice(0,10)}</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+// ── New / Open ────────────────────────────────────────────────────────────
+function newEstimate(){
+  currentId = null;
+  matRows=[]; labRows=[]; subRows=[];
+  clearForm();
+  const num = nextNumber();
+  document.getElementById('estNumDisplay').textContent = num;
+  document.getElementById('estDateDisplay').textContent = new Date().toLocaleDateString('en-GB');
+  document.getElementById('estStatusBadge').textContent = 'draft';
+  document.getElementById('estStatusBadge').className = 'badge badge-draft';
+  document.getElementById('statusSel').value = 'draft';
+  renderRows();
+  calcTotals();
+  document.getElementById('listView').style.display='none';
+  document.getElementById('formView').style.display='block';
+}
+
+function openEstimate(id){
+  const all = loadAll();
+  const e = all.find(x=>x.id===id);
+  if(!e) return;
+  currentId = id;
+  // Customer
+  document.getElementById('c_name').value   = e.customer_name||'';
+  document.getElementById('c_phone').value  = e.customer_phone||'';
+  document.getElementById('c_email').value  = e.customer_email||'';
+  document.getElementById('c_addr').value   = e.customer_address||'';
+  // Vehicle
+  document.getElementById('v_year').value   = e.vehicle_year||'';
+  document.getElementById('v_reg').value    = e.vehicle_reg||'';
+  document.getElementById('v_make').value   = e.vehicle_make||'';
+  document.getElementById('v_colour').value = e.vehicle_colour||'';
+  document.getElementById('v_scope').value  = e.scope||'';
+  // Adjustments
+  document.getElementById('adj_complexity').value = e.complexity_pct||0;
+  document.getElementById('adj_discount').value   = e.discount_pct||0;
+  document.getElementById('adj_vat').value        = e.vat_pct||20;
+  // Admin
+  document.getElementById('a_timescale').value = e.timescale||'';
+  document.getElementById('a_deposit').value   = e.deposit||0;
+  document.getElementById('a_auth').value      = e.authorised_by||'';
+  document.getElementById('a_authdate').value  = e.authorised_date||'';
+  document.getElementById('a_notes').value     = e.notes||'';
+  // Header
+  document.getElementById('estNumDisplay').textContent = e.estimate_number||'—';
+  document.getElementById('estDateDisplay').textContent = (e.created_at||'').slice(0,10);
+  document.getElementById('statusSel').value = e.status||'draft';
+  updateStatusBadge(e.status||'draft');
+  // Rows
+  matRows = e.materials||[];
+  labRows = e.labour||[];
+  subRows = e.sublet||[];
+  renderRows();
+  calcTotals();
+  document.getElementById('listView').style.display='none';
+  document.getElementById('formView').style.display='block';
+}
+
+function clearForm(){
+  ['c_name','c_phone','c_email','c_addr','v_year','v_reg','v_make','v_colour','v_scope',
+   'a_timescale','a_auth','a_authdate','a_notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('adj_complexity').value=0;
+  document.getElementById('adj_discount').value=0;
+  document.getElementById('adj_vat').value=20;
+  document.getElementById('a_deposit').value=0;
+}
+
+// ── Row management ────────────────────────────────────────────────────────
+function addRow(type){
+  if(type==='mat') matRows.push({desc:'',qty:1,rate:0});
+  else if(type==='lab') labRows.push({desc:'',hours:1,rate:40});
+  else subRows.push({desc:'',cost:0,markup:20});
+  renderRows();
+  calcTotals();
+}
+
+function removeRow(type,idx){
+  if(type==='mat') matRows.splice(idx,1);
+  else if(type==='lab') labRows.splice(idx,1);
+  else subRows.splice(idx,1);
+  renderRows();
+  calcTotals();
+}
+
+function renderRows(){
+  document.getElementById('matBody').innerHTML = matRows.map((r,i)=>`
+    <tr>
+      <td><input value="${esc(r.desc)}" oninput="matRows[${i}].desc=this.value"></td>
+      <td><input type="number" value="${r.qty}" min="0" step="0.1" oninput="matRows[${i}].qty=parseFloat(this.value)||0;calcTotals()" style="width:65px"></td>
+      <td><input type="number" value="${r.rate}" min="0" step="0.01" oninput="matRows[${i}].rate=parseFloat(this.value)||0;calcTotals()" style="width:85px"></td>
+      <td style="text-align:right;color:var(--gold)">£${((r.qty||0)*(r.rate||0)).toFixed(2)}</td>
+      <td><button class="sm red no-print" onclick="removeRow('mat',${i})">✕</button></td>
+    </tr>`).join('');
+
+  document.getElementById('labBody').innerHTML = labRows.map((r,i)=>`
+    <tr>
+      <td><input value="${esc(r.desc)}" oninput="labRows[${i}].desc=this.value"></td>
+      <td><input type="number" value="${r.hours}" min="0" step="0.5" oninput="labRows[${i}].hours=parseFloat(this.value)||0;calcTotals()" style="width:65px"></td>
+      <td><input type="number" value="${r.rate}" min="0" step="1" oninput="labRows[${i}].rate=parseFloat(this.value)||0;calcTotals()" style="width:85px"></td>
+      <td style="text-align:right;color:var(--gold)">£${((r.hours||0)*(r.rate||0)).toFixed(2)}</td>
+      <td><button class="sm red no-print" onclick="removeRow('lab',${i})">✕</button></td>
+    </tr>`).join('');
+
+  document.getElementById('subBody').innerHTML = subRows.map((r,i)=>{
+    const charged = (r.cost||0)*(1+(r.markup||0)/100);
+    return `<tr>
+      <td><input value="${esc(r.desc)}" oninput="subRows[${i}].desc=this.value"></td>
+      <td><input type="number" value="${r.cost}" min="0" step="0.01" oninput="subRows[${i}].cost=parseFloat(this.value)||0;calcTotals()" style="width:85px"></td>
+      <td><input type="number" value="${r.markup}" min="0" step="1" oninput="subRows[${i}].markup=parseFloat(this.value)||0;calcTotals()" style="width:75px"></td>
+      <td style="text-align:right;color:var(--gold)">£${charged.toFixed(2)}</td>
+      <td><button class="sm red no-print" onclick="removeRow('sub',${i})">✕</button></td>
+    </tr>`;}).join('');
+}
+
+// ── Calculation ───────────────────────────────────────────────────────────
+let _grandTotal = 0;
+function calcTotals(){
+  const matTotal = matRows.reduce((s,r)=>s+(r.qty||0)*(r.rate||0),0);
+  const labTotal = labRows.reduce((s,r)=>s+(r.hours||0)*(r.rate||0),0);
+  const subTotal = subRows.reduce((s,r)=>s+(r.cost||0)*(1+(r.markup||0)/100),0);
+  const subtotal  = matTotal+labTotal+subTotal;
+  const complexity= subtotal*(parseFloat(document.getElementById('adj_complexity').value)||0)/100;
+  const afterComp = subtotal+complexity;
+  const discount  = afterComp*(parseFloat(document.getElementById('adj_discount').value)||0)/100;
+  const exVat     = afterComp-discount;
+  const vat       = exVat*(parseFloat(document.getElementById('adj_vat').value)||20)/100;
+  const total     = exVat+vat;
+  const deposit   = parseFloat(document.getElementById('a_deposit').value)||0;
+  const balance   = total-deposit;
+  _grandTotal     = total;
+
+  const row = (label,val,cls='')=>
+    `<div class="row ${cls}"><span>${label}</span><span>£${val.toFixed(2)}</span></div>`;
+  document.getElementById('totalsBlock').innerHTML =
+    row('Materials',matTotal)+
+    row('Labour',labTotal)+
+    row('Sublet / External',subTotal)+
+    row('Subtotal',subtotal)+
+    (complexity?row(`Complexity (${document.getElementById('adj_complexity').value}%)`,complexity):'')+
+    (discount?row(`Discount (${document.getElementById('adj_discount').value}%)`,  -discount):'')+
+    row('Ex-VAT',exVat)+
+    row(`VAT (${document.getElementById('adj_vat').value}%)`,vat)+
+    row('TOTAL (inc. VAT)',total,'grand')+
+    (deposit?row('Deposit paid',-deposit):'') +
+    (deposit?row('Balance due',balance):'');
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────
+function saveEstimate(){
+  const all = loadAll();
+  const num = currentId ? (all.find(x=>x.id===currentId)||{}).estimate_number : nextNumber();
+  const now = new Date().toISOString();
+  const rec = {
+    id:          currentId||uid(),
+    estimate_number: num,
+    customer_name:  document.getElementById('c_name').value.trim(),
+    customer_phone: document.getElementById('c_phone').value.trim(),
+    customer_email: document.getElementById('c_email').value.trim(),
+    customer_address:document.getElementById('c_addr').value.trim(),
+    vehicle_year:   document.getElementById('v_year').value.trim(),
+    vehicle_reg:    document.getElementById('v_reg').value.toUpperCase().trim(),
+    vehicle_make:   document.getElementById('v_make').value.trim(),
+    vehicle_colour: document.getElementById('v_colour').value.trim(),
+    scope:          document.getElementById('v_scope').value.trim(),
+    materials:      matRows,
+    labour:         labRows,
+    sublet:         subRows,
+    complexity_pct: parseFloat(document.getElementById('adj_complexity').value)||0,
+    discount_pct:   parseFloat(document.getElementById('adj_discount').value)||0,
+    vat_pct:        parseFloat(document.getElementById('adj_vat').value)||20,
+    deposit:        parseFloat(document.getElementById('a_deposit').value)||0,
+    timescale:      document.getElementById('a_timescale').value.trim(),
+    authorised_by:  document.getElementById('a_auth').value.trim(),
+    authorised_date:document.getElementById('a_authdate').value,
+    notes:          document.getElementById('a_notes').value.trim(),
+    status:         document.getElementById('statusSel').value,
+    _total:         _grandTotal,
+    created_at:     currentId?(all.find(x=>x.id===currentId)||{created_at:now}).created_at:now,
+    updated_at:     now,
+  };
+  if(!currentId){ all.push(rec); currentId=rec.id; }
+  else { const idx=all.findIndex(x=>x.id===currentId); if(idx>=0) all[idx]=rec; }
+  saveAll(all);
+  document.getElementById('estNumDisplay').textContent=rec.estimate_number;
+  alert('Saved: '+rec.estimate_number);
+}
+
+function updateStatus(){
+  updateStatusBadge(document.getElementById('statusSel').value);
+}
+function updateStatusBadge(s){
+  const el = document.getElementById('estStatusBadge');
+  el.textContent=s; el.className='badge badge-'+s;
+}
+
+function printEstimate(){ window.print(); }
+
+function exportAllCSV(){
+  const all = loadAll();
+  const heads = ['estimate_number','status','customer_name','vehicle_make','vehicle_reg','_total','created_at'];
+  const rows = all.map(e=>heads.map(h=>`"${(e[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+  const blob = new Blob([heads.join(',')+'\n'+rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ek-estimates.csv';a.click();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+showList();
+</script>
+</body>
+</html>

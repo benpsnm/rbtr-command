@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WW Triage — Reference Spec</title>
+<style>
+  :root{--bg:#0d0d0d;--card:#161616;--border:#2a2a2a;--gold:#c9a84c;--text:#e8e8e8;--muted:#666;--green:#3a7d44;--red:#8b2020;--amber:#7a5c1e;--green-text:#5cb85c;--red-text:#ff6b6b;--amber-text:#ffa500}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;padding:16px;max-width:900px;margin:0 auto}
+  h1{color:var(--gold);font-size:20px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  button{background:#1e1e1e;color:var(--text);border:1px solid var(--border);padding:7px 14px;cursor:pointer;font-size:13px;font-family:inherit}
+  button:hover{border-color:var(--gold)}
+  button.gold{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+  textarea,input,select{background:#111;color:var(--text);border:1px solid var(--border);padding:8px;font-size:13px;font-family:inherit;width:100%}
+  textarea:focus,input:focus,select:focus{outline:1px solid var(--gold)}
+  .card{background:var(--card);border:1px solid var(--border);padding:16px;margin-bottom:12px}
+  .ct{color:var(--gold);font-size:16px;font-weight:700;margin-bottom:4px}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+  .verdict-block{padding:20px;text-align:center;margin-bottom:12px;border:2px solid}
+  .verdict-respond{border-color:var(--green-text);background:#0a1f0a}
+  .verdict-call{border-color:var(--amber-text);background:#1f150a}
+  .verdict-decline{border-color:var(--red-text);background:#1f0a0a}
+  .verdict-big{font-size:36px;font-weight:700;margin-bottom:8px}
+  .verdict-respond .verdict-big{color:var(--green-text)}
+  .verdict-call    .verdict-big{color:var(--amber-text)}
+  .verdict-decline .verdict-big{color:var(--red-text)}
+  .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .flag{padding:3px 8px;font-size:11px;border-radius:2px}
+  .flag-red{background:#3a0000;color:#ff6b6b}
+  .flag-amber{background:#2a1500;color:#ffa500}
+  .flag-green{background:#0a2a0a;color:#5cb85c}
+  .detected-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px}
+  .det-item{background:#111;border:1px solid var(--border);padding:8px}
+  .det-item.hit{border-color:var(--green-text)}
+  .det-item.miss{border-color:var(--red-text);opacity:.5}
+  .response-box{background:#111;border:1px solid var(--border);padding:12px;white-space:pre-wrap;font-size:13px;line-height:1.5;min-height:120px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rule-list{font-size:12px;color:var(--muted);line-height:1.8}
+  .rule-list li{list-style:none;padding-left:14px;position:relative}
+  .rule-list li::before{content:'✕';position:absolute;left:0;color:var(--red-text)}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>📥 WW Triage — Reference Spec</h1>
+<div class="sub">WhichWarehouse enquiry triage · auto-detect → verdict · Phase 4 reference</div>
+
+<div class="card">
+  <div class="ct">Hard Decline Rules</div>
+  <div class="two-col" style="margin-top:8px">
+    <div>
+      <div class="label" style="margin-bottom:6px">Geography (auto-decline)</div>
+      <ul class="rule-list">
+        <li>South West England (SW, PL, EX, TQ, TR, BA, BS)</li>
+        <li>Wales (CF, NP, SA, LL, SY, HR, LD, CH5)</li>
+        <li>Scotland (G, EH, FK, KY, DD, AB, IV, PH, KA, ML, PA)</li>
+        <li>Northern Ireland (BT)</li>
+        <li>Republic of Ireland</li>
+      </ul>
+    </div>
+    <div>
+      <div class="label" style="margin-bottom:6px">Service / cargo (auto-decline)</div>
+      <ul class="rule-list">
+        <li>Fulfilment / pick-and-pack / 3PL dispatch</li>
+        <li>Chilled / frozen / temperature-controlled</li>
+        <li>Hazardous materials</li>
+        <li>&lt;20 pallets (unless explicitly growth trajectory)</li>
+        <li>Lithium batteries (any quantity)</li>
+        <li>Chemical / COSHH controlled</li>
+        <li>Allergen-controlled environments required</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="ct">Paste WW Enquiry</div>
+  <textarea id="enquiryText" rows="8" placeholder="Paste the full WhichWarehouse enquiry here…
+
+Example:
+Company: Northern Gift Co Ltd
+Contact: Karen Walsh
+Email: k.walsh@northerngift.com
+Region: Leeds
+Pallets: 200
+Service: Ambient pallet storage
+Notes: Seasonal stock Sept–Dec, need access 5 days/week"></textarea>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="gold" onclick="triage()">▶ Run Triage</button>
+    <button onclick="clearAll()">Clear</button>
+    <button onclick="loadExample()">Load Example</button>
+  </div>
+</div>
+
+<!-- Detection results -->
+<div id="detectionBlock" style="display:none">
+  <div class="card">
+    <div class="ct">Auto-detected Fields</div>
+    <div class="detected-grid" id="detectedGrid"></div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict-block" id="verdictBlock">
+    <div class="verdict-big" id="verdictText">—</div>
+    <div id="verdictReason"></div>
+    <div class="flags" id="verdictFlags"></div>
+  </div>
+
+  <!-- Manual overrides -->
+  <div class="card">
+    <div class="ct">Manual Override</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="setVerdict('respond')" style="border-color:var(--green-text)">✓ RESPOND</button>
+      <button onclick="setVerdict('call_first')" style="border-color:var(--amber-text)">📞 CALL FIRST</button>
+      <button onclick="setVerdict('decline')" style="border-color:var(--red-text)">✕ DECLINE</button>
+    </div>
+    <div style="margin-top:10px">
+      <div class="label">Override reason / notes</div>
+      <input id="overrideNote" placeholder="Reason for manual override…" style="margin-top:4px">
+    </div>
+  </div>
+
+  <!-- Drafted response -->
+  <div class="card" id="responseCard" style="display:none">
+    <div class="ct">Drafted Response</div>
+    <div class="response-box" id="responseBox" contenteditable="true"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="gold" onclick="copyResponse()">📋 Copy</button>
+      <button onclick="markSent()">✓ Mark Sent</button>
+      <button onclick="saveToQueue()">💾 Save to DB Queue</button>
+    </div>
+  </div>
+
+  <!-- Audit -->
+  <div class="card">
+    <div class="ct">Save to Triage Queue</div>
+    <div class="two-col" style="margin-top:8px">
+      <div>
+        <div class="label">WW Reference</div>
+        <input id="wwRef" placeholder="WW-2026-XXXXX">
+      </div>
+      <div>
+        <div class="label">Prospect → CRM</div>
+        <select id="crmAction"><option value="">Don't add to CRM</option><option value="add">Add as new CRM prospect</option><option value="link">Link to existing prospect</option></select>
+      </div>
+    </div>
+    <button class="gold" style="margin-top:12px;width:100%" onclick="saveRecord()">💾 Save Triage Record</button>
+  </div>
+</div>
+
+<script>
+// ── Decline rules ──────────────────────────────────────────────────────────
+const DECLINE_GEO = /\b(SW\d|PL\d|EX\d|TQ\d|TR\d|BA\d|BS\d|CF\d|NP\d|SA\d|LL\d|SY\d|LD\d|BT\d|G[0-9 ]|EH\d|FK\d|KY\d|DD\d|AB\d|IV\d|PH\d|KA\d|ML\d|PA\d|wales|scotland|northern ireland|republic of ireland|ireland)\b/i;
+const GEO_NAMES = /\b(swansea|cardiff|bristol|bath|exeter|cornwall|devon|glasgow|edinburgh|aberdeen|dundee|inverness|belfast|dublin|wales|scotland)\b/i;
+
+const DECLINE_SERVICE = [
+  { rx:/fulfilment|fulfillment|pick.{0,5}pack|pick.{0,5}send|dispatch.{0,5}service|3pl.{0,10}dispatch/i, label:'Fulfilment / 3PL dispatch' },
+  { rx:/chilled|frozen|refrigerat|temperature.control|cold.chain|cold storage/i,                         label:'Chilled / frozen' },
+  { rx:/hazardous|hazmat/i,                                                                               label:'Hazardous materials' },
+  { rx:/lithium.{0,10}batter|li.ion|lipo/i,                                                              label:'Lithium batteries' },
+  { rx:/coshh|chemical.{0,10}storage|controlled.{0,10}substance/i,                                       label:'Chemical / COSHH' },
+  { rx:/allergen.control|nut.free.{0,10}storage|gluten.free.{0,10}warehouse/i,                           label:'Allergen-controlled' },
+];
+
+// ── Detect fields ──────────────────────────────────────────────────────────
+function detectFields(text){
+  const t = text;
+  const det = {};
+
+  // Company
+  const compMatch = t.match(/company\s*[:\-]\s*(.+)/i) || t.match(/(?:from|business|firm)\s*[:\-]\s*(.+)/i);
+  det.company = compMatch ? compMatch[1].trim() : null;
+
+  // Contact
+  const conMatch = t.match(/contact\s*[:\-]\s*(.+)/i) || t.match(/name\s*[:\-]\s*(.+)/i);
+  det.contact = conMatch ? conMatch[1].trim() : null;
+
+  // Email
+  const emailMatch = t.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
+  det.email = emailMatch ? emailMatch[1] : null;
+
+  // Postcode
+  const pcMatch = t.match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})\b/i);
+  det.postcode = pcMatch ? pcMatch[1].toUpperCase() : null;
+
+  // Region / location (broader)
+  const regMatch = t.match(/region\s*[:\-]\s*(.+)/i) || t.match(/location\s*[:\-]\s*(.+)/i) || t.match(/based.{0,10}in\s+([A-Za-z\s]+)/i);
+  det.region = regMatch ? regMatch[1].trim() : null;
+
+  // Pallet count
+  const palMatch = t.match(/(\d[\d,]*)\s*pallets?\b/i);
+  det.pallets = palMatch ? parseInt(palMatch[1].replace(/,/g,'')) : null;
+
+  // Service type
+  const svcMatch = t.match(/service\s*[:\-]\s*(.+)/i) || t.match(/(?:need|require|looking.for)\s*[:\-]?\s*(.+)/i);
+  det.service = svcMatch ? svcMatch[1].trim() : null;
+
+  return det;
+}
+
+// ── Triage logic ───────────────────────────────────────────────────────────
+let currentVerdict = null;
+let detected = {};
+
+function triage(){
+  const text = document.getElementById('enquiryText').value.trim();
+  if(!text){ alert('Paste an enquiry first'); return; }
+
+  detected = detectFields(text);
+  const flags = [];
+  const declineReasons = [];
+
+  // Geography check
+  const geoTarget = [text, detected.postcode||'', detected.region||''].join(' ');
+  if(DECLINE_GEO.test(geoTarget) || GEO_NAMES.test(geoTarget)){
+    declineReasons.push('Region outside service area (SW/Wales/Scotland/NI)');
+    flags.push({label:'Out-of-area', type:'red'});
+  }
+
+  // Service checks
+  DECLINE_SERVICE.forEach(rule => {
+    if(rule.rx.test(text)){
+      declineReasons.push(rule.label);
+      flags.push({label:rule.label, type:'red'});
+    }
+  });
+
+  // Volume check
+  if(detected.pallets !== null && detected.pallets < 20){
+    declineReasons.push(`Low volume: ${detected.pallets} pallets (<20 minimum)`);
+    flags.push({label:`Only ${detected.pallets} pallets`, type:'amber'});
+  }
+
+  // Positive signals
+  if(detected.pallets && detected.pallets >= 20) flags.push({label:`${detected.pallets} pallets`, type:'green'});
+  if(detected.email)    flags.push({label:'Email detected', type:'green'});
+  if(detected.company)  flags.push({label:'Company named', type:'green'});
+
+  // Determine verdict
+  let verdict;
+  if(declineReasons.length > 0){
+    verdict = 'decline';
+  } else if(!detected.pallets || !detected.email || !detected.company){
+    verdict = 'call_first';  // missing info → call to qualify
+  } else {
+    verdict = 'respond';
+  }
+
+  currentVerdict = verdict;
+
+  // Render detected fields
+  const fields = [
+    {key:'company', label:'Company'},
+    {key:'contact', label:'Contact'},
+    {key:'email',   label:'Email'},
+    {key:'postcode',label:'Postcode'},
+    {key:'region',  label:'Region'},
+    {key:'pallets', label:'Pallets'},
+    {key:'service', label:'Service'},
+  ];
+  document.getElementById('detectedGrid').innerHTML = fields.map(f =>
+    `<div class="det-item ${detected[f.key]?'hit':'miss'}">
+      <div class="label">${f.label}</div>
+      <div>${detected[f.key] !== null ? String(detected[f.key]) : '<span style="color:var(--muted)">not found</span>'}</div>
+    </div>`
+  ).join('');
+
+  renderVerdict(verdict, declineReasons, flags);
+  renderResponse(verdict, declineReasons);
+
+  document.getElementById('detectionBlock').style.display='block';
+}
+
+function renderVerdict(v, reasons, flags){
+  const vb = document.getElementById('verdictBlock');
+  vb.className = 'verdict-block verdict-'+({respond:'respond',call_first:'call',decline:'decline'}[v]);
+  document.getElementById('verdictText').textContent = {respond:'✓ RESPOND',call_first:'📞 CALL FIRST',decline:'✕ DECLINE'}[v];
+  document.getElementById('verdictReason').innerHTML = reasons.length
+    ? reasons.map(r=>`<div style="font-size:13px;margin-top:4px">— ${r}</div>`).join('')
+    : (v==='call_first' ? '<div style="font-size:13px;margin-top:4px">— Missing qualifying info (pallets/email/company)</div>' : '');
+  document.getElementById('verdictFlags').innerHTML = flags.map(f=>
+    `<span class="flag flag-${f.type}">${f.label}</span>`).join('');
+}
+
+function setVerdict(v){
+  currentVerdict = v;
+  renderVerdict(v,[],[]);
+  renderResponse(v,[]);
+}
+
+function renderResponse(verdict, declineReasons){
+  const co = detected.company || '[Company]';
+  const cont = detected.contact ? `, ${detected.contact.split(' ')[0]}` : '';
+  let body = '';
+
+  if(verdict === 'respond'){
+    const pallets = detected.pallets || '[X]';
+    body = `Hi${cont},
+
+Thank you for your enquiry via WhichWarehouse.
+
+We'd be happy to help — we have capacity for ${pallets} pallets of ambient storage at our Hellaby, Rotherham facility (S66 8HR), just off the M18/M1.
+
+Our current rate is £3.95/pallet/week for up to 100 pallets, with a first week free when you commit to 12 weeks. Pallet movements are charged at £3.50 each (in or out).
+
+Could you confirm:
+- Approximate start date
+- Any specific access requirements (days/times)
+- Whether this is ambient goods only
+
+Happy to arrange a call or site visit at your convenience.
+
+Kind regards,
+Ben Greenwood
+Pallet Northern Storage Midlands
+S66 8HR | M18 J1 / M1 J32`;
+
+  } else if(verdict === 'call_first'){
+    body = `[CALL FIRST — missing: ${
+      [!detected.email?'email':null, !detected.pallets?'pallet count':null, !detected.company?'company name':null].filter(Boolean).join(', ')
+    }]
+
+After call, draft response based on what's confirmed.`;
+
+  } else {
+    const reason = declineReasons[0] || 'outside our service parameters';
+    body = `Hi${cont},
+
+Thank you for reaching out about storage for ${co}.
+
+Unfortunately, we're unable to assist on this occasion — our facility specialises in ${reason.toLowerCase().includes('area') ? 'the Yorkshire and East Midlands region' : 'ambient pallet storage'} and ${reason.toLowerCase()}.
+
+We wish you well in finding a suitable solution.
+
+Kind regards,
+Ben Greenwood
+Pallet Northern Storage Midlands`;
+  }
+
+  document.getElementById('responseBox').textContent = body;
+  document.getElementById('responseCard').style.display = 'block';
+}
+
+function copyResponse(){
+  const text = document.getElementById('responseBox').textContent;
+  navigator.clipboard.writeText(text).then(()=>alert('Copied to clipboard'));
+}
+function markSent(){
+  alert('In production: sets triage_enquiries.response_sent=true and logs to triage_audit_log');
+}
+function saveToQueue(){
+  alert('In production: POST to /api/triage with verdict + detected fields + response → inserts into triage_enquiries');
+}
+function saveRecord(){
+  const payload = {
+    ww_reference: document.getElementById('wwRef').value,
+    company_name: detected.company,
+    raw_text: document.getElementById('enquiryText').value,
+    pallets: detected.pallets,
+    region: detected.region,
+    verdict: currentVerdict,
+    response_drafted: document.getElementById('responseBox').textContent,
+    crm_action: document.getElementById('crmAction').value,
+  };
+  console.log('[TRIAGE SAVE]', payload);
+  alert('Saved (console only in ref spec). Production: inserts to triage_enquiries table.');
+}
+function clearAll(){
+  document.getElementById('enquiryText').value='';
+  document.getElementById('detectionBlock').style.display='none';
+  currentVerdict=null; detected={};
+}
+function loadExample(){
+  document.getElementById('enquiryText').value = `Company: Northern Gift Co Ltd
+Contact: Karen Walsh
+Email: k.walsh@northerngift.com
+Phone: 01132 000003
+Region: Leeds
+Postcode: LS1 4PA
+Pallets: 200
+Service: Ambient pallet storage
+Notes: Seasonal Christmas stock, need storage from Sept to Dec, access 5 days/week, no temperature requirements.`;
+}
+</script>
+</body>
+</html>
