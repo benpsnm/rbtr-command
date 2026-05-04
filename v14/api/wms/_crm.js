@@ -1,24 +1,26 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WMS CRM · Sales pipeline for PSNM pallet storage prospects
+// WMS CRM module · Sales pipeline for PSNM pallet storage prospects
 //
-// GET  /api/wms/crm?action=list              — list active (or deleted) prospects
-// GET  /api/wms/crm?action=get&id=UUID       — single prospect + interactions
-// GET  /api/wms/crm?action=stats             — counts per status
-// GET  /api/wms/crm?action=interactions&id=UUID — interaction log for prospect
+// Mounted at /api/wms?module=crm via the api/wms.js dispatcher.
 //
-// POST /api/wms/crm  { action: 'create',          ...fields }
-// POST /api/wms/crm  { action: 'update',    id,   ...fields }
-// POST /api/wms/crm  { action: 'delete',    id           }   — soft delete
-// POST /api/wms/crm  { action: 'restore',   id           }   — undo soft delete
-// POST /api/wms/crm  { action: 'purge',     id, confirmation_token } — hard GDPR erase
-// POST /api/wms/crm  { action: 'seed'              }   — insert Top 20 (idempotent)
-// POST /api/wms/crm  { action: 'log_interaction',  prospect_id, type, summary, occurred_at? }
+// GET  ?module=crm&action=list              — list active (or deleted) prospects
+// GET  ?module=crm&action=get&id=UUID       — single prospect + interactions
+// GET  ?module=crm&action=stats             — counts per status
+// GET  ?module=crm&action=interactions&prospect_id=UUID
+//
+// POST ?module=crm  { action: 'create',          ...fields }
+// POST ?module=crm  { action: 'update',    id,   ...fields }
+// POST ?module=crm  { action: 'delete',    id           }   — soft delete
+// POST ?module=crm  { action: 'restore',   id           }   — undo soft delete
+// POST ?module=crm  { action: 'purge',     id, confirmation_token } — GDPR hard erase
+// POST ?module=crm  { action: 'seed'              }   — insert Top 20 (idempotent)
+// POST ?module=crm  { action: 'log_interaction',  prospect_id, type, summary, occurred_at? }
 //
 // Auth: x-rbtr-auth header OR same-origin browser call.
-// Validation: manual, no schema library (per codebase convention).
-// Soft delete: sets deleted_at timestamp. Hard purge via /purge only.
+// Validation: manual, no schema library.
+// Soft delete: sets deleted_at timestamp. Hard purge via 'purge' action only.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -153,7 +155,6 @@ async function actionStats() {
 async function actionList(query) {
   const showDeleted = query.show_deleted === 'true';
   const deletedFilter = showDeleted ? 'deleted_at=not.is.null' : 'deleted_at=is.null';
-  // Embed interaction IDs for count — PostgREST resolves via FK prospect_id → crm_prospects.id
   const rows = await sbQ('crm_prospects',
     `select=*,crm_interactions(id)&${deletedFilter}&order=created_at.desc`
   );
@@ -175,9 +176,9 @@ async function actionGet(query) {
 }
 
 async function actionInteractions(query) {
-  if (!query.id) throw new Error('id required');
+  if (!query.prospect_id) throw new Error('prospect_id required');
   const rows = await sbQ('crm_interactions',
-    `prospect_id=eq.${query.id}&order=occurred_at.desc&limit=50`
+    `prospect_id=eq.${query.prospect_id}&order=occurred_at.desc&limit=50`
   );
   return { interactions: rows };
 }
@@ -209,7 +210,6 @@ async function actionDelete(body) {
 
 async function actionRestore(body) {
   if (!body.id) throw new Error('id required');
-  // PostgREST needs explicit null — send as JSON null
   await sbPatch('crm_prospects', { id: body.id }, {
     deleted_at: null,
     updated_at: new Date().toISOString(),
@@ -223,14 +223,12 @@ async function actionPurge(body) {
   if (body.confirmation_token !== PURGE_TOKEN) {
     throw new Error(`confirmation_token must be exactly '${PURGE_TOKEN}'`);
   }
-  // Interactions cascade via FK ON DELETE CASCADE — explicit delete for belt-and-braces
   await sbDelete('crm_interactions', { prospect_id: body.id });
   await sbDelete('crm_prospects',    { id: body.id });
   return { ok: true, purged: body.id };
 }
 
 async function actionSeed() {
-  // Idempotent: skip companies already present (active only)
   const existing = await sbQ('crm_prospects', 'select=company&deleted_at=is.null');
   const existingNames = new Set(existing.map(r => r.company.toLowerCase()));
 
@@ -277,19 +275,13 @@ async function actionLogInteraction(body) {
   };
 
   const result = await sbInsert('crm_interactions', row);
-  // Bump prospect updated_at so list ordering reflects recent activity
   await sbPatch('crm_prospects', { id: body.prospect_id }, { updated_at: now });
 
   return { interaction: Array.isArray(result) ? result[0] : result };
 }
 
-// ── Main handler ───────────────────────────────────────────────────────────
-module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-rbtr-auth');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
-
+// ── Handler (called by api/wms.js dispatcher) ──────────────────────────────
+module.exports = async function crmHandler(req, res) {
   if (!checkAuth(req)) {
     res.status(401).json({ error: 'x-rbtr-auth header missing or invalid' }); return;
   }

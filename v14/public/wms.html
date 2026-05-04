@@ -4116,7 +4116,7 @@ Pallet Storage Near Me
       <div><div class="fl">Company *</div><input class="inp" id="crm-mo-company" placeholder="Acme Ltd" style="margin-top:3px"></div>
       <div><div class="fl">Postcode</div><input class="inp" id="crm-mo-postcode" placeholder="S66 8HR" style="margin-top:3px;text-transform:uppercase"></div>
       <div><div class="fl">Contact</div><input class="inp" id="crm-mo-contact" placeholder="Jane Smith" style="margin-top:3px"></div>
-      <div><div class="fl">Title / Role</div><input class="inp" id="crm-mo-title" placeholder="Logistics Manager" style="margin-top:3px"></div>
+      <div><div class="fl">Title / Role</div><input class="inp" id="crm-mo-role" placeholder="Logistics Manager" style="margin-top:3px"></div>
       <div><div class="fl">Phone</div><input class="inp" id="crm-mo-phone" placeholder="01709 000000" style="margin-top:3px"></div>
       <div><div class="fl">Email</div><input class="inp" id="crm-mo-email" placeholder="jane@acme.co.uk" style="margin-top:3px"></div>
       <div><div class="fl">Pallet volume (est.)</div><input class="inp" id="crm-mo-pallets" type="number" min="0" placeholder="50" style="margin-top:3px"></div>
@@ -5454,7 +5454,8 @@ let _crmShowDeleted = false;
 let _crmEditId = null;
 let _crmIntProspectId = null;
 
-function crmToday() { return new Date().toISOString().slice(0,10); }
+const CRM = '/api/wms?module=crm';
+
 function crmAddDays(n) { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function crmEsc(s) {
   if(s==null) return '';
@@ -5467,13 +5468,13 @@ async function crmLoad() {
   document.getElementById('crm-empty').style.display='none';
   document.getElementById('crm-tbody').innerHTML='';
   try {
-    const showDel = _crmShowDeleted ? '&show_deleted=1' : '';
+    const showDel = _crmShowDeleted ? '&show_deleted=true' : '';
     const [sr, lr] = await Promise.all([
-      fetch('/api/wms/crm?action=stats'),
-      fetch('/api/wms/crm?action=list'+showDel),
+      fetch(`${CRM}&action=stats`),
+      fetch(`${CRM}&action=list${showDel}`),
     ]);
     const [sd, ld] = await Promise.all([sr.json(), lr.json()]);
-    if (sd.ok) crmRenderStats(sd.stats);
+    if (sd.ok) crmRenderStats(sd);
     if (ld.ok) {
       _crmData = ld.prospects;
       crmFilter();
@@ -5482,18 +5483,17 @@ async function crmLoad() {
   document.getElementById('crm-loading').style.display='none';
 }
 
-function crmRenderStats(stats) {
-  const order = ['lead','contacted','quoted','won','lost','dormant'];
-  const labels = {lead:'Lead',contacted:'Contacted',quoted:'Quoted',won:'Won',lost:'Lost',dormant:'Dormant'};
-  const colours = {lead:'bbl',contacted:'bgy',quoted:'brd',won:'bg2',lost:'bgr',dormant:'bgy'};
+function crmRenderStats(sd) {
+  const order = ['new','contacted','replied','quoted','followup','won','lost'];
+  const labels = {new:'New',contacted:'Contacted',replied:'Replied',quoted:'Quoted',followup:'Follow-up',won:'Won',lost:'Lost'};
+  const colours = {new:'bbl',contacted:'bgy',replied:'brd',quoted:'brd',followup:'bgy',won:'bg2',lost:'bgr'};
   const box = document.getElementById('crm-stats');
   box.innerHTML = order.map(s => `
     <div class="kpi">
-      <span class="kn">${stats[s]||0}</span>
+      <span class="kn">${sd[s]||0}</span>
       <span class="kl"><span class="bdg ${colours[s]}">${labels[s]}</span></span>
     </div>`).join('') +
-    `<div class="kpi"><span class="kn">${stats.total||0}</span><span class="kl">Total</span></div>` +
-    `<div class="kpi"><span class="kn">${stats.deleted||0}</span><span class="kl">Archived</span></div>`;
+    `<div class="kpi"><span class="kn">${sd.total||0}</span><span class="kl">Total</span></div>`;
 }
 
 function crmFilter() {
@@ -5501,12 +5501,12 @@ function crmFilter() {
   const sf = document.getElementById('crm-sf').value;
   const pf = document.getElementById('crm-pf').value;
   const srcf = document.getElementById('crm-srcf').value;
-  let rows = _crmData.filter(p => {
+  const rows = _crmData.filter(p => {
     if(sf && p.status !== sf) return false;
     if(pf && p.priority !== pf) return false;
     if(srcf && p.source !== srcf) return false;
     if(q) {
-      const hay = [p.company_name,p.contact_name,p.email,p.postcode].join(' ').toLowerCase();
+      const hay = [p.company,p.contact,p.email,p.postcode].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -5522,27 +5522,27 @@ function crmFilter() {
 }
 
 function crmRow(p) {
-  const statusColour = {lead:'bbl',contacted:'bgy',quoted:'brd',won:'bg2',lost:'bgr',dormant:'bgy'};
-  const priorityColour = {high:'bgr',medium:'brd',low:'bgy'};
+  const statusColour = {new:'bbl',contacted:'bgy',replied:'brd',quoted:'brd',followup:'bgy',won:'bg2',lost:'bgr'};
+  const priorityColour = {hot:'bgr',warm:'brd',cold:'bgy'};
   const sc = statusColour[p.status]||'bgy';
   const pc = priorityColour[p.priority]||'bgy';
   let dueCell = '—';
-  if(p.next_action_due) {
-    const due = new Date(p.next_action_due);
+  if(p.next_action_date) {
+    const due = new Date(p.next_action_date);
     const today = new Date(); today.setHours(0,0,0,0);
     const diff = Math.ceil((due-today)/(1000*60*60*24));
     const cls = diff < 0 ? 'style="color:var(--red)"' : diff <= 3 ? 'style="color:var(--gold)"' : '';
-    dueCell = `<span ${cls}>${p.next_action_due}</span>`;
+    dueCell = `<span ${cls}>${p.next_action_date}</span>`;
   }
-  const archived = p.deleted_at ? true : false;
+  const archived = !!p.deleted_at;
   const actionBtns = archived
     ? `<button class="btn bout" onclick="crmRestore('${p.id}')">Restore</button>`
     : `<button class="btn bghost" onclick="crmOpenEdit('${p.id}')">Edit</button>
        <button class="btn bghost" onclick="crmOpenInteraction('${p.id}')">Log</button>
        <button class="btn bred" onclick="crmDelete('${p.id}')">Del</button>`;
   return `<tr${archived?' style="opacity:0.5"':''}>
-    <td>${crmEsc(p.company_name)}</td>
-    <td>${crmEsc(p.contact_name||'')}</td>
+    <td>${crmEsc(p.company)}</td>
+    <td>${crmEsc(p.contact||'')}</td>
     <td><span class="bdg ${sc}">${p.status}</span></td>
     <td><span class="bdg ${pc}">${p.priority}</span></td>
     <td>${crmEsc(p.source||'')}</td>
@@ -5561,15 +5561,20 @@ function crmToggleDeleted() {
   crmLoad();
 }
 
+function crmClearForm() {
+  ['crm-mo-company','crm-mo-postcode','crm-mo-contact','crm-mo-role',
+   'crm-mo-phone','crm-mo-email','crm-mo-pallets','crm-mo-action','crm-mo-due','crm-mo-notes']
+    .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('crm-mo-status').value   = 'new';
+  document.getElementById('crm-mo-priority').value = 'warm';
+  document.getElementById('crm-mo-source').value   = 'cold';
+}
+
 function crmOpenAdd() {
   _crmEditId = null;
-  document.getElementById('crm-mo-title').textContent = 'Add Prospect';
-  const form = document.getElementById('crm-prospect-form');
-  form.reset();
-  document.getElementById('crm-f-status').value = 'lead';
-  document.getElementById('crm-f-priority').value = 'medium';
-  document.getElementById('crm-f-source').value = 'cold_outreach';
-  document.getElementById('crm-f-due').value = crmAddDays(7);
+  document.getElementById('crm-mo-title').textContent = 'ADD PROSPECT';
+  crmClearForm();
+  document.getElementById('crm-mo-due').value = crmAddDays(7);
   document.getElementById('crm-prospect-mo').style.display='flex';
 }
 
@@ -5577,45 +5582,47 @@ function crmOpenEdit(id) {
   const p = _crmData.find(x=>x.id===id);
   if(!p) return;
   _crmEditId = id;
-  document.getElementById('crm-mo-title').textContent = 'Edit Prospect';
-  document.getElementById('crm-f-company').value = p.company_name||'';
-  document.getElementById('crm-f-postcode').value = p.postcode||'';
-  document.getElementById('crm-f-contact').value = p.contact_name||'';
-  document.getElementById('crm-f-title').value = p.contact_title||'';
-  document.getElementById('crm-f-phone').value = p.phone||'';
-  document.getElementById('crm-f-email').value = p.email||'';
-  document.getElementById('crm-f-pallets').value = p.estimated_pallets||'';
-  document.getElementById('crm-f-source').value = p.source||'cold_outreach';
-  document.getElementById('crm-f-priority').value = p.priority||'medium';
-  document.getElementById('crm-f-status').value = p.status||'lead';
-  document.getElementById('crm-f-next-action').value = p.next_action||'';
-  document.getElementById('crm-f-due').value = p.next_action_due||'';
-  document.getElementById('crm-f-notes').value = p.notes||'';
+  document.getElementById('crm-mo-title').textContent = 'EDIT PROSPECT';
+  document.getElementById('crm-mo-company').value  = p.company||'';
+  document.getElementById('crm-mo-postcode').value = p.postcode||'';
+  document.getElementById('crm-mo-contact').value  = p.contact||'';
+  const roleEl = document.getElementById('crm-mo-role');
+  if(roleEl) roleEl.value = p.title||'';
+  document.getElementById('crm-mo-phone').value    = p.phone||'';
+  document.getElementById('crm-mo-email').value    = p.email||'';
+  document.getElementById('crm-mo-pallets').value  = p.pallet_volume||'';
+  document.getElementById('crm-mo-source').value   = p.source||'cold';
+  document.getElementById('crm-mo-priority').value = p.priority||'warm';
+  document.getElementById('crm-mo-status').value   = p.status||'new';
+  document.getElementById('crm-mo-action').value   = p.next_action||'';
+  document.getElementById('crm-mo-due').value      = p.next_action_date||'';
+  document.getElementById('crm-mo-notes').value    = p.notes||'';
   document.getElementById('crm-prospect-mo').style.display='flex';
 }
 
 async function crmSave() {
-  const company = document.getElementById('crm-f-company').value.trim();
+  const company = document.getElementById('crm-mo-company').value.trim();
   if(!company) { toast('Company name is required', true); return; }
+  const roleEl = document.getElementById('crm-mo-role');
   const payload = {
-    action: _crmEditId ? 'update' : 'create',
-    company_name: company,
-    postcode: document.getElementById('crm-f-postcode').value.trim()||null,
-    contact_name: document.getElementById('crm-f-contact').value.trim()||null,
-    contact_title: document.getElementById('crm-f-title').value.trim()||null,
-    phone: document.getElementById('crm-f-phone').value.trim()||null,
-    email: document.getElementById('crm-f-email').value.trim()||null,
-    estimated_pallets: parseInt(document.getElementById('crm-f-pallets').value)||null,
-    source: document.getElementById('crm-f-source').value,
-    priority: document.getElementById('crm-f-priority').value,
-    status: document.getElementById('crm-f-status').value,
-    next_action: document.getElementById('crm-f-next-action').value.trim()||null,
-    next_action_due: document.getElementById('crm-f-due').value||null,
-    notes: document.getElementById('crm-f-notes').value.trim()||null,
+    action:           _crmEditId ? 'update' : 'create',
+    company:          company,
+    postcode:         document.getElementById('crm-mo-postcode').value.trim()||null,
+    contact:          document.getElementById('crm-mo-contact').value.trim()||null,
+    title:            roleEl ? roleEl.value.trim()||null : null,
+    phone:            document.getElementById('crm-mo-phone').value.trim()||null,
+    email:            document.getElementById('crm-mo-email').value.trim()||null,
+    pallet_volume:    parseInt(document.getElementById('crm-mo-pallets').value)||null,
+    source:           document.getElementById('crm-mo-source').value,
+    priority:         document.getElementById('crm-mo-priority').value,
+    status:           document.getElementById('crm-mo-status').value,
+    next_action:      document.getElementById('crm-mo-action').value.trim()||null,
+    next_action_date: document.getElementById('crm-mo-due').value||null,
+    notes:            document.getElementById('crm-mo-notes').value.trim()||null,
   };
   if(_crmEditId) payload.id = _crmEditId;
   try {
-    const r = await fetch('/api/wms/crm', {
+    const r = await fetch(CRM, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload),
     });
@@ -5631,7 +5638,7 @@ async function crmSave() {
 async function crmDelete(id) {
   if(!confirm('Archive this prospect?')) return;
   try {
-    const r = await fetch('/api/wms/crm', {
+    const r = await fetch(CRM, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'delete', id}),
     });
@@ -5643,7 +5650,7 @@ async function crmDelete(id) {
 
 async function crmRestore(id) {
   try {
-    const r = await fetch('/api/wms/crm', {
+    const r = await fetch(CRM, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'restore', id}),
     });
@@ -5656,43 +5663,39 @@ async function crmRestore(id) {
 async function crmSeed() {
   const btn = document.getElementById('crm-seed-btn');
   btn.disabled = true;
-  btn.textContent = 'Seeding…';
   try {
-    const r = await fetch('/api/wms/crm', {
+    const r = await fetch(CRM, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'seed'}),
     });
     const d = await r.json();
     if(d.ok) {
-      toast(`Seed done — ${d.inserted} inserted, ${d.skipped} skipped`);
+      toast(`Seed done — ${d.seeded} inserted, ${d.skipped} skipped`);
       crmLoad();
     } else toast('Seed error: '+(d.error||'unknown'), true);
   } catch(e) { toast('Seed failed: '+e.message, true); }
   btn.disabled = false;
-  btn.textContent = 'Seed Top 20';
 }
 
 async function crmOpenInteraction(prospectId) {
   _crmIntProspectId = prospectId;
   const p = _crmData.find(x=>x.id===prospectId);
-  document.getElementById('crm-int-mo-title').textContent =
-    'Log Interaction — '+(p ? crmEsc(p.company_name) : '');
+  const heading = document.getElementById('crm-int-co');
+  if(heading) heading.textContent = 'LOG INTERACTION' + (p ? ' — '+p.company : '');
   document.getElementById('crm-int-type').value = 'call';
-  document.getElementById('crm-int-datetime').value =
-    new Date().toISOString().slice(0,16);
+  document.getElementById('crm-int-at').value   = new Date().toISOString().slice(0,16);
   document.getElementById('crm-int-summary').value = '';
-  // Load history
   const hist = document.getElementById('crm-int-history');
   hist.innerHTML = '<em style="color:var(--muted)">Loading…</em>';
   document.getElementById('crm-int-mo').style.display='flex';
   try {
-    const r = await fetch(`/api/wms/crm?action=interactions&prospect_id=${prospectId}`);
+    const r = await fetch(`${CRM}&action=interactions&prospect_id=${prospectId}`);
     const d = await r.json();
     if(d.ok && d.interactions.length) {
       hist.innerHTML = d.interactions.map(i => `
         <div style="padding:6px 0;border-bottom:1px solid var(--border)">
-          <span class="bdg bgy">${crmEsc(i.interaction_type)}</span>
-          <span style="color:var(--muted);font-size:0.8em;margin-left:6px">${(i.interaction_at||'').slice(0,16)}</span>
+          <span class="bdg bgy">${crmEsc(i.type)}</span>
+          <span style="color:var(--muted);font-size:0.8em;margin-left:6px">${(i.occurred_at||'').slice(0,16)}</span>
           <div style="margin-top:4px">${crmEsc(i.summary)}</div>
         </div>`).join('');
     } else {
@@ -5705,14 +5708,14 @@ async function crmSaveInteraction() {
   const summary = document.getElementById('crm-int-summary').value.trim();
   if(!summary) { toast('Summary is required', true); return; }
   const payload = {
-    action: 'log_interaction',
+    action:      'log_interaction',
     prospect_id: _crmIntProspectId,
-    interaction_type: document.getElementById('crm-int-type').value,
-    interaction_at: document.getElementById('crm-int-datetime').value||new Date().toISOString(),
+    type:        document.getElementById('crm-int-type').value,
+    occurred_at: document.getElementById('crm-int-at').value||new Date().toISOString(),
     summary,
   };
   try {
-    const r = await fetch('/api/wms/crm', {
+    const r = await fetch(CRM, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload),
     });
