@@ -82,6 +82,12 @@ async function sbUpdate(table, match, row) {
 function buildV22Section(angleBrief, enrichmentHighlights, touchNumber, critique) {
   const lines = [];
   lines.push(`\n---\n\n## v2.2 INTELLIGENCE-LED DRAFT — MANDATORY REQUIREMENTS\n`);
+
+  lines.push(`### ABSOLUTE RULE — NO INTERNAL SCAFFOLDING IN CUSTOMER COPY
+NEVER include internal system labels in any customer-facing output (subject line, email body, signature). Banned terms include: "Touch 1", "Touch 2", "Touch 3", "Touch 4", "Touch 5", "lead_id", "draft_id", "angle_id", "enrichment_id", "pending_approval", "pending_critic", "needs_revision", "human_review_required", "v2.1", "v2.2", "Atlas" (when referring to the system), "claim_verifier", "Reasoner", "Drafter", "Critic", and any other system field name.
+
+The touch_number value below is provided for TONAL CALIBRATION ONLY. Use it to decide register — but NEVER reference the number or the word "Touch" followed by a digit in the output. To convey prior contact, use natural language only: "following up on my earlier note", "reaching back out", "third time I've written about this — I'll keep it short." Never "Touch 3", never "this is my third touch".\n`);
+
   lines.push(`This is a v2.2 intelligence-led draft. The Reasoner layer has identified the following angle. You MUST use it.\n`);
   lines.push(`### ANGLE BRIEF (from Reasoner — use this as your foundation)`);
   lines.push(`Primary pain point: ${angleBrief.primary_pain_point}`);
@@ -97,7 +103,7 @@ function buildV22Section(angleBrief, enrichmentHighlights, touchNumber, critique
   lines.push(`3. Calibrate tone to the prospect_role_lens above.`);
   lines.push(`4. Include ONE drive-time fact from the verified table (required by validator). Choose the destination most relevant to this prospect's likely distribution routes.`);
   lines.push(`5. Length: 100–140 words (body only, not counting sign-off). Tight. Every sentence earns its place.`);
-  lines.push(`6. Touch number for this email: ${touchNumber}. Tone must match — Touch 1 = polite cold opener. Touch 2-3 = warmer reference to prior contact.`);
+  lines.push(`6. Tone calibration (DO NOT write this number or "Touch X" in the email): touch ${touchNumber} of 5. Rules — Touch 1: polite cold opener, no prior-contact reference. Touch 2–3: warmer, reference prior contact in natural language only ("following up", "third note from me") — never write "Touch 2" or "Touch 3". Touch 4–5: direct, low-volume persistence; consider a plain "is this a no?" close.`);
   lines.push(`7. All v2.1 prohibitions in the rules section below apply without exception.`);
   lines.push(`8. NO speculative claims about the prospect — no guessing their pallet count, staff count, revenue, current setup quality, or operations you haven't seen.`);
 

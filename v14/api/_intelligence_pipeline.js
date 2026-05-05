@@ -60,6 +60,19 @@ async function sbUpdate(table, match, row) {
   } catch (e) { return { error: e.message }; }
 }
 
+async function sbInsert(table, rows) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: sbHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify(rows),
+    });
+    if (!r.ok) return { error: await r.text() };
+    return r.json();
+  } catch (e) { return { error: e.message }; }
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 
 async function runPipeline(leadIdOrCompany, opts = {}) {
@@ -240,6 +253,145 @@ async function runPipeline(leadIdOrCompany, opts = {}) {
   return result;
 }
 
+// ── Run from approved angle (human override) ──────────────────────────────────
+// Skips Enricher + Reasoner. Fetches angle + enrichment from DB by angle_id,
+// then runs Layer 3 (Drafter) + Layer 4 (Critic) only.
+// Used when a human approves an angle_brief despite confidence < 60.
+
+async function runFromAngle(angleId) {
+  const result = {
+    angle_id: angleId,
+    started_at: new Date().toISOString(),
+    layers: {},
+    final_status: null,
+    draft_id: null,
+    error: null,
+  };
+
+  // Fetch angle record
+  const angles = await sbGet('psnm_lead_angles', `id=eq.${angleId}&select=*`);
+  if (!Array.isArray(angles) || !angles[0]) {
+    result.final_status = 'error';
+    result.error = 'angle_not_found';
+    return result;
+  }
+  const angle = angles[0];
+
+  // Fetch enrichment record
+  const enrichments = await sbGet('psnm_lead_enrichment', `id=eq.${angle.enrichment_id}&select=*`);
+  if (!Array.isArray(enrichments) || !enrichments[0]) {
+    result.final_status = 'error';
+    result.error = 'enrichment_not_found';
+    return result;
+  }
+  const enrichmentData = enrichments[0].enrichment_data;
+  const enrichmentId   = enrichments[0].id;
+  const leadId         = angle.lead_id;
+  const angleBrief     = angle.angle_brief;
+
+  result.layers.enricher = {
+    ok: true, from_cache: true,
+    quality_score: enrichments[0].quality_score,
+    lead_id: leadId, enrichment_id: enrichmentId,
+    summary: buildEnrichmentSummary(enrichmentData),
+  };
+  result.layers.reasoner = {
+    ok: true,
+    confidence: angle.confidence,
+    confidence_flag: 'human_review_required',
+    angle_id: angleId,
+    angle_brief: angleBrief,
+    human_override: true,
+  };
+
+  // Layers 3 + 4: Drafter → Critic loop (max 3 attempts)
+  let draftResult = null;
+  let criticResult = null;
+  let critique = null;
+  const criticLog = [];
+
+  for (let attempt = 1; attempt <= MAX_CRITIC_ATTEMPTS; attempt++) {
+    const t3 = Date.now();
+    draftResult = await draftV22(leadId, enrichmentData, angleBrief, angleId, enrichmentId, attempt, critique);
+    result.layers[`drafter_attempt_${attempt}`] = {
+      ok: draftResult.ok,
+      draft_id: draftResult.draft_id,
+      claim_verdict: draftResult.claim_verdict,
+      validator_pass: draftResult.validator?.pass,
+      validator_issue_count: draftResult.validator?.issues?.length || 0,
+      ms: Date.now() - t3,
+    };
+
+    if (!draftResult.ok) {
+      result.final_status = 'drafter_error';
+      result.error = draftResult.error;
+      return result;
+    }
+
+    result.draft_id = draftResult.draft_id;
+
+    const t4 = Date.now();
+    criticResult = await criticDraft(
+      draftResult.subject, draftResult.body,
+      enrichmentData, angleBrief, draftResult.touch_number,
+      { verdict: draftResult.claim_verdict, claims: draftResult.claims },
+    );
+    result.layers[`critic_attempt_${attempt}`] = {
+      ok: criticResult.ok,
+      verdict: criticResult.verdict,
+      failed_checks: criticResult.failed_checks,
+      ms: Date.now() - t4,
+    };
+
+    if (!criticResult.ok) {
+      result.final_status = 'critic_error';
+      result.error = criticResult.error;
+      return result;
+    }
+
+    const logEntry = {
+      attempt, verdict: criticResult.verdict,
+      failed_checks: criticResult.failed_checks || [],
+      suggested_rewrite_prompt: criticResult.suggested_rewrite_prompt,
+      ts: new Date().toISOString(),
+    };
+    criticLog.push(logEntry);
+
+    if (draftResult.draft_id) {
+      await sbUpdate('psnm_atlas_drafts', { id: draftResult.draft_id }, {
+        critic_iterations: attempt, critic_log: criticLog,
+      });
+    }
+
+    if (criticResult.verdict === 'pass') {
+      if (draftResult.draft_id) {
+        await sbUpdate('psnm_atlas_drafts', { id: draftResult.draft_id }, { status: 'pending_approval' });
+      }
+      result.final_status = 'pending_approval';
+      result.layers.critic_final = { verdict: 'pass', attempts: attempt, checks: criticResult.checks };
+      break;
+    }
+
+    critique = buildCritique(criticResult);
+
+    if (attempt === MAX_CRITIC_ATTEMPTS) {
+      if (draftResult.draft_id) {
+        await sbUpdate('psnm_atlas_drafts', { id: draftResult.draft_id }, { status: 'needs_revision' });
+      }
+      result.final_status = 'human_review_required';
+      result.layers.critic_final = {
+        verdict: 'fail_max_attempts', attempts: MAX_CRITIC_ATTEMPTS,
+        failed_checks: criticResult.failed_checks,
+        last_critique: criticResult.suggested_rewrite_prompt,
+      };
+    }
+  }
+
+  result.completed_at = new Date().toISOString();
+  result.total_ms = Date.now() - new Date(result.started_at).getTime();
+  return result;
+}
+
 function buildCritique(criticResult) {
   const lines = [];
   lines.push(`CRITIC VERDICT: FAIL`);
@@ -349,4 +501,102 @@ async function applyTouchCountFix(audit) {
   };
 }
 
-module.exports = { runPipeline, auditTouchCounts, applyTouchCountFix };
+async function rewriteAndCritique(sourceDraftId, newBody) {
+  const result = { source_draft_id: sourceDraftId, started_at: new Date().toISOString() };
+
+  const drafts = await sbGet('psnm_atlas_drafts', `id=eq.${sourceDraftId}&select=*`);
+  if (!Array.isArray(drafts) || !drafts[0]) { result.error = 'source_draft_not_found'; return result; }
+  const src = drafts[0];
+
+  const enrichments = src.enrichment_id
+    ? await sbGet('psnm_lead_enrichment', `id=eq.${src.enrichment_id}&select=enrichment_data`)
+    : null;
+  const enrichmentData = enrichments?.[0]?.enrichment_data || {};
+
+  let angleBrief = null;
+  if (src.angle_id) {
+    const angles = await sbGet('psnm_lead_angles', `id=eq.${src.angle_id}&select=angle_brief`);
+    angleBrief = angles?.[0]?.angle_brief || null;
+  }
+
+  const newDraftRow = {
+    prospect_id: src.prospect_id,
+    touch_number: src.touch_number,
+    subject: src.subject,
+    body: newBody,
+    framework_annotations: src.framework_annotations,
+    confidence_score: src.confidence_score,
+    status: 'pending_critic',
+    source: src.source,
+    enrichment_id: src.enrichment_id,
+    angle_id: src.angle_id,
+    critic_iterations: 0,
+    critic_log: [],
+  };
+  const inserted = await sbInsert('psnm_atlas_drafts', [newDraftRow]);
+  if (!inserted?.[0]?.id) { result.error = 'insert_failed'; result.detail = inserted; return result; }
+  const newDraftId = inserted[0].id;
+  result.new_draft_id = newDraftId;
+
+  const criticResult = await criticDraft(
+    src.subject, newBody,
+    enrichmentData, angleBrief, src.touch_number,
+    { verdict: 'all_green', claims: [] },
+  );
+
+  if (!criticResult.ok) { result.error = criticResult.error; return result; }
+
+  const criticLog = [{
+    ts: new Date().toISOString(), attempt: 1,
+    verdict: criticResult.verdict,
+    failed_checks: criticResult.failed_checks || [],
+    suggested_rewrite_prompt: criticResult.suggested_rewrite_prompt || null,
+  }];
+  const finalStatus = criticResult.verdict === 'pass' ? 'pending_approval' : 'needs_revision';
+  await sbUpdate('psnm_atlas_drafts', { id: newDraftId }, {
+    status: finalStatus, critic_iterations: 1, critic_log: criticLog,
+  });
+
+  result.verdict = criticResult.verdict;
+  result.failed_checks = criticResult.failed_checks || [];
+  result.checks = criticResult.checks;
+  result.final_status = finalStatus;
+  result.completed_at = new Date().toISOString();
+  return result;
+}
+
+async function critiqueExisting(draftId) {
+  const result = { draft_id: draftId, started_at: new Date().toISOString() };
+
+  const drafts = await sbGet('psnm_atlas_drafts', `id=eq.${draftId}&select=*`);
+  if (!Array.isArray(drafts) || !drafts[0]) { result.error = 'draft_not_found'; return result; }
+  const draft = drafts[0];
+
+  const enrichments = draft.enrichment_id
+    ? await sbGet('psnm_lead_enrichment', `id=eq.${draft.enrichment_id}&select=enrichment_data`)
+    : null;
+  const enrichmentData = enrichments?.[0]?.enrichment_data || {};
+
+  let angleBrief = null;
+  if (draft.angle_id) {
+    const angles = await sbGet('psnm_lead_angles', `id=eq.${draft.angle_id}&select=angle_brief`);
+    angleBrief = angles?.[0]?.angle_brief || null;
+  }
+
+  const criticResult = await criticDraft(
+    draft.subject, draft.body,
+    enrichmentData, angleBrief, draft.touch_number,
+    { verdict: 'all_green', claims: [] },
+  );
+
+  if (!criticResult.ok) { result.error = criticResult.error; return result; }
+
+  result.subject = draft.subject;
+  result.verdict = criticResult.verdict;
+  result.failed_checks = criticResult.failed_checks || [];
+  result.checks = criticResult.checks;
+  result.completed_at = new Date().toISOString();
+  return result;
+}
+
+module.exports = { runPipeline, runFromAngle, rewriteAndCritique, critiqueExisting, auditTouchCounts, applyTouchCountFix };

@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const crypto = require('crypto');
-const { runPipeline, auditTouchCounts, applyTouchCountFix } = require('./_intelligence_pipeline');
+const { runPipeline, runFromAngle, rewriteAndCritique, critiqueExisting, auditTouchCounts, applyTouchCountFix } = require('./_intelligence_pipeline');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const MODEL_DEFAULT = process.env.ANTHROPIC_MODEL_DEFAULT || 'claude-sonnet-4-5-20250929';
@@ -531,6 +531,27 @@ module.exports = async function handler(req, res) {
         if (!audit?.discrepancies) return v22json(400, { error: 'audit object with discrepancies array required' });
         const fix = await applyTouchCountFix(audit);
         return v22json(200, fix);
+      }
+
+      if (v22action === 'v2_2_critique_existing') {
+        const { draft_id } = rawBody;
+        if (!draft_id) return v22json(400, { error: 'draft_id required' });
+        const result = await critiqueExisting(draft_id);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_rewrite_and_critique') {
+        const { source_draft_id, new_body } = rawBody;
+        if (!source_draft_id || !new_body) return v22json(400, { error: 'source_draft_id + new_body required' });
+        const result = await rewriteAndCritique(source_draft_id, new_body);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_run_from_angle') {
+        const { angle_id } = rawBody;
+        if (!angle_id) return v22json(400, { error: 'angle_id required' });
+        const result = await runFromAngle(angle_id);
+        return v22json(200, result);
       }
 
       if (v22action === 'v2_2_run_pipeline') {

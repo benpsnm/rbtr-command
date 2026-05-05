@@ -20,6 +20,7 @@ const RBTR_AUTH_TOKEN = process.env.RBTR_AUTH_TOKEN;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'sales@palletstoragenearme.co.uk';
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Near Me';
+const crypto = require('crypto');
 const calcQuote = require('./_quote_calc');
 const intelligence = require('./_intelligence_core');
 const { validateDraft } = require('./_draft_validator');
@@ -58,6 +59,105 @@ async function sbUpdate(table, match, row) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+// ── sendgrid_events · Event Webhook handler ───────────────────────────────────
+// Receives delivery/open/click/bounce events from SendGrid.
+// Auth: ECDSA P-256 signature (SENDGRID_WEBHOOK_PUBLIC_KEY).
+// Vercel pre-parses JSON bodies, so raw body is reconstructed via JSON.stringify —
+// signature verification works when SendGrid sends compact JSON (which it does).
+// Always returns 200 except on bad signature (401).
+async function sendgridEvents(req) {
+  const SG_PUB_KEY = process.env.SENDGRID_WEBHOOK_PUBLIC_KEY;
+  const signature  = req.headers['x-twilio-email-event-webhook-signature'];
+  const timestamp  = req.headers['x-twilio-email-event-webhook-timestamp'];
+  const events     = Array.isArray(req.body) ? req.body : (req.body ? [req.body] : []);
+
+  if (SG_PUB_KEY) {
+    if (!signature || !timestamp) {
+      return { status: 401, ok: false, error: 'missing_signature_headers' };
+    }
+    try {
+      // Reconstruct the signed payload: timestamp + raw body string.
+      // SendGrid sends compact JSON with no extra whitespace, so re-serialising matches.
+      const rawBody = JSON.stringify(req.body || []);
+      const verifier = crypto.createVerify('SHA256');
+      verifier.update(timestamp + rawBody);
+      if (!verifier.verify(SG_PUB_KEY, signature, 'base64')) {
+        return { status: 401, ok: false, error: 'invalid_signature' };
+      }
+    } catch (e) {
+      return { status: 401, ok: false, error: 'signature_verification_failed', detail: e.message };
+    }
+  }
+
+  const touchOutcomeMap = {
+    delivered:   'delivered',
+    open:        'opened',
+    click:       'clicked',
+    bounce:      'bounced',
+    spamreport:  'spam',
+    unsubscribe: 'unsubscribed',
+  };
+
+  const results = [];
+  for (const ev of events) {
+    const sgEventId  = ev.sg_event_id  || null;
+    const draftId    = ev.draft_id     || null;
+    const leadId     = ev.lead_id      || null;
+    const eventType  = ev.event        || 'unknown';
+    const occurredAt = ev.timestamp    ? new Date(ev.timestamp * 1000).toISOString() : new Date().toISOString();
+
+    // Insert event row (ON CONFLICT DO NOTHING via Prefer header)
+    if (sgEventId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/psnm_outreach_events`, {
+        method: 'POST',
+        headers: sbHeaders({ Prefer: 'resolution=ignore-duplicates,return=minimal' }),
+        body: JSON.stringify({
+          sg_event_id:  sgEventId,
+          draft_id:     draftId,
+          lead_id:      leadId,
+          event_type:   eventType,
+          email:        ev.email     || null,
+          url:          ev.url       || null,
+          useragent:    ev.useragent || null,
+          ip:           ev.ip        || null,
+          reason:       ev.reason    || null,
+          raw:          ev,
+          occurred_at:  occurredAt,
+        }),
+      }).catch(() => null);
+    }
+
+    // Update touch outcome (find most-recent sent touch for this lead)
+    const outcome = touchOutcomeMap[eventType];
+    if (outcome && leadId) {
+      const touches = await sbSelect('psnm_outreach_touches',
+        `target_id=eq.${leadId}&outcome=eq.sent&select=id&order=touched_at.desc&limit=1`);
+      if (touches?.[0]) {
+        await sbUpdate('psnm_outreach_touches', { id: touches[0].id }, { outcome }).catch(() => null);
+      }
+    }
+
+    // Terminal event: update draft status
+    if (draftId && (eventType === 'bounce' || eventType === 'spamreport')) {
+      const newStatus = eventType === 'bounce' ? 'bounced' : 'spam_flagged';
+      await sbUpdate('psnm_atlas_drafts', { id: draftId }, { status: newStatus }).catch(() => null);
+    }
+
+    // Telegram alerts for actionable events
+    if (eventType === 'bounce') {
+      await sendTelegramAlert(`⚠️ Bounce: ${ev.email}\nReason: ${ev.reason || 'unknown'}${draftId ? `\nDraft: ${draftId}` : ''}`).catch(() => null);
+    } else if (eventType === 'spamreport') {
+      await sendTelegramAlert(`🚨 Spam report: ${ev.email}${draftId ? `\nDraft: ${draftId}` : ''}`).catch(() => null);
+    } else if (eventType === 'click') {
+      await sendTelegramAlert(`🔗 Link clicked: ${ev.email}\n${ev.url || ''}`).catch(() => null);
+    }
+
+    results.push({ sg_event_id: sgEventId, event_type: eventType, stored: !!sgEventId });
+  }
+
+  return { ok: true, processed: results.length, events: results };
+}
 
 async function sendTelegramAlert(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -337,7 +437,7 @@ async function sendEmail(body) {
       hint: 'Set SENDGRID_API_KEY in Vercel env. See BEN_TODO.md for SendGrid setup steps.',
     };
   }
-  const { to, subject, text, html, from, from_name } = body || {};
+  const { to, subject, text, html, from, from_name, custom_args } = body || {};
   if (!to || !subject || !(text || html)) return { ok: false, error: 'to + subject + text|html required' };
   const payload = {
     personalizations: [{ to: [{ email: to }] }],
@@ -347,6 +447,7 @@ async function sendEmail(body) {
   };
   if (text) payload.content.push({ type: 'text/plain', value: text });
   if (html) payload.content.push({ type: 'text/html', value: html });
+  if (custom_args) payload.custom_args = custom_args;
   const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
@@ -701,10 +802,12 @@ async function dispatchApproved(body) {
             from: { email: EMAIL_FROM, name: EMAIL_FROM_NAME },
             subject: draft.subject,
             content: [{ type: 'text/plain', value: draft.body }],
+            custom_args: { draft_id: draft.id, lead_id: draft.prospect_id || '', source: 'v2_2_stack' },
           }),
         });
+        const sgMsgId = sgRes.status === 202 ? sgRes.headers.get('X-Message-Id') : null;
         sendOk = sgRes.status === 202;
-        sendResult = { status: sgRes.status, at: new Date().toISOString() };
+        sendResult = { status: sgRes.status, at: new Date().toISOString(), ...(sgMsgId ? { sg_message_id: sgMsgId } : {}) };
         if (!sendOk) sendResult.error = await sgRes.text().catch(() => 'unknown');
       } else {
         sendOk = false;
@@ -713,7 +816,7 @@ async function dispatchApproved(body) {
 
       const now = new Date().toISOString();
       if (sendOk) {
-        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult });
+        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult, ...(sendResult.sg_message_id ? { sg_message_id: sendResult.sg_message_id } : {}) });
         if (draft.prospect_id) {
           await sbInsert('psnm_outreach_touches', [{
             target_id: draft.prospect_id,
@@ -1750,6 +1853,11 @@ module.exports = async function handler(req, res) {
 
   // inbound_email: auth via SENDGRID_INBOUND_SECRET query param (not x-rbtr-auth)
   if (action === 'inbound_email' && req.method === 'POST') return res.status(200).json(await inboundEmail(req));
+  // sendgrid_events: auth via ECDSA signature (SENDGRID_WEBHOOK_PUBLIC_KEY)
+  if (action === 'sendgrid_events' && req.method === 'POST') {
+    const result = await sendgridEvents(req);
+    return res.status(result.status === 401 ? 401 : 200).json(result);
+  }
 
   const auth = checkAuth(req, action);
   if (!auth.ok) { res.status(401).json({ error: auth.error }); return; }

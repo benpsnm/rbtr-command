@@ -40,12 +40,18 @@ What makes you delete immediately:
 - Overly familiar tone on a first contact
 - Poor grammar or obvious errors
 - Email that feels longer than it needs to be
+- Internal system labels visible in a customer email — "Touch 3", "v2.2", "lead_id", "pending_approval", etc. A sender who lets their CRM scaffolding leak into the subject line is not paying attention.
 
 Your job: read the draft and score it against each check. Be harsh but specific. Generic feedback is useless — point to specific lines and words.
 
 Return ONLY valid JSON, no markdown wrapper:
 {
   "checks": [
+    {
+      "check": "internal_label_leak",
+      "result": "pass" or "fail",
+      "note": "Does the subject or body contain any internal system labels, CRM field names, or touch-sequence numbers used as content rather than tone calibration? Banned: 'Touch 1/2/3/4/5', 'v2.1', 'v2.2', 'Atlas' as a system name, 'lead_id', 'draft_id', 'angle_id', 'pending_approval', 'pending_critic', 'needs_revision', 'human_review_required', 'Reasoner', 'Drafter', 'Critic', 'claim_verifier'. Quote the exact offending term and its location if found."
+    },
     {
       "check": "opener_specificity",
       "result": "pass" or "fail",
@@ -84,6 +90,21 @@ Return ONLY valid JSON, no markdown wrapper:
 
 The verdict is fail if ANY check fails. The verdict is pass only if ALL checks pass.`;
 
+// ── Internal label check (pre-flight kill-switch, no API needed) ─────────────
+
+const INTERNAL_LABELS = [
+  'touch 1', 'touch 2', 'touch 3', 'touch 4', 'touch 5',
+  'lead_id', 'draft_id', 'angle_id', 'enrichment_id',
+  'pending_approval', 'pending_critic', 'needs_revision', 'human_review_required',
+  'v2.2', 'v2.1', 'atlas stack', 'atlas v2',
+  'claim_verifier', 'reasoner', 'drafter', 'critic',
+];
+
+function checkInternalLabels(subject, body) {
+  const combined = (subject + ' ' + body).toLowerCase();
+  return INTERNAL_LABELS.filter(label => combined.includes(label));
+}
+
 // ── Banned words check (pre-flight, no API needed) ────────────────────────────
 
 const BANNED_WORDS = [
@@ -116,6 +137,22 @@ function checkBannedWords(body) {
 
 async function criticDraft(subject, body, enrichmentData, angleBrief, touchNumber, claimVerifierResult) {
   if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+
+  // Pre-flight: internal label kill-switch (runs before everything, no API needed)
+  const internalLabelsFound = checkInternalLabels(subject, body);
+  if (internalLabelsFound.length > 0) {
+    return {
+      ok: true,
+      verdict: 'fail',
+      failed_checks: ['internal_label_leak'],
+      checks: [{
+        check: 'internal_label_leak',
+        result: 'fail',
+        note: `Internal system labels found in customer-facing copy: ${internalLabelsFound.join(', ')}. These must never appear in subject or body. Remove them and rewrite any sentence that uses touch-number language.`,
+      }],
+      suggested_rewrite_prompt: `CRITICAL: Remove all internal system labels from subject and body. Found: ${internalLabelsFound.join(', ')}. The touch number is a tone calibration input — never write "Touch X" or the digit in customer copy. Rewrite the subject and any affected lines.`,
+    };
+  }
 
   // Pre-flight: banned words (deterministic, no API)
   const bannedFound = checkBannedWords(body);
