@@ -100,6 +100,10 @@ async function runPipeline(leadIdOrCompany, opts = {}) {
   // Attach enrichment summary for readability
   result.layers.enricher.summary = buildEnrichmentSummary(enrichmentData);
 
+  // Rate limit buffer: Enricher makes 2 Anthropic web_search calls; give the API
+  // a brief window before Reasoner fires. Skip on cache hits (no API calls made).
+  if (!enrichResult.from_cache) await new Promise(r => setTimeout(r, 1500));
+
   // ── Layer 2: Reasoner ──────────────────────────────────────────────────────
   const t2 = Date.now();
   const reasonResult = await reasonLead(leadId, enrichmentData, enrichmentId);

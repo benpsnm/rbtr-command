@@ -113,27 +113,38 @@ async function fetchCompaniesHouse(companyName) {
 
 // ── Website scraper ───────────────────────────────────────────────────────────
 
-async function canScrape(baseUrl) {
+async function parseRobotsTxt(baseUrl) {
+  // Returns list of disallowed path prefixes for User-agent: * (or our named UA).
+  // Empty list means allow everything. Per RFC 9309: empty Disallow = allow all.
   try {
     const r = await fetch(`${baseUrl}/robots.txt`, {
       headers: { 'User-Agent': SCRAPER_UA },
       signal: AbortSignal.timeout(5000),
     });
-    if (!r.ok) return true; // no robots.txt = OK
+    if (!r.ok) return [];
     const txt = await r.text();
     const lines = txt.split('\n').map(l => l.trim());
+    const disallowed = [];
     let applicable = false;
     for (const line of lines) {
       const lower = line.toLowerCase();
       if (lower.startsWith('user-agent:')) {
         applicable = lower.includes('*') || lower.includes('psnm') || lower.includes('enrichbot');
       }
-      if (applicable && lower.startsWith('disallow: /') && lower !== 'disallow: /?' && lower !== 'disallow: /?q=') {
-        return false;
+      if (!applicable) continue;
+      if (lower.startsWith('disallow:')) {
+        const path = line.slice(9).trim(); // preserves original case for path comparison
+        if (path) disallowed.push(path);   // empty Disallow = "allow all" per RFC 9309
       }
     }
-    return true;
-  } catch { return true; }
+    return disallowed;
+  } catch { return []; }
+}
+
+function isPathBlocked(disallowRules, urlPath) {
+  if (!disallowRules.length) return false;
+  const p = urlPath || '/';
+  return disallowRules.some(rule => p.startsWith(rule));
 }
 
 function stripHtml(html) {
@@ -166,71 +177,88 @@ async function scrapeWebsite(website) {
   if (!website) return { scraped: false, pages: [] };
   const base = website.startsWith('http') ? website.replace(/\/$/, '') : `https://${website.replace(/\/$/, '')}`;
 
-  if (!(await canScrape(base))) return { scraped: false, pages: [], blocked_by_robots: true };
+  const disallowRules = await parseRobotsTxt(base);
 
   const paths = ['', '/about', '/about-us', '/news', '/blog', '/press'];
   const pages = [];
   for (const p of paths) {
     if (pages.length >= 5) break;
+    if (isPathBlocked(disallowRules, p || '/')) continue;
     const text = await fetchPage(`${base}${p}`);
     if (text && text.length > 150) pages.push({ path: p || '/', excerpt: text.slice(0, 1000) });
   }
-  return { scraped: pages.length > 0, pages };
+  // blocked_by_robots: true only when the root path itself is disallowed (Disallow: /)
+  const rootBlocked = isPathBlocked(disallowRules, '/');
+  return { scraped: pages.length > 0, pages, blocked_by_robots: rootBlocked && pages.length === 0 };
 }
 
 // ── News + sector search (Anthropic web_search) ───────────────────────────────
+// Split into two API calls with a 500ms gap between them to avoid rate-limit
+// collisions when the Enricher and Reasoner fire in close succession.
 
 async function fetchNewsAndSector(companyName, sector) {
   if (!ANTHROPIC_KEY) return { news: [], sector_headline: null };
-  try {
-    const prompt = `You have two tasks. Use web_search for each.
 
-TASK 1 — Recent news about the company "${companyName}":
-Search for: "${companyName}" news 2026
-Filter to results from the last 90 days only. Exclude the company's own website. Return up to 10 results.
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-TASK 2 — Sector headline:
-Search for one recent UK trade press headline (last 30 days) for the "${sector}" sector.
+  const anthropicCall = async (prompt, maxUses) => {
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'web-search-2025-03-05',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          system: 'You are a business intelligence researcher. Complete the task using web search. Return only valid JSON.',
+          messages: [{ role: 'user', content: prompt }],
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: maxUses }],
+        }),
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      const m = cleaned.match(/\{[\s\S]*\}/);
+      return m ? JSON.parse(m[0]) : null;
+    } catch { return null; }
+  };
+
+  // Call 1: company news
+  const newsResult = await anthropicCall(
+    `Search for recent news about the company "${companyName}".
+Search query: "${companyName}" news 2026
+Filter to results from the last 90 days only. Exclude the company's own website. Return up to 8 results.
 
 Return ONLY valid JSON, no markdown:
-{
-  "company_news": [
-    { "title": "...", "source": "...", "date_approx": "...", "snippet": "...", "url": "..." }
-  ],
-  "sector_headline": "one sentence summary of recent ${sector} sector news in the UK"
-}
+{"company_news":[{"title":"...","source":"...","date_approx":"...","snippet":"...","url":"..."}]}
 
-If no company news found, return empty array. If no sector news found, use null.`;
+If no news found, return {"company_news":[]}`,
+    2,
+  );
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'web-search-2025-03-05',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        system: 'You are a business intelligence researcher. Complete both tasks using web search. Return only valid JSON.',
-        messages: [{ role: 'user', content: prompt }],
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
-      }),
-    });
-    if (!r.ok) return { news: [], sector_headline: null };
-    const data = await r.json();
-    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
-    const raw = textBlocks.join('\n').trim();
-    const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-    const m = cleaned.match(/\{[\s\S]*\}/);
-    if (!m) return { news: [], sector_headline: null };
-    const parsed = JSON.parse(m[0]);
-    return {
-      news: (parsed.company_news || []).slice(0, 10),
-      sector_headline: parsed.sector_headline || null,
-    };
-  } catch { return { news: [], sector_headline: null }; }
+  // 500ms gap between web_search calls
+  await sleep(500);
+
+  // Call 2: sector headline
+  const sectorResult = await anthropicCall(
+    `Search for one recent UK trade press headline (last 30 days) for the "${sector}" sector.
+
+Return ONLY valid JSON, no markdown:
+{"sector_headline":"one sentence summary of recent ${sector} sector news in the UK"}
+
+If no relevant news found, return {"sector_headline":null}`,
+    2,
+  );
+
+  return {
+    news: (newsResult?.company_news || []).slice(0, 10),
+    sector_headline: sectorResult?.sector_headline || null,
+  };
 }
 
 // ── Quality score ─────────────────────────────────────────────────────────────
