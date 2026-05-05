@@ -344,6 +344,7 @@ async function sendEmail(body) {
   const payload = {
     personalizations: [{ to: [{ email: to }] }],
     from: { email: from || EMAIL_FROM, name: from_name || EMAIL_FROM_NAME },
+    reply_to: { email: 'replies@parse.palletstoragenearme.co.uk', name: 'Pallet Storage Near Me' },
     subject,
     content: [],
   };
@@ -733,6 +734,7 @@ async function dispatchApproved(body) {
           body: JSON.stringify({
             personalizations: [{ to: [{ email: toEmail, name: toName || toEmail }] }],
             from: { email: EMAIL_FROM, name: EMAIL_FROM_NAME },
+            reply_to: { email: 'replies@parse.palletstoragenearme.co.uk', name: 'Pallet Storage Near Me' },
             subject: draft.subject,
             content: [{ type: 'text/plain', value: draft.body }],
             custom_args: { draft_id: draft.id, lead_id: draft.prospect_id || '', source: 'v2_2_stack' },
