@@ -1,7 +1,7 @@
 # PSNM_STATE.md — Single source of truth
 
-**Last updated:** 2026-05-06 ~11:00  
-**Last updated by:** Ben + Claude (Bug 1 Fix A + Fix C + Fix B verified)  
+**Last updated:** 2026-05-06 ~11:30  
+**Last updated by:** Ben + Claude (Bug 3 resolved — 16 failed drafts superseded)  
 **Rule:** AI tools read this file FIRST in every session before answering anything about state. Every change to the system requires updating this file in the same commit. No exceptions.
 
 ---
@@ -63,7 +63,7 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 - 51_atlas_drafts_superseded_status.sql — status='superseded' for dispatch dedup
 - 52_psnm_inbound_replies.sql — inbound reply capture (NEW 5 May)
 
-### Table row counts (as of 6 May 2026 09:55)
+### Table row counts (as of 6 May 2026 ~11:30)
 | Table | Count | Notes |
 |---|---|---|
 | psnm_outreach_targets | 205 | Master prospect list |
@@ -77,8 +77,8 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 | Status | Count |
 |---|---|
 | sent | 11 (10 have sg_message_id=NULL — pre-migration sends; 1 backfilled: Marc Deakin Fix C) |
-| superseded | 1 (Fix B test draft — archived) |
-| failed | 16 (NOT INVESTIGATED — root cause unknown) |
+| superseded | 17 (1 Fix B test draft + 16 Bug 3 no-email drafts — all archived) |
+| failed | 0 (RESOLVED — see Bug 3 below) |
 | needs_revision | 11 (critic flagged, never re-fixed) |
 | pending_approval | 6 |
 | pending_critic | 2 |
@@ -140,11 +140,13 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 - These 6 orphaned events are unrecoverable — accepted
 - New events (post-Fix A) correctly capture both draft_id and sg_message_id (verified via Fix B test)
 
-### Bug 3 — 16 failed drafts (root cause unknown)
-- Status='failed' on 16 drafts in psnm_atlas_drafts
-- Distribution unknown (legacy v2.1 vs v2.2_stack)
-- send_result column likely contains error messages
-- Status: NOT INVESTIGATED
+### Bug 3 — 16 failed drafts (RESOLVED 6 May)
+- Root cause: all 16 had `error: no_email` — v2.1 pipeline generated drafts for 4 prospects with null email addresses; no email was ever sent
+- Single failure pattern, no code bug; the no_email guard worked correctly
+- Affected prospects (all still uncontacted, email=null): Clugston Distribution Services (quality 82), International Stones UK (78), Stanton Logistics (75), All Shires Foods Ltd (68) + 1 orphan (Poo-Ch Pouch, no prospect record)
+- Action: all 16 bulk-superseded 6 May with critic_log entry. Status is now clean (failed=0)
+- Next: find email addresses for the 4 named prospects; generate fresh v2.2 drafts once unified WMS is live
+- Full diagnosis: /tmp/bug3-diagnosis.md
 
 ### Open issue 4 — 11 needs_revision drafts in limbo
 - Critic flagged, never re-processed by Reasoner
@@ -182,6 +184,7 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 - ~10:20 — Fix C: Marc Deakin draft sg_message_id backfilled from send_result JSON (id=6933cb45)
 - ~10:30 — Fix B: Test dispatch to yahoo.com verified — sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g captured on draft; 2 events arrived with draft_id + sg_message_id both populated. Capture pipeline confirmed end-to-end.
 - ~11:00 — Fix B cleanup: test draft marked superseded, test prospect marked do_not_contact, .env.production removed. PSNM_STATE.md updated.
+- ~11:30 — Bug 3 resolved: all 16 failed drafts diagnosed (single pattern: no_email), bulk-superseded. failed=0, superseded=17. 4 high-value prospects (Clugston, Int'l Stones, Stanton, All Shires) flagged for email enrichment + re-draft.
 
 ### 5 May 2026
 - Atlas v2.2 intelligence stack shipped to production (Enricher/Reasoner/Drafter/Critic)
@@ -229,7 +232,7 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 Bug fixes (pre-Phase 0c):
 - Bug 1: FIXED 6 May (Fix A + Fix B + Fix C — capture pipeline verified end-to-end)
 - Bug 2: PARTIALLY RESOLVED — 6 old orphaned events unrecoverable; new events now correctly linked
-- Bug 3: NOT INVESTIGATED — 16 failed drafts, root cause unknown
+- Bug 3: RESOLVED 6 May — all 16 no_email drafts superseded; 4 prospects flagged for email enrichment
 
 ---
 
