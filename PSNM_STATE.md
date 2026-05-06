@@ -208,31 +208,25 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 
 ---
 
-## Phase 0c-alt — App-layer auth (COMPLETE 6 May 2026)
+## Phase 0c-alt — App-Layer Auth — COMPLETE (6 May 2026)
 
-- **Commit:** 094cb5a (`feat(auth): app-layer auth for v14 (Phase 0c-alt)`)
-- **Production URL:** rbtr-jarvis.vercel.app (deploy `aq0jeo2gg`, aliased)
-- **Files shipped:**
-  - NEW: `v14/api/auth/login.js`, `logout.js`, `middleware.js`, `check.js`
-  - MODIFIED: `v14/api/atlas.js` (path 4.5 cookie check added between x-rbtr-auth and isSameOrigin — all existing paths byte-identical)
-  - MODIFIED: `v14/public/wms.html` (sync XHR auth gate at top of first script block; logout button in topbar)
-  - REPLACED: `v14/public/login.html` (old stale Supabase login page → PSNM single-password page)
-- **Architecture:** Pattern A — single password, one role (`wms`). Cookie `psnm_session` HttpOnly Secure SameSite=Strict Path=/ Max-Age 30d. JWT HS256 signed with SESSION_SIGNING_KEY. API routes accept cookie OR x-rbtr-auth header (header path unchanged).
-- **Test results:** 8/8 passed
-  - a: unauthenticated → 401
-  - b: wrong x-rbtr-auth → 401 (no fallthrough)
-  - c: valid cookie + cross-origin → 200 (path 4.5 isolated)
-  - d: valid x-rbtr-auth → 200 **(BLAST RADIUS ZERO)**
-  - e: valid Bearer CRON_SECRET → 400 not 401 **(BLAST RADIUS ZERO)**
-  - f: logout → Max-Age=0 cookie cleared
-  - g: tampered JWT → 401
-  - h: GET to POST endpoint → 405
-- **Secrets:** passwords + hashes in `/tmp/auth-build-state-2026-05-06.md` (session-local only — rotate before that file expires)
-- **Known deferred issues (do not fix in current PR):**
-  1. Sync XHR blank page on cold start (~50ms–3s) — acceptable for admin tool
-  2. wms.html scripts at lines 4090 + 4265 not auth-gated — atlas.js returns 401 on their calls during redirect window (no data leak, just Vercel log noise)
-  3. `isSameOrigin` still primary auth path for same-domain browser traffic — path 4.5 (cookie) shadowed. Remove `isSameOrigin` in follow-up PR after cookie auth proven in production.
-  4. localStorage not cleared on logout — single-role, out of scope
+Shipped v14 production. Replaces stale Supabase login. Pattern A: single password, JWT cookie session, 30-day fixed expiry. OR'd with existing x-rbtr-auth header so all crons/scripts continue working unchanged.
+
+- Commit: 094cb5a (feat(auth): app-layer auth for v14)
+- Deploy: aq0jeo2gg → rbtr-jarvis.vercel.app
+- Files: api/auth/{login,logout,middleware,check}.js + public/login.html + atlas.js (+15 lines path 4.5 cookie) + wms.html (sync XHR auth check + topbar logout button)
+- Cookie: psnm_session, HttpOnly Secure SameSite=Strict, Path=/, Max-Age 30d, JWT HS256
+- Env: WMS_PASSWORD_HASH, SESSION_SIGNING_KEY (both in v14 production, verified)
+- Deps: bcryptjs@3.0.3, jsonwebtoken@9.0.3, cookie@1.1.1
+- Tests: 8/8 passed end-to-end including blast-radius (d: x-rbtr-auth, e: Bearer CRON_SECRET)
+- Secrets stored: /tmp/auth-build-state-2026-05-06.md
+
+Deferred:
+- psnm-wms standalone auth (no backend to protect — pure static SPA)
+- standalone CSV-extract feature broken (fetch to api.anthropic.com with no key — proxy through v14 later)
+- atlas.js path 4.5 shadowed by isSameOrigin — intentional, removed in follow-up after cookie auth proven
+- wms.html scripts at lines 4090/4265 not auth-gated (atlas.js will 401 their calls during redirect window — benign)
+- localStorage not cleared on logout (single-role pattern, not a privacy issue)
 
 ## Deferred for tomorrow
 
