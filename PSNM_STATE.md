@@ -158,6 +158,11 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 
 ## Atlas config (live)
 
+- daily_send_limit: 50
+- paused: false
+- tone_mix: balanced
+- territory_filter: S Yorkshire, W Yorkshire, Derbyshire, Notts
+
 ---
 
 ## Recent work history (most recent first)
@@ -199,6 +204,25 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 ---
 
 ## Phase plan locked from spec review (5 May)
+
+| Phase | Description | Estimate | Status |
+|---|---|---|---|
+| 0a | CRON_SECRET | 1h | DONE 6 May |
+| 0b | SendGrid event signature key fix | 1h | DONE 6 May |
+| 0c | Vercel Password Protection on both deployments | 1h | DEFERRED — bugs first |
+| 0.5 | API auth (token injected at page load, verified by /api/atlas) | 4-6h | pending |
+| 1 | Reconcile standalone drift (bring psnm-wms up to CC parity) | 2-3h | pending |
+| 2 | Extract psnm-core.js (shared component for both deployments) | 4-6h | pending |
+| 3 | Inbound Replies Inbox UI | 3-4h | pending |
+| 4 | Outreach Events Timeline UI | 3h | pending |
+| 5 | Draft History + Critic Log UI | 3.5h | pending |
+| 6 | Connect new psnm-wms GitHub repo as Vercel deploy source | 1h | pending |
+| 7 | Draft Response feature (Atlas-generated replies to inbound) | TBD | pending |
+
+Bug fixes (pre-Phase 0c):
+- Bug 1: investigate why sg_message_id is never captured on sent drafts
+- Bug 2: orphaned outreach events (consequence of Bug 1)
+- Bug 3: investigate root cause of 16 failed drafts
 
 ---
 
