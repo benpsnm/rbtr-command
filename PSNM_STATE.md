@@ -1,7 +1,7 @@
 # PSNM_STATE.md — Single source of truth
 
-**Last updated:** 2026-05-06 ~11:30  
-**Last updated by:** Ben + Claude (Bug 3 resolved — 16 failed drafts superseded)  
+**Last updated:** 2026-05-06 ~15:15  
+**Last updated by:** Ben + Claude (Phase 0c-alt complete — app-layer auth live in v14)  
 **Rule:** AI tools read this file FIRST in every session before answering anything about state. Every change to the system requires updating this file in the same commit. No exceptions.
 
 ---
@@ -23,14 +23,14 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 - Vercel project: v14, ID prj_WmfOs1RwgvTdWk9thP6mZWHVLpWf
 - Source: this repo, working branch feature/atlas-v2.2-intelligence-stack
 - Deploy method: manual `vercel --prod` from /Users/bengreenwood/Desktop/rbtr-command/v14
-- Auth: NONE on /wms.html — open URL (Phase 0c will add Vercel Password Protection)
+- Auth: **LIVE — Phase 0c-alt complete (6 May)**. Pattern A single-password JWT cookie session. Login page at /login.html. Cookie `psnm_session` HttpOnly Secure SameSite=Strict 30d. Header path (`x-rbtr-auth`) unchanged — crons/scripts unaffected.
 
 ### psnm-wms.vercel.app (Standalone)
 - Vercel project: psnm-wms, ID prj_VMnipQ7zEPUMGUjsHyYg1NU74oYz
 - Source: /Users/bengreenwood/Desktop/psnm/deploy/index.html
 - Backed up to github.com/benpsnm/psnm-wms (private)
 - Deploy method: manual `vercel --prod` from /Desktop/psnm/deploy/
-- Auth: client-side SHA256 password gate only (weak — Phase 0c will replace with Vercel Password Protection)
+- Auth: client-side SHA256 password gate only (weak). Phase 0c-alt deferred — standalone is static SPA with no backend to protect.
 - Feature gap: no Atlas, no PIP, no WW Leads (drifted from Command Centre)
 
 ---
@@ -43,6 +43,8 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 | CRON_SECRET | 64 chars | NEW 6 May. Bearer auth on cron endpoints |
 | SENDGRID_INBOUND_SECRET | 32 chars | Query param secret for inbound parse webhook |
 | SENDGRID_WEBHOOK_PUBLIC_KEY | 180 chars | NEW 6 May. PEM-wrapped ECDSA P-256 public key for event webhook signature verification |
+| WMS_PASSWORD_HASH | 60 chars | NEW 6 May. bcrypt cost 10. Hash of CC admin password. |
+| SESSION_SIGNING_KEY | 64 chars | NEW 6 May. 64 hex char HMAC key for JWT HS256 signing. |
 | SUPABASE_URL | n/a | https://mpxgyobotiqcawmqlhbf.supabase.co |
 | SUPABASE_SERVICE_ROLE | 41 chars | Service-role key for backend writes |
 | PSNM_INTELLIGENCE_AUTORUN | n/a | Currently `false`. Cron-driven intelligence stack runs are off. Flip to `true` after Phase 0c |
@@ -185,6 +187,7 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 - ~10:30 — Fix B: Test dispatch to yahoo.com verified — sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g captured on draft; 2 events arrived with draft_id + sg_message_id both populated. Capture pipeline confirmed end-to-end.
 - ~11:00 — Fix B cleanup: test draft marked superseded, test prospect marked do_not_contact, .env.production removed. PSNM_STATE.md updated.
 - ~11:30 — Bug 3 resolved: all 16 failed drafts diagnosed (single pattern: no_email), bulk-superseded. failed=0, superseded=17. 4 high-value prospects (Clugston, Int'l Stones, Stanton, All Shires) flagged for email enrichment + re-draft.
+- ~12:00–15:15 — Phase 0c-alt complete: app-layer auth built and deployed to v14 production. Commit 094cb5a. All 8 end-to-end tests passed. Blast radius zero.
 
 ### 5 May 2026
 - Atlas v2.2 intelligence stack shipped to production (Enricher/Reasoner/Drafter/Critic)
@@ -205,6 +208,42 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 
 ---
 
+## Phase 0c-alt — App-layer auth (COMPLETE 6 May 2026)
+
+- **Commit:** 094cb5a (`feat(auth): app-layer auth for v14 (Phase 0c-alt)`)
+- **Production URL:** rbtr-jarvis.vercel.app (deploy `aq0jeo2gg`, aliased)
+- **Files shipped:**
+  - NEW: `v14/api/auth/login.js`, `logout.js`, `middleware.js`, `check.js`
+  - MODIFIED: `v14/api/atlas.js` (path 4.5 cookie check added between x-rbtr-auth and isSameOrigin — all existing paths byte-identical)
+  - MODIFIED: `v14/public/wms.html` (sync XHR auth gate at top of first script block; logout button in topbar)
+  - REPLACED: `v14/public/login.html` (old stale Supabase login page → PSNM single-password page)
+- **Architecture:** Pattern A — single password, one role (`wms`). Cookie `psnm_session` HttpOnly Secure SameSite=Strict Path=/ Max-Age 30d. JWT HS256 signed with SESSION_SIGNING_KEY. API routes accept cookie OR x-rbtr-auth header (header path unchanged).
+- **Test results:** 8/8 passed
+  - a: unauthenticated → 401
+  - b: wrong x-rbtr-auth → 401 (no fallthrough)
+  - c: valid cookie + cross-origin → 200 (path 4.5 isolated)
+  - d: valid x-rbtr-auth → 200 **(BLAST RADIUS ZERO)**
+  - e: valid Bearer CRON_SECRET → 400 not 401 **(BLAST RADIUS ZERO)**
+  - f: logout → Max-Age=0 cookie cleared
+  - g: tampered JWT → 401
+  - h: GET to POST endpoint → 405
+- **Secrets:** passwords + hashes in `/tmp/auth-build-state-2026-05-06.md` (session-local only — rotate before that file expires)
+- **Known deferred issues (do not fix in current PR):**
+  1. Sync XHR blank page on cold start (~50ms–3s) — acceptable for admin tool
+  2. wms.html scripts at lines 4090 + 4265 not auth-gated — atlas.js returns 401 on their calls during redirect window (no data leak, just Vercel log noise)
+  3. `isSameOrigin` still primary auth path for same-domain browser traffic — path 4.5 (cookie) shadowed. Remove `isSameOrigin` in follow-up PR after cookie auth proven in production.
+  4. localStorage not cleared on logout — single-role, out of scope
+
+## Deferred for tomorrow
+
+1. **Standalone CSV-extract proxy** — `psnm-wms.vercel.app/index.html` line 2959 calls `api.anthropic.com/v1/messages` without an API key (broken feature, no exposure). Fix: proxy through `v14/api/atlas.js`. Low priority.
+2. **Standalone password gate decision** — psnm-wms is static SPA (no backend). Decide: leave public-static or port Pattern A login from v14. Architecture conversation only.
+3. **`run_intelligence_cycle` grep** — not in atlas.js action list (test e returned 400 not 401). Verify no cron calls this action: `grep -r 'run_intelligence_cycle' v14/`
+4. **isSameOrigin removal** — follow-up PR: remove `isSameOrigin` path from `checkAuth()` once cookie auth is proven. Cookie path currently shadowed for normal browser traffic.
+5. **Email enrichment** — find addresses for Clugston Distribution Services, International Stones UK, Stanton Logistics, All Shires Foods Ltd; generate fresh v2.2 drafts.
+
+---
+
 ## Active spec / planning docs
 
 - `/tmp/psnm-unification-spec.md` — 5,242-word unification spec from 5 May night
@@ -219,7 +258,8 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 |---|---|---|---|
 | 0a | CRON_SECRET | 1h | DONE 6 May |
 | 0b | SendGrid event signature key fix | 1h | DONE 6 May |
-| 0c | Vercel Password Protection on both deployments | 1h | DEFERRED — bugs first |
+| 0c | Vercel Password Protection on both deployments | 1h | SUPERSEDED by 0c-alt |
+| 0c-alt | App-layer auth (bcrypt+JWT cookie, Pattern A) on v14 | ~3h | **DONE 6 May** (commit 094cb5a) |
 | 0.5 | API auth (token injected at page load, verified by /api/atlas) | 4-6h | pending |
 | 1 | Reconcile standalone drift (bring psnm-wms up to CC parity) | 2-3h | pending |
 | 2 | Extract psnm-core.js (shared component for both deployments) | 4-6h | pending |
