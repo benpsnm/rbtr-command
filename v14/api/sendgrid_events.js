@@ -134,6 +134,7 @@ async function handler(req, res) {
         headers: sbHeaders({ Prefer: 'resolution=ignore-duplicates,return=minimal' }),
         body: JSON.stringify({
           sg_event_id:  sgEventId,
+          sg_message_id: ev.sg_message_id || null,
           draft_id:     draftId,
           lead_id:      leadId,
           event_type:   eventType,
