@@ -23,6 +23,8 @@ const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Nea
 const crypto = require('crypto');
 const calcQuote = require('./_quote_calc');
 const intelligence = require('./_intelligence_core');
+const { parse: parseCookies } = require('cookie');
+const jwt = require('jsonwebtoken');
 const { validateDraft } = require('./_draft_validator');
 const { verifyDraft } = require('./_claim_verifier');
 
@@ -95,6 +97,19 @@ function checkAuth(req, action) {
   const isSameOrigin = host && (origin.includes(host) || referer.includes(host)) &&
     (host === 'rbtr-jarvis.vercel.app' || host.endsWith('.vercel.app') || host.startsWith('localhost'));
   if (supplied === RBTR_AUTH_TOKEN || isSameOrigin) return { ok: true };
+  // Path 4.5 — valid psnm_session cookie
+  try {
+    const cookies = parseCookies(req.headers.cookie || '');
+    const sessionToken = cookies['psnm_session'];
+    if (sessionToken) {
+      const signingKey = process.env.SESSION_SIGNING_KEY;
+      if (signingKey) {
+        const payload = jwt.verify(sessionToken, signingKey, { algorithms: ['HS256'] });
+        const now = Math.floor(Date.now() / 1000);
+        if (payload.role === 'wms' && payload.exp > now) return { ok: true };
+      }
+    }
+  } catch { /* fall through */ }
   return { ok: false, error: 'x-rbtr-auth header missing or invalid' };
 }
 
