@@ -1,7 +1,7 @@
 # PSNM_STATE.md — Single source of truth
 
-**Last updated:** 2026-05-06 09:55  
-**Last updated by:** Ben + Claude (after ground-truth audit)  
+**Last updated:** 2026-05-06 ~11:00  
+**Last updated by:** Ben + Claude (Bug 1 Fix A + Fix C + Fix B verified)  
 **Rule:** AI tools read this file FIRST in every session before answering anything about state. Every change to the system requires updating this file in the same commit. No exceptions.
 
 ---
@@ -58,7 +58,7 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 ### Migrations applied (latest)
 - 47_lead_enrichment.sql — Companies House + web + news enrichment cache
 - 48_lead_angles.sql — angle generation per lead
-- 49_atlas_drafts_sg_message_id.sql — adds sg_message_id column to drafts (BUG: not being populated)
+- 49_atlas_drafts_sg_message_id.sql — adds sg_message_id column to drafts (FIXED 6 May)
 - 50_psnm_outreach_events.sql — SendGrid event capture
 - 51_atlas_drafts_superseded_status.sql — status='superseded' for dispatch dedup
 - 52_psnm_inbound_replies.sql — inbound reply capture (NEW 5 May)
@@ -69,14 +69,15 @@ Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at
 | psnm_outreach_targets | 205 | Master prospect list |
 | psnm_intelligence_prospects | 44 | PIP harvested |
 | psnm_atlas_drafts | 48 | See breakdown below |
-| psnm_outreach_events | 6 | NEW 6 May. 3x processed, 3x delivered. Bug: all have draft_id=NULL, sg_message_id=NULL |
+| psnm_outreach_events | 8 | 6 orphaned (pre-Fix A). 2 from Fix B test dispatch — both have draft_id + sg_message_id populated |
 | psnm_inbound_replies | 2 | Both test rows from ben.greenwood89@yahoo.com on 5 May |
 | psnm_ww_leads | 10 | All status='new', 6 from today (6 May) — UNACTIONED |
 
 ### psnm_atlas_drafts by status
 | Status | Count |
 |---|---|
-| sent | 11 (BUG: all have sg_message_id=NULL) |
+| sent | 11 (10 have sg_message_id=NULL — pre-migration sends; 1 backfilled: Marc Deakin Fix C) |
+| superseded | 1 (Fix B test draft — archived) |
 | failed | 16 (NOT INVESTIGATED — root cause unknown) |
 | needs_revision | 11 (critic flagged, never re-fixed) |
 | pending_approval | 6 |
@@ -126,17 +127,18 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 
 ## 🔴 Known bugs in production
 
-### Bug 1 — sg_message_id never captured on sent drafts
-- All 11 sent drafts have sg_message_id=NULL despite migration 49 adding the column 5 May
-- Capture code in sendEmail() / dispatchApproved() either missing or broken
-- Root cause: likely not reading X-Message-Id header from SendGrid response
-- Status: NOT YET INVESTIGATED. Tomorrow morning's first task.
+### Bug 1 — sg_message_id capture (FIXED 6 May)
+- Root cause investigated and resolved (see /tmp/bug1-diagnosis.md for full analysis)
+- Fix A: sendgrid_events.js now captures sg_message_id on every event insert (commit d72c983)
+- Fix B: dispatchApproved() confirmed working — test dispatch captured sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g
+- Fix C: Marc Deakin draft (id=6933cb45) backfilled with sg_message_id=XYr0qyZmSqqV646RVHB4pQ
+- Remaining: 10 Apr 27-29 drafts have sg_message_id=NULL — unrecoverable (SendGrid activity history expired). Accepted.
+- Future dispatches: fully linked (draft → sg_message_id → events → inbound replies)
 
-### Bug 2 — Outreach events orphaned (consequence of Bug 1)
-- 6 events in psnm_outreach_events have draft_id=NULL, sg_message_id=NULL
-- Symptom of Bug 1 — events arrive, but matching to drafts fails
-- Fix is downstream of Bug 1
-- This also explains why yesterday's inbound reply test couldn't matchToDraft()
+### Bug 2 — Outreach events orphaned (PARTIALLY RESOLVED 6 May)
+- 6 pre-Fix-A events in psnm_outreach_events still have draft_id=NULL, sg_message_id=NULL (old dispatches — no custom_args in payload)
+- These 6 orphaned events are unrecoverable — accepted
+- New events (post-Fix A) correctly capture both draft_id and sg_message_id (verified via Fix B test)
 
 ### Bug 3 — 16 failed drafts (root cause unknown)
 - Status='failed' on 16 drafts in psnm_atlas_drafts
@@ -167,14 +169,19 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 
 ## Recent work history (most recent first)
 
-### 6 May 2026 (today, in progress)
+### 6 May 2026
 - 09:00 — Marc Deakin reply sent (peer-to-peer logistics relationship at AF Blakemore)
 - 09:10 — Phase 0a shipped: CRON_SECRET set on rbtr-jarvis production, all 7 cron endpoints now require Bearer auth
 - 09:25 — Phase 0b config shipped: SENDGRID_WEBHOOK_PUBLIC_KEY set with PEM wrapping (was empty for 18 hours)
 - 09:25 — Laptop crash, recovered
 - 09:30 — Phase 0b verified: 6 events flowed into psnm_outreach_events (but Bug 2 surfaced — events orphaned)
 - 09:50 — Ground-truth audit run: surfaced Bugs 1, 2, 3 + state file 7 days out of date
-- 09:55 — PSNM_STATE.md updated to current truth (this commit)
+- 09:55 — PSNM_STATE.md updated to current truth
+- ~10:00 — Bug 1 root cause diagnosed (3-layer analysis, full memo at /tmp/bug1-diagnosis.md)
+- ~10:10 — Fix A: sg_message_id added to sendgrid_events.js event insert (commit d72c983), deployed
+- ~10:20 — Fix C: Marc Deakin draft sg_message_id backfilled from send_result JSON (id=6933cb45)
+- ~10:30 — Fix B: Test dispatch to yahoo.com verified — sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g captured on draft; 2 events arrived with draft_id + sg_message_id both populated. Capture pipeline confirmed end-to-end.
+- ~11:00 — Fix B cleanup: test draft marked superseded, test prospect marked do_not_contact, .env.production removed. PSNM_STATE.md updated.
 
 ### 5 May 2026
 - Atlas v2.2 intelligence stack shipped to production (Enricher/Reasoner/Drafter/Critic)
@@ -220,9 +227,9 @@ All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cr
 | 7 | Draft Response feature (Atlas-generated replies to inbound) | TBD | pending |
 
 Bug fixes (pre-Phase 0c):
-- Bug 1: investigate why sg_message_id is never captured on sent drafts
-- Bug 2: orphaned outreach events (consequence of Bug 1)
-- Bug 3: investigate root cause of 16 failed drafts
+- Bug 1: FIXED 6 May (Fix A + Fix B + Fix C — capture pipeline verified end-to-end)
+- Bug 2: PARTIALLY RESOLVED — 6 old orphaned events unrecoverable; new events now correctly linked
+- Bug 3: NOT INVESTIGATED — 16 failed drafts, root cause unknown
 
 ---
 
