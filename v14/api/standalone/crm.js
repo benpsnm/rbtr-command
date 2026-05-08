@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      const rows = await sbGet('psnm_crm_status', { select: 'lead_id,status' });
+      const rows = await sbGet('psnm_wms_crm_status', { select: 'lead_id,status' });
       const status = {};
       rows.forEach(r => { status[r.lead_id] = r.status; });
       return res.status(200).json({ status });
@@ -25,14 +25,14 @@ module.exports = async (req, res) => {
       const { leadId, status } = req.body;
       if (!leadId || !status) return res.status(400).json({ error: 'leadId and status required' });
       if (!VALID_STATUSES.has(status)) return res.status(400).json({ error: 'invalid status' });
-      await sbPost('psnm_crm_status', [{ lead_id: leadId, status, updated_at: new Date().toISOString() }], true);
+      await sbPost('psnm_wms_crm_status', [{ lead_id: leadId, status, updated_at: new Date().toISOString() }], true);
       return res.status(200).json({ ok: true });
     }
 
     if (req.method === 'DELETE') {
       const leadId = req.query.leadId;
       if (!leadId) return res.status(400).json({ error: 'leadId required' });
-      await sbDelete('psnm_crm_status', { lead_id: leadId });
+      await sbDelete('psnm_wms_crm_status', { lead_id: leadId });
       return res.status(200).json({ ok: true });
     }
 

@@ -52,14 +52,14 @@ module.exports = async (req, res) => {
       const params = { select: '*', order: 'created_at.desc' };
       const statusFilter = req.query.status;
       if (statusFilter && statusFilter !== 'all') params['status'] = `eq.${statusFilter}`;
-      const rows = await sbGet('psnm_enquiries', params);
+      const rows = await sbGet('psnm_wms_enquiries', params);
       return res.status(200).json({ enquiries: rows.map(fromRow) });
     }
 
     if (req.method === 'POST') {
       const body = req.body;
       if (!body.id) body.id = 'EQ' + Date.now();
-      const created = await sbPost('psnm_enquiries', [toRow(body)], true);
+      const created = await sbPost('psnm_wms_enquiries', [toRow(body)], true);
       return res.status(201).json({ enquiry: fromRow(created[0]) });
     }
 
@@ -72,14 +72,14 @@ module.exports = async (req, res) => {
           patch[k === 'startDate' ? 'start_date' : k] = rest[k];
         }
       });
-      const updated = await sbPatch('psnm_enquiries', { id }, patch);
+      const updated = await sbPatch('psnm_wms_enquiries', { id }, patch);
       return res.status(200).json({ enquiry: updated[0] ? fromRow(updated[0]) : null });
     }
 
     if (req.method === 'DELETE') {
       const id = req.query.id;
       if (!id) return res.status(400).json({ error: 'id required' });
-      await sbDelete('psnm_enquiries', { id });
+      await sbDelete('psnm_wms_enquiries', { id });
       return res.status(200).json({ ok: true });
     }
 

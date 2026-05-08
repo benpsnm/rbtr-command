@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
       const params = { select: '*' };
       if (!req.query.all) params['out'] = 'eq.false';
       if (req.query.customer) params['customer'] = `eq.${req.query.customer}`;
-      const rows = await sbGet('psnm_pallets', params);
+      const rows = await sbGet('psnm_wms_pallets', params);
       const pallets = rows.map(fromRow);
       const maxId = pallets.reduce((m, p) => Math.max(m, p.id), 0);
       return res.status(200).json({ pallets, nextId: maxId + 1 });
@@ -70,7 +70,7 @@ module.exports = async (req, res) => {
       if (body.pallets && typeof body.pallets === 'object') {
         const rows = Object.values(body.pallets).map(toRow);
         if (!rows.length) return res.status(200).json({ ok: true, count: 0 });
-        await sbPost('psnm_pallets', rows, true);
+        await sbPost('psnm_wms_pallets', rows, true);
         return res.status(200).json({ ok: true, count: rows.length });
       }
 
@@ -78,10 +78,10 @@ module.exports = async (req, res) => {
       const row = toRow(body);
       if (!row.id) {
         // Assign next ID
-        const existing = await sbGet('psnm_pallets', { select: 'id', order: 'id.desc', limit: 1 });
+        const existing = await sbGet('psnm_wms_pallets', { select: 'id', order: 'id.desc', limit: 1 });
         row.id = existing.length ? existing[0].id + 1 : 1;
       }
-      const created = await sbPost('psnm_pallets', [row], true);
+      const created = await sbPost('psnm_wms_pallets', [row], true);
       return res.status(201).json({ pallet: fromRow(created[0]) });
     }
 
@@ -98,7 +98,7 @@ module.exports = async (req, res) => {
           else patch[k] = rest[k];
         }
       });
-      const updated = await sbPatch('psnm_pallets', { id }, patch);
+      const updated = await sbPatch('psnm_wms_pallets', { id }, patch);
       return res.status(200).json({ pallet: updated[0] ? fromRow(updated[0]) : null });
     }
 
@@ -107,7 +107,7 @@ module.exports = async (req, res) => {
       if (!id || req.query.confirm !== 'true') {
         return res.status(400).json({ error: 'id and confirm=true required' });
       }
-      await sbDelete('psnm_pallets', { id });
+      await sbDelete('psnm_wms_pallets', { id });
       return res.status(200).json({ ok: true });
     }
 

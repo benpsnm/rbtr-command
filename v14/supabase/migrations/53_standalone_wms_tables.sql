@@ -7,11 +7,11 @@ BEGIN;
 
 -- ── Helper: reuse _rbtr_set_updated_at() from migration 13 ──────────────────
 
--- ── 1. psnm_pallets ──────────────────────────────────────────────────────────
+-- ── 1. psnm_wms_pallets ──────────────────────────────────────────────────────────
 -- One row per pallet. id preserved from localStorage nextId counter on migration.
 -- out=true means the pallet has left the warehouse but record is kept for history.
 
-CREATE TABLE IF NOT EXISTS psnm_pallets (
+CREATE TABLE IF NOT EXISTS psnm_wms_pallets (
   id            INTEGER       PRIMARY KEY,
   customer      TEXT          NOT NULL,
   ref           TEXT,
@@ -31,23 +31,23 @@ CREATE TABLE IF NOT EXISTS psnm_pallets (
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_psnm_pallets_customer
-  ON psnm_pallets (customer);
-CREATE INDEX IF NOT EXISTS idx_psnm_pallets_out
-  ON psnm_pallets (out);
-CREATE INDEX IF NOT EXISTS idx_psnm_pallets_location
-  ON psnm_pallets (location) WHERE out = false;
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_pallets_customer
+  ON psnm_wms_pallets (customer);
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_pallets_out
+  ON psnm_wms_pallets (out);
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_pallets_location
+  ON psnm_wms_pallets (location) WHERE out = false;
 
-ALTER TABLE psnm_pallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_pallets ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON TABLE psnm_pallets
+COMMENT ON TABLE psnm_wms_pallets
   IS 'CLASSIFICATION: INTERNAL — Standalone WMS pallet inventory. One row per pallet. id matches the localStorage nextId sequence. Occupancy maps (cells/floor/aisleFloor) are derived from location + out columns.';
 
--- ── 2. psnm_customers ────────────────────────────────────────────────────────
+-- ── 2. psnm_wms_customers ────────────────────────────────────────────────────────
 -- Keyed by company name (matches localStorage S.customers object key).
 -- rate stored as text to match localStorage shape exactly.
 
-CREATE TABLE IF NOT EXISTS psnm_customers (
+CREATE TABLE IF NOT EXISTS psnm_wms_customers (
   name          TEXT          PRIMARY KEY,
   contact       TEXT,
   phone         TEXT,
@@ -60,23 +60,23 @@ CREATE TABLE IF NOT EXISTS psnm_customers (
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_psnm_customers_email
-  ON psnm_customers (email) WHERE email IS NOT NULL AND email != '';
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_customers_email
+  ON psnm_wms_customers (email) WHERE email IS NOT NULL AND email != '';
 
-ALTER TABLE psnm_customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_customers ENABLE ROW LEVEL SECURITY;
 
-DROP TRIGGER IF EXISTS trg_psnm_customers_updated_at ON psnm_customers;
-CREATE TRIGGER trg_psnm_customers_updated_at
-  BEFORE UPDATE ON psnm_customers
+DROP TRIGGER IF EXISTS trg_psnm_wms_customers_updated_at ON psnm_wms_customers;
+CREATE TRIGGER trg_psnm_wms_customers_updated_at
+  BEFORE UPDATE ON psnm_wms_customers
   FOR EACH ROW EXECUTE FUNCTION _rbtr_set_updated_at();
 
-COMMENT ON TABLE psnm_customers
+COMMENT ON TABLE psnm_wms_customers
   IS 'CLASSIFICATION: INTERNAL — Standalone WMS customer registry. Keyed by company name. Rate stored as text string matching localStorage format.';
 
--- ── 3. psnm_movements ────────────────────────────────────────────────────────
+-- ── 3. psnm_wms_movements ────────────────────────────────────────────────────────
 -- Append-only movement log. No UPDATE or DELETE in normal operation.
 
-CREATE TABLE IF NOT EXISTS psnm_movements (
+CREATE TABLE IF NOT EXISTS psnm_wms_movements (
   id            BIGSERIAL     PRIMARY KEY,
   type          TEXT          NOT NULL
                   CHECK (type IN ('IN','OUT','MOVE','ADJUST')),
@@ -93,22 +93,22 @@ CREATE TABLE IF NOT EXISTS psnm_movements (
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_psnm_movements_date
-  ON psnm_movements (date DESC);
-CREATE INDEX IF NOT EXISTS idx_psnm_movements_customer
-  ON psnm_movements (customer);
-CREATE INDEX IF NOT EXISTS idx_psnm_movements_type
-  ON psnm_movements (type);
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_movements_date
+  ON psnm_wms_movements (date DESC);
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_movements_customer
+  ON psnm_wms_movements (customer);
+CREATE INDEX IF NOT EXISTS idx_psnm_wms_movements_type
+  ON psnm_wms_movements (type);
 
-ALTER TABLE psnm_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_movements ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON TABLE psnm_movements
+COMMENT ON TABLE psnm_wms_movements
   IS 'CLASSIFICATION: INTERNAL — Standalone WMS movement log. Append-only. IN/OUT/MOVE/ADJUST types. Mirrors S.movements localStorage array.';
 
--- ── 4. psnm_bookings ─────────────────────────────────────────────────────────
+-- ── 4. psnm_wms_bookings ─────────────────────────────────────────────────────────
 -- Active confirmed bookings. Mirrors psnm_v14_bk localStorage key.
 
-CREATE TABLE IF NOT EXISTS psnm_bookings (
+CREATE TABLE IF NOT EXISTS psnm_wms_bookings (
   id            TEXT          PRIMARY KEY,
   company       TEXT          NOT NULL,
   contact       TEXT          NOT NULL,
@@ -125,15 +125,15 @@ CREATE TABLE IF NOT EXISTS psnm_bookings (
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-ALTER TABLE psnm_bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_bookings ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON TABLE psnm_bookings
+COMMENT ON TABLE psnm_wms_bookings
   IS 'CLASSIFICATION: INTERNAL — Confirmed pallet storage bookings. Mirrors psnm_v14_bk localStorage key. id format: "BK" + timestamp.';
 
--- ── 5. psnm_enquiries ────────────────────────────────────────────────────────
+-- ── 5. psnm_wms_enquiries ────────────────────────────────────────────────────────
 -- Pre-booking enquiries. Mirrors psnm_v14_eq localStorage key.
 
-CREATE TABLE IF NOT EXISTS psnm_enquiries (
+CREATE TABLE IF NOT EXISTS psnm_wms_enquiries (
   id            TEXT          PRIMARY KEY,
   company       TEXT          NOT NULL,
   contact       TEXT          NOT NULL,
@@ -150,25 +150,25 @@ CREATE TABLE IF NOT EXISTS psnm_enquiries (
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-ALTER TABLE psnm_enquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_enquiries ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON TABLE psnm_enquiries
+COMMENT ON TABLE psnm_wms_enquiries
   IS 'CLASSIFICATION: INTERNAL — Pre-booking storage enquiries. Mirrors psnm_v14_eq localStorage key. id format: "EQ" + timestamp.';
 
--- ── 6. psnm_crm_status ───────────────────────────────────────────────────────
+-- ── 6. psnm_wms_crm_status ───────────────────────────────────────────────────────
 -- Override status for CRM leads. Master lead list is hardcoded in index.html JS.
 -- Only non-default statuses are stored here (mirrors psnm_crm4_status localStorage).
 
-CREATE TABLE IF NOT EXISTS psnm_crm_status (
+CREATE TABLE IF NOT EXISTS psnm_wms_crm_status (
   lead_id       TEXT          PRIMARY KEY,
   status        TEXT          NOT NULL
                   CHECK (status IN ('new','hot','opened','contacted','cold')),
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 
-ALTER TABLE psnm_crm_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE psnm_wms_crm_status ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON TABLE psnm_crm_status
+COMMENT ON TABLE psnm_wms_crm_status
   IS 'CLASSIFICATION: INTERNAL — CRM lead status overrides. Master lead list (208 entries) is hardcoded in psnm-wms index.html. Only overrides stored. Mirrors psnm_crm4_status localStorage key.';
 
 COMMIT;

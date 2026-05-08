@@ -61,8 +61,8 @@ module.exports = async (req, res) => {
       // Get total count separately
       const countParams = { ...params, select: 'id', limit: '1000', offset: '0' };
       const [rows, allIds] = await Promise.all([
-        sbGet('psnm_movements', params),
-        sbGet('psnm_movements', countParams),
+        sbGet('psnm_wms_movements', params),
+        sbGet('psnm_wms_movements', countParams),
       ]);
       return res.status(200).json({ movements: rows.map(fromRow), total: allIds.length });
     }
@@ -71,7 +71,7 @@ module.exports = async (req, res) => {
       const body = req.body;
       const items = Array.isArray(body) ? body : [body];
       const rows = items.map(toRow);
-      const created = await sbPost('psnm_movements', rows, false);
+      const created = await sbPost('psnm_wms_movements', rows, false);
       return res.status(201).json({ movements: (Array.isArray(created) ? created : [created]).map(fromRow) });
     }
 

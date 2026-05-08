@@ -8,7 +8,7 @@ const { requireAuth } = require('../auth/middleware');
 const { setCors, handlePreflight } = require('./_cors');
 const { sbGet } = require('./_db');
 
-const REQUIRED_TABLES = ['psnm_pallets','psnm_customers','psnm_movements','psnm_bookings','psnm_enquiries','psnm_crm_status'];
+const REQUIRED_TABLES = ['psnm_wms_pallets','psnm_wms_customers','psnm_wms_movements','psnm_wms_bookings','psnm_wms_enquiries','psnm_wms_crm_status'];
 
 module.exports = async (req, res) => {
   if (handlePreflight(req, res)) return;

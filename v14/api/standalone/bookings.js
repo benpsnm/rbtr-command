@@ -53,14 +53,14 @@ module.exports = async (req, res) => {
       const statusFilter = req.query.status;
       if (statusFilter && statusFilter !== 'all') params['status'] = `eq.${statusFilter}`;
       else if (!statusFilter) params['status'] = 'eq.active';
-      const rows = await sbGet('psnm_bookings', params);
+      const rows = await sbGet('psnm_wms_bookings', params);
       return res.status(200).json({ bookings: rows.map(fromRow) });
     }
 
     if (req.method === 'POST') {
       const body = req.body;
       if (!body.id) body.id = 'BK' + Date.now();
-      const created = await sbPost('psnm_bookings', [toRow(body)], true);
+      const created = await sbPost('psnm_wms_bookings', [toRow(body)], true);
       return res.status(201).json({ booking: fromRow(created[0]) });
     }
 
@@ -73,14 +73,14 @@ module.exports = async (req, res) => {
           patch[k === 'startDate' ? 'start_date' : k] = rest[k];
         }
       });
-      const updated = await sbPatch('psnm_bookings', { id }, patch);
+      const updated = await sbPatch('psnm_wms_bookings', { id }, patch);
       return res.status(200).json({ booking: updated[0] ? fromRow(updated[0]) : null });
     }
 
     if (req.method === 'DELETE') {
       const id = req.query.id;
       if (!id) return res.status(400).json({ error: 'id required' });
-      await sbDelete('psnm_bookings', { id });
+      await sbDelete('psnm_wms_bookings', { id });
       return res.status(200).json({ ok: true });
     }
 
