@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RBTR · Sponsor Outreach</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #161616;
+    --border:   #2a2a2a;
+    --text:     #e8e8e8;
+    --muted:    #888;
+    --accent:   #f5a623;
+    --green:    #4ade80;
+    --red:      #f87171;
+    --blue:     #60a5fa;
+    --yellow:   #facc15;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+  .header .sub { color: var(--muted); font-size: 12px; }
+  .header-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn:not(:disabled):hover { opacity: 0.85; }
+  .btn-primary   { background: var(--accent); color: #000; }
+  .btn-ghost     { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-approve   { background: #166534; color: var(--green); }
+  .btn-skip      { background: #7f1d1d; color: var(--red); }
+  .btn-small     { padding: 5px 10px; font-size: 12px; }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; gap: 24px; flex-wrap: wrap;
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-value.green  { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.muted  { color: var(--muted); }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .progress-bar-bg { background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; }
+  .progress-bar-fill { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.3s; width: 0%; }
+  .progress-log { font-size: 12px; color: var(--muted); margin-top: 8px; font-family: monospace; max-height: 80px; overflow-y: auto; }
+
+  /* ── Filters ── */
+  .filter-bar {
+    padding: 12px 24px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px;
+  }
+  .filter-label { color: var(--muted); font-size: 12px; }
+
+  /* ── Card grid ── */
+  .cards { padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 900px; margin: 0 auto; }
+
+  /* ── Draft card ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .card.approved  { border-color: #166534; }
+  .card.skipped   { border-color: #7f1d1d; opacity: 0.6; }
+  .card-header {
+    padding: 14px 18px; display: flex; align-items: flex-start; gap: 12px;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .card-meta { flex: 1; }
+  .sponsor-name { font-size: 16px; font-weight: 700; }
+  .sponsor-cat  { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .subject-line { font-size: 13px; color: var(--blue); margin-top: 6px; font-style: italic; }
+  .card-badges  { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; margin-left: auto; }
+  .badge {
+    padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge-high    { background: #14532d; color: var(--green); }
+  .badge-medium  { background: #713f12; color: var(--yellow); }
+  .badge-low     { background: #1e3a5f; color: var(--blue); }
+  .badge-pending { background: #1c1c1c; color: var(--muted); border: 1px solid var(--border); }
+  .badge-approved{ background: #14532d; color: var(--green); }
+  .badge-skipped { background: #450a0a; color: var(--red); }
+
+  .card-body { padding: 16px 18px; }
+  .email-body {
+    white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: #ccc;
+    font-family: Georgia, serif; border-left: 3px solid var(--border);
+    padding-left: 14px; margin-bottom: 14px;
+  }
+  .asks-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .ask-pill { background: #1a1a2e; border: 1px solid #2d2d5e; color: #93c5fd; font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+  .why-line { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .value-line { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 14px; }
+
+  .card-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 60px 24px; color: var(--muted); }
+  .empty h2 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
+  .empty p  { font-size: 14px; }
+
+  /* ── Notice ── */
+  .notice {
+    margin: 24px; padding: 16px 20px; border-radius: 8px;
+    background: #1a1400; border: 1px solid #5c4500; color: var(--yellow);
+    font-size: 13px; line-height: 1.6;
+  }
+  .notice code { background: #2a2000; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--border); }
+  ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>RBTR · Sponsor Outreach</h1>
+    <div class="sub" id="header-sub">Loading…</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost btn-small" onclick="loadDrafts()">↻ Refresh</button>
+    <button class="btn btn-primary" id="btn-generate" onclick="startBatch()">Generate All Drafts</button>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-label">Total</div><div class="stat-value muted" id="stat-total">–</div></div>
+  <div class="stat"><div class="stat-label">Pending Review</div><div class="stat-value yellow" id="stat-pending">–</div></div>
+  <div class="stat"><div class="stat-label">Approved</div><div class="stat-value green" id="stat-approved">–</div></div>
+  <div class="stat"><div class="stat-label">Skipped</div><div class="stat-value muted" id="stat-skipped">–</div></div>
+  <div class="stat"><div class="stat-label">Est. Value</div><div class="stat-value" id="stat-value" style="color:var(--accent)">–</div></div>
+</div>
+
+<div class="progress-wrap" id="progress-wrap">
+  <div class="progress-label" id="progress-label">Generating drafts…</div>
+  <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+  <div class="progress-log" id="progress-log"></div>
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">Filter:</span>
+  <select class="filter-select" id="filter-status" onchange="renderCards()">
+    <option value="all">All statuses</option>
+    <option value="draft_pending_review">Pending review</option>
+    <option value="approved">Approved</option>
+    <option value="skipped">Skipped</option>
+  </select>
+  <select class="filter-select" id="filter-confidence" onchange="renderCards()">
+    <option value="all">All confidence</option>
+    <option value="high">High confidence</option>
+    <option value="medium">Medium confidence</option>
+    <option value="low">Low confidence</option>
+  </select>
+  <select class="filter-select" id="filter-category" onchange="renderCards()">
+    <option value="all">All categories</option>
+  </select>
+  <button class="btn btn-ghost btn-small" onclick="approveAll()">✓ Approve All Pending</button>
+</div>
+
+<div id="notice-area"></div>
+<div class="cards" id="cards-container"></div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+const ANON_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjY2ODIsImV4cCI6MjA4OTg0MjY4Mn0.Lo-3Q0PbbOZmNsw3iAOzytgn80O0l7TKHXTYwhqsWog';
+const AUTH_TOKEN   = localStorage.getItem('rbtr_auth') || '';
+
+// ── Sponsor list (hardcoded from sponsor_targets — 69 brands) ──────────────
+const SPONSOR_LIST = [
+  { id:'5c76136a', brand_name:'Victron Energy',          category:'Power',        ask:'Quattro 24/5000 + MPPT + BMV + wiring',                        value:10200, hq:'Netherlands', notes:'Best of breed inverter. Already specced.' },
+  { id:'cc23eb03', brand_name:'Fogstar',                 category:'Battery',      ask:'400Ah LiFePO4 pack + BMS',                                     value:9600,  hq:'UK',          notes:'UK lithium specialist. Spec confirmed.' },
+  { id:'6d20203d', brand_name:'Sony',                    category:'Camera',       ask:'Cinema camera body + lens kit',                                value:8700,  hq:'Japan',       notes:'Primary cinema camera body owned. Pitch for lenses.' },
+  { id:'953000cc', brand_name:'EcoFlow',                 category:'Power',        ask:'Delta Pro Ultra + extra battery + solar',                      value:6200,  hq:'China',       notes:'' },
+  { id:'9ecaccd3', brand_name:'Goldschmitt',             category:'Suspension',   ask:'Air suspension + bellows upgrade for the Arocs',               value:6000,  hq:'Germany',     notes:'' },
+  { id:'b995f5be', brand_name:'Michelin',                category:'Tyres',        ask:'6× XZL 365/80 R20 super single tyres',                         value:6600,  hq:'France',      notes:'Critical safety + brand value.' },
+  { id:'08292ae5', brand_name:'WS Sherburns',            category:'Body',         ask:'Side door + hinge fabrication work',                           value:5500,  hq:'UK',          notes:'' },
+  { id:'0a35f73a', brand_name:'Expedition Meister',      category:'Interior',     ask:'Slide-out mechanism + engineering',                            value:5000,  hq:'Germany',     notes:'' },
+  { id:'3e94430f', brand_name:'Mercedes-Benz Trucks',   category:'Truck',        ask:'Arocs build hero partner: full build and expedition coverage', value:5000,  hq:'Germany',     notes:'Already own the truck. Hero brand.' },
+  { id:'0a47c6d8', brand_name:'La Marzocco',             category:'Lifestyle',    ask:'Onboard espresso machine',                                     value:5000,  hq:'Italy',       notes:'' },
+  { id:'fbd59784', brand_name:'DJI',                     category:'Camera',       ask:'Mavic 3 Pro + Osmo Action 4 + Ronin gimbal',                   value:5000,  hq:'China',       notes:'Aerial + handheld cinematic.' },
+  { id:'e4950f20', brand_name:'iKamper',                 category:'Body',         ask:'Rooftop tent (iKamper Skycamp 4.0) — forward position',                            value:4000,  hq:'South Korea', notes:'' },
+  { id:'7fdb1c3f', brand_name:'Alu-Cab',                 category:'Body',         ask:'Roof rack + awning — Alu-Cab Gen 3-R rear position',                                  value:3500,  hq:'South Africa',notes:'' },
+  { id:'31330478', brand_name:'Chesterfield Composites', category:'Body',         ask:'Composite body panels + cab fit',                              value:4000,  hq:'UK',          notes:'' },
+  { id:'f37ee6ea', brand_name:'Clesana',                 category:'Ablutions',    ask:'Waterless toilet + consumables — Clesana C1',                  value:3800,  hq:'Switzerland', notes:'' },
+  { id:'7868c5ad', brand_name:'Infinity Shower',         category:'Ablutions',    ask:'Recirculating shower system',                                  value:3800,  hq:'UK',          notes:'' },
+  { id:'b196b1ee', brand_name:'Truma',                   category:'Heating',      ask:'Combi heater + ducting',                                       value:3820,  hq:'Germany',     notes:'' },
+  { id:'27a7f6ee', brand_name:'Miele',                   category:'Kitchen',      ask:'Small-footprint dishwasher',                                   value:3000,  hq:'Germany',     notes:'' },
+  { id:'07b38478', brand_name:'FabCo+Jetex+Profusion',  category:'Body',         ask:'Fabrication + exhaust + finishing',                            value:3000,  hq:'UK',          notes:'' },
+  { id:'27e645a3', brand_name:'Bosch Rexroth',           category:'Hydraulics',   ask:'Hydraulic slides + pumps for 7m electronic slide-out',         value:2800,  hq:'Germany',     notes:'' },
+  { id:'4c8525a0', brand_name:'Midland Turbo',           category:'Powertrain',   ask:'Turbo + recondition — 500-520hp target',                       value:2800,  hq:'UK',          notes:'' },
+  { id:'d7d41c47', brand_name:'Strands',                 category:'Lighting',     ask:'Expedition LED light bar + work lamps',                        value:2800,  hq:'Sweden',      notes:'' },
+  { id:'8e199dac', brand_name:'RED Winches',             category:'Recovery',     ask:'Zeon-class winch + synthetic rope',                            value:2500,  hq:'UK',          notes:'British-made.' },
+  { id:'072c71e5', brand_name:'Jaltest',                 category:'Diagnostics',  ask:'OBD expert pack for heavy commercial vehicles',                value:2500,  hq:'Spain',       notes:'' },
+  { id:'18b22b01', brand_name:'Linak',                   category:'Interior',     ask:'Linear actuators for electronic slide-out',                    value:2400,  hq:'Denmark',     notes:'' },
+  { id:'0bb67295', brand_name:'Rosco',                   category:'Safety',       ask:'Reverse cameras + monitors — Rosco CMS',                       value:2400,  hq:'USA',         notes:'' },
+  { id:'87a9b22b', brand_name:'Webasto',                 category:'Heating',      ask:'Thermo Top Evo 5 + install kit',                               value:1780,  hq:'Germany',     notes:'Primary heater.' },
+  { id:'f48e6fd8', brand_name:'Brigade',                 category:'Safety',       ask:'360° camera system + side detection sensors',                  value:1600,  hq:'UK',          notes:'' },
+  { id:'b8df20b7', brand_name:'Starlink',                category:'Comms',        ask:'Mini kit + global roaming subscription',                       value:1500,  hq:'USA',         notes:'Internet on the move.' },
+  { id:'4030b814', brand_name:'Warn',                    category:'Recovery',     ask:'Zeon 10-S winch + accessories',                                value:1500,  hq:'USA',         notes:'' },
+  { id:'ab63af62', brand_name:'Top Tuning',              category:'Powertrain',   ask:'OM471 engine tuning + mapping',                                value:1500,  hq:'Netherlands', notes:'' },
+  { id:'a6eb2d4d', brand_name:'GoPro',                   category:'Camera',       ask:'3× Hero 13 Black + accessories',                               value:1500,  hq:'USA',         notes:'Action + onboard cameras.' },
+  { id:'ddf92ede', brand_name:'Garmin',                  category:'Comms',        ask:'2× inReach Mini + 45-month subscriptions',                     value:1250,  hq:'USA',         notes:'Safety-critical satellite comms.' },
+  { id:'58980c98', brand_name:'Atomos',                  category:'Camera',       ask:'Ninja V monitor/recorder + SSD kit',                           value:1400,  hq:'Australia',   notes:'' },
+  { id:'dffbe6c2', brand_name:'Salomon',                 category:'Apparel',      ask:'Family hiking boots + shoes for all four',                     value:1680,  hq:'France',      notes:'' },
+  { id:'56552b30', brand_name:'Isotherm',                category:'Fridge',       ask:'Under-counter DC fridge',                                      value:1200,  hq:'Italy',       notes:'' },
+  { id:'b0d317b8', brand_name:'Joolca',                  category:'Ablutions',    ask:'Hot water on demand system',                                   value:1200,  hq:'Australia',   notes:'' },
+  { id:'410a49a4', brand_name:'Aputure',                 category:'Camera',       ask:'On-truck LED lighting kit',                                    value:1200,  hq:'China',       notes:'' },
+  { id:'fc256917', brand_name:'Rab',                     category:'Apparel',      ask:'Family cold-weather kit — Ben, Sarah, Hudson, Benson',         value:1200,  hq:'UK',          notes:'' },
+  { id:'e6220077', brand_name:'ARB',                     category:'Recovery',     ask:'Compressor + recovery kit',                                    value:1200,  hq:'Australia',   notes:'' },
+  { id:'69f95203', brand_name:'Renogy',                  category:'Solar',        ask:'1,600W bifacial solar panel array',                            value:900,   hq:'USA',         notes:'' },
+  { id:'c82b59b5', brand_name:'Rode',                    category:'Audio',        ask:'Wireless Pro kit + boom microphone',                           value:900,   hq:'Australia',   notes:'' },
+  { id:'cfcc3dc1', brand_name:'Quooker',                 category:'Kitchen',      ask:'Boiling water tap for the truck kitchen',                      value:900,   hq:'Netherlands', notes:'' },
+  { id:'425af507', brand_name:'Hilleberg',               category:'Tents',        ask:'Expedition tent for camp alongside the truck',                 value:900,   hq:'Sweden',      notes:'' },
+  { id:'d67a49d2', brand_name:'Flextail',                category:'Camp',         ask:'Portable pump + camp lighting kit',                            value:750,   hq:'China',       notes:'' },
+  { id:'7cef625c', brand_name:'Risen Energy',            category:'Solar',        ask:'Bifacial 400W panels + mounting frames',                       value:720,   hq:'China',       notes:'' },
+  { id:'fcecfd1b', brand_name:'Engel',                   category:'Fridge',       ask:'Chest freezer for the truck',                                  value:700,   hq:'Japan',       notes:'' },
+  { id:'d53c29b4', brand_name:'Sandisk',                 category:'Storage',      ask:'4TB Extreme Portable SSD + CFexpress cards ×4',                value:700,   hq:'USA',         notes:'' },
+  { id:'e6cd70b8', brand_name:'Pelican',                 category:'Storage',      ask:'Hard cases for cameras + kit',                                 value:650,   hq:'USA',         notes:'' },
+  { id:'a77c19d4', brand_name:'Tata Steel UK',           category:'Chassis',      ask:'Chassis steel supply for the Arocs build',                     value:650,   hq:'UK',          notes:'' },
+  { id:'1b27b72f', brand_name:'Eberspächer',             category:'Heating',      ask:'Backup diesel heater unit',                                    value:600,   hq:'Germany',     notes:'Redundancy heater.' },
+  { id:'babab7bf', brand_name:'LaCie',                   category:'Storage',      ask:'20TB Rugged RAID drive ×2',                                    value:600,   hq:'France',      notes:'Footage backup.' },
+  { id:'bc92a0da', brand_name:'Patagonia',               category:'Apparel',      ask:'Family kit for cold and wet legs',                             value:600,   hq:'USA',         notes:'Brand values aligned.' },
+  { id:'cf0c8478', brand_name:'MAXTRAX',                 category:'Recovery',     ask:'MKII recovery boards ×2',                                      value:550,   hq:'Australia',   notes:'' },
+  { id:'f22dcb80', brand_name:'Smartrack',               category:'Security',     ask:'Cat 6 S7 tracker + 45-month subscription',                     value:380,   hq:'UK',          notes:'' },
+  { id:'6fc4de9a', brand_name:'Kriega',                  category:'Storage',      ask:'Modular luggage system + harnesses',                           value:410,   hq:'UK',          notes:'' },
+  { id:'8dd3a161', brand_name:'Thule',                   category:'Storage',      ask:'Roof bars + bike mounting system',                             value:320,   hq:'Sweden',      notes:'' },
+  { id:'aa89a5c8', brand_name:'Nextbase',                category:'Comms',        ask:'Dashcam + rear camera',                                        value:330,   hq:'UK',          notes:'' },
+  { id:'48df270e', brand_name:'AMK',                     category:'Safety',       ask:'Adventure medical kit + trauma pack',                          value:400,   hq:'USA',         notes:'' },
+  { id:'9c3ab3c1', brand_name:'Berkey',                  category:'Water',        ask:'Water filtration unit + replacement filters',                  value:400,   hq:'USA',         notes:'Family water security.' },
+  { id:'1ba145d4', brand_name:'Maxxis',                  category:'Tyres',        ask:'Spare tyre + wheel partnership',                               value:400,   hq:'Taiwan',      notes:'' },
+  { id:'0698d1a5', brand_name:'Helly Hansen',            category:'Apparel',      ask:'Family wet-weather kit',                                       value:400,   hq:'Norway',      notes:'' },
+  { id:'3415df44', brand_name:'Berkefeld',               category:'Water',        ask:'Ceramic filter cartridges',                                    value:350,   hq:'Germany',     notes:'' },
+  { id:'a63c9ba9', brand_name:'ACR',                     category:'Safety',       ask:'PLB + EPIRB backup satellite beacon',                          value:250,   hq:'USA',         notes:'' },
+  { id:'84600c7b', brand_name:'Whale',                   category:'Water',        ask:'Water pumps + inline filters',                                 value:280,   hq:'UK',          notes:'' },
+  { id:'4c02dd6e', brand_name:'Icon LifeSaver',          category:'Water',        ask:'LifeSaver Cube + cartridges',                                  value:300,   hq:'UK',          notes:'' },
+  { id:'f5af22b9', brand_name:'Snow Peak',               category:'Cooking',      ask:'Portable cooking system for camp meals',                       value:300,   hq:'Japan',       notes:'' },
+  { id:'590a4fa3', brand_name:'LifeStraw',               category:'Water',        ask:'Personal + community filter set',                              value:120,   hq:'Switzerland', notes:'' },
+  { id:'7374e147', brand_name:'Trangia',                 category:'Cooking',      ask:'Stoves + cookware — bulletproof backup',                       value:200,   hq:'Sweden',      notes:'' },
+];
+
+// ── State ───────────────────────────────────────────────────────────────────
+let allDrafts    = [];
+let batchRunning = false;
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+function getAuthHeaders() {
+  const token = localStorage.getItem('rbtr_auth') || AUTH_TOKEN;
+  const h = { 'Content-Type': 'application/json' };
+  if (token) h['x-rbtr-auth'] = token;
+  return h;
+}
+
+// ── Supabase reads via proxy ─────────────────────────────────────────────────
+async function sbGet(table, qs = '') {
+  const r = await fetch(`/api/supabase-proxy?table=${table}&${qs}`, { headers: getAuthHeaders() });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return Array.isArray(d) ? d : (d.data || []);
+}
+
+// ── Load drafts ──────────────────────────────────────────────────────────────
+async function loadDrafts() {
+  document.getElementById('header-sub').textContent = 'Loading…';
+  try {
+    const rows = await sbGet('psnm_sponsor_outreach', 'order=created_at.asc&limit=200');
+    allDrafts = rows;
+    updateStats();
+    updateCategoryFilter();
+    renderCards();
+    document.getElementById('header-sub').textContent = `${rows.length} drafts · Last refreshed ${new Date().toLocaleTimeString('en-GB')}`;
+    if (rows.length === 0) showNotice();
+    else hideNotice();
+  } catch (e) {
+    document.getElementById('header-sub').textContent = 'Error loading — check table exists';
+    showNotice();
+  }
+}
+
+function showNotice() {
+  document.getElementById('notice-area').innerHTML = `
+    <div class="notice">
+      <strong>⚠ Setup step needed before generating drafts.</strong><br><br>
+      Run this SQL in the <a href="https://supabase.com/dashboard/project/mpxgyobotiqcawmqlhbf/sql" target="_blank" style="color:var(--accent)">Supabase SQL Editor</a>:
+      <br><br>
+      <code style="display:block;white-space:pre;overflow-x:auto;margin-top:8px;padding:10px;background:#1a1400;border-radius:6px;font-size:11px">CREATE TABLE IF NOT EXISTS psnm_sponsor_outreach (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sponsor_name          text NOT NULL,
+  sponsor_category      text,
+  contact_email_guess   text,
+  contact_role_guess    text,
+  draft_subject         text,
+  draft_body            text,
+  asks                  jsonb DEFAULT '[]',
+  why_we_picked_them    text,
+  sponsor_value_estimate text,
+  follow_up_status      text DEFAULT 'none',
+  status                text DEFAULT 'draft_pending_review',
+  confidence            text DEFAULT 'medium',
+  notes                 text,
+  created_at            timestamptz DEFAULT now(),
+  updated_at            timestamptz DEFAULT now()
+);
+ALTER TABLE psnm_sponsor_outreach ENABLE ROW LEVEL SECURITY;</code>
+      <br>Then click <strong>Generate All Drafts</strong>.
+    </div>`;
+}
+
+function hideNotice() {
+  document.getElementById('notice-area').innerHTML = '';
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const pending  = allDrafts.filter(d => d.status === 'draft_pending_review').length;
+  const approved = allDrafts.filter(d => d.status === 'approved').length;
+  const skipped  = allDrafts.filter(d => d.status === 'skipped').length;
+  const totalVal = allDrafts.filter(d => d.status !== 'skipped').reduce((sum, d) => {
+    const m = (d.sponsor_value_estimate || '').match(/[\d,]+/);
+    return sum + (m ? parseInt(m[0].replace(/,/g, '')) : 0);
+  }, 0);
+  document.getElementById('stat-total').textContent    = allDrafts.length;
+  document.getElementById('stat-pending').textContent  = pending;
+  document.getElementById('stat-approved').textContent = approved;
+  document.getElementById('stat-skipped').textContent  = skipped;
+  document.getElementById('stat-value').textContent    = totalVal > 0 ? `£${totalVal.toLocaleString('en-GB')}` : '–';
+}
+
+function updateCategoryFilter() {
+  const cats = [...new Set(allDrafts.map(d => d.sponsor_category).filter(Boolean))].sort();
+  const sel  = document.getElementById('filter-category');
+  const cur  = sel.value;
+  sel.innerHTML = '<option value="all">All categories</option>';
+  cats.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    if (c === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function renderCards() {
+  const statusF    = document.getElementById('filter-status').value;
+  const confF      = document.getElementById('filter-confidence').value;
+  const catF       = document.getElementById('filter-category').value;
+  const container  = document.getElementById('cards-container');
+
+  let filtered = allDrafts;
+  if (statusF !== 'all') filtered = filtered.filter(d => d.status === statusF);
+  if (confF   !== 'all') filtered = filtered.filter(d => d.confidence === confF);
+  if (catF    !== 'all') filtered = filtered.filter(d => d.sponsor_category === catF);
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty"><h2>${allDrafts.length === 0 ? 'No drafts yet' : 'No matches'}</h2><p>${allDrafts.length === 0 ? 'Click "Generate All Drafts" to start.' : 'Try changing the filters above.'}</p></div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(d => cardHTML(d)).join('');
+}
+
+function badgeClass(conf) {
+  if (conf === 'high')   return 'badge-high';
+  if (conf === 'medium') return 'badge-medium';
+  return 'badge-low';
+}
+function statusBadgeClass(s) {
+  if (s === 'approved')             return 'badge-approved';
+  if (s === 'skipped')              return 'badge-skipped';
+  if (s === 'draft_pending_review') return 'badge-pending';
+  return 'badge-pending';
+}
+function statusLabel(s) {
+  if (s === 'draft_pending_review') return 'Pending review';
+  if (s === 'approved')             return '✓ Approved';
+  if (s === 'skipped')              return '✗ Skipped';
+  return s;
+}
+
+function cardHTML(d) {
+  const asks = (() => {
+    try { return JSON.parse(d.asks || '[]'); } catch { return []; }
+  })();
+  const bodyEscaped = (d.draft_body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `
+  <div class="card ${d.status === 'approved' ? 'approved' : d.status === 'skipped' ? 'skipped' : ''}" id="card-${d.id}">
+    <div class="card-header">
+      <div class="card-meta">
+        <div class="sponsor-name">${d.sponsor_name}</div>
+        <div class="sponsor-cat">${d.sponsor_category || ''} ${d.sponsor_value_estimate ? `· ${d.sponsor_value_estimate}` : ''}</div>
+        ${d.draft_subject ? `<div class="subject-line">"${d.draft_subject}"</div>` : ''}
+      </div>
+      <div class="card-badges">
+        <span class="badge ${badgeClass(d.confidence)}">${d.confidence || 'medium'}</span>
+        <span class="badge ${statusBadgeClass(d.status)}">${statusLabel(d.status)}</span>
+      </div>
+    </div>
+    <div class="card-body">
+      ${d.draft_body ? `<div class="email-body">${bodyEscaped}</div>` : '<div class="email-body" style="color:var(--muted)">No body generated yet</div>'}
+      ${asks.length > 0 ? `<div class="asks-row">${asks.map(a => `<span class="ask-pill">${a}</span>`).join('')}</div>` : ''}
+      ${d.why_we_picked_them ? `<div class="why-line">Why: ${d.why_we_picked_them}</div>` : ''}
+      <div class="card-actions">
+        ${d.status !== 'approved' ? `<button class="btn btn-approve btn-small" onclick="setStatus('${d.id}', 'approved')">✓ Approve</button>` : ''}
+        ${d.status !== 'skipped'  ? `<button class="btn btn-skip btn-small"    onclick="setStatus('${d.id}', 'skipped')">✗ Skip</button>` : ''}
+        ${d.status !== 'draft_pending_review' ? `<button class="btn btn-ghost btn-small" onclick="setStatus('${d.id}', 'draft_pending_review')">↩ Reset</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Approve / skip ───────────────────────────────────────────────────────────
+async function setStatus(id, status) {
+  const r = await fetch('/api/sponsors/approve', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ id, status }),
+  });
+  if (!r.ok) { alert('Failed to update status'); return; }
+  const idx = allDrafts.findIndex(d => d.id === id);
+  if (idx >= 0) allDrafts[idx].status = status;
+  updateStats();
+  renderCards();
+}
+
+async function approveAll() {
+  const pending = allDrafts.filter(d => d.status === 'draft_pending_review');
+  if (pending.length === 0) { alert('No pending drafts to approve.'); return; }
+  if (!confirm(`Approve all ${pending.length} pending drafts?`)) return;
+  for (const d of pending) await setStatus(d.id, 'approved');
+}
+
+// ── Batch generator ──────────────────────────────────────────────────────────
+async function startBatch() {
+  if (batchRunning) return;
+
+  const existing = allDrafts.map(d => d.sponsor_name);
+  const toRun    = SPONSOR_LIST.filter(s => !existing.includes(s.brand_name));
+
+  if (toRun.length === 0) {
+    alert('All sponsors already have drafts. Refresh to see them.');
+    return;
+  }
+
+  if (!confirm(`Generate ${toRun.length} outreach drafts?\n\nThis calls the Claude API for each sponsor (2 seconds between calls).\nEstimated time: ~${Math.ceil(toRun.length * 5 / 60)} minutes.\n\nCost: ~£${(toRun.length * 0.003).toFixed(2)} API cost.\n\nGo?`)) return;
+
+  batchRunning = true;
+  document.getElementById('btn-generate').disabled = true;
+  document.getElementById('progress-wrap').classList.add('visible');
+
+  let done = 0, errors = 0;
+  const log = document.getElementById('progress-log');
+
+  for (const s of toRun) {
+    const pct = Math.round((done / toRun.length) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-label').textContent = `Generating: ${s.brand_name} (${done + 1}/${toRun.length})`;
+    log.textContent = `[${done + 1}/${toRun.length}] ${s.brand_name}…`;
+    log.scrollTop = log.scrollHeight;
+
+    try {
+      const r = await fetch('/api/sponsors/draft', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          sponsor_name:     s.brand_name,
+          sponsor_category: s.category,
+          ask_summary:      s.ask,
+          ask_value_gbp:    s.value,
+          hq_country:       s.hq,
+          notes:            s.notes || '',
+        }),
+      });
+
+      if (r.ok) {
+        const data = await r.json();
+        allDrafts.push({
+          id: data.draft?.id || `tmp-${Date.now()}`,
+          sponsor_name: s.brand_name,
+          sponsor_category: s.category,
+          draft_subject: data.subject,
+          draft_body: data.draft?.draft_body,
+          asks: data.draft?.asks || '[]',
+          why_we_picked_them: data.draft?.why_we_picked_them,
+          sponsor_value_estimate: data.draft?.sponsor_value_estimate || `£${s.value}`,
+          confidence: data.confidence || 'medium',
+          status: 'draft_pending_review',
+        });
+        log.textContent = `✓ ${s.brand_name} — "${data.subject}"`;
+      } else {
+        const err = await r.text();
+        log.textContent = `✗ ${s.brand_name} — ${err.slice(0, 100)}`;
+        errors++;
+      }
+    } catch (e) {
+      log.textContent = `✗ ${s.brand_name} — ${e.message}`;
+      errors++;
+    }
+
+    done++;
+    updateStats();
+    renderCards();
+
+    if (done < toRun.length) await new Promise(r => setTimeout(r, 2000));
+  }
+
+  document.getElementById('progress-fill').style.width = '100%';
+  document.getElementById('progress-label').textContent =
+    `Done! ${done - errors} generated, ${errors} errors.`;
+  batchRunning = false;
+  document.getElementById('btn-generate').disabled = false;
+
+  // Final reload from DB
+  setTimeout(loadDrafts, 1500);
+}
+
+// ── Auth check ───────────────────────────────────────────────────────────────
+async function checkAuth() {
+  const stored = localStorage.getItem('rbtr_auth');
+  if (!stored) {
+    const token = prompt('Enter RBTR auth token:');
+    if (token) localStorage.setItem('rbtr_auth', token);
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  await checkAuth();
+  await loadDrafts();
+})();
+</script>
+</body>
+</html>

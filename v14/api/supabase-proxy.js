@@ -66,6 +66,8 @@ const ALLOWED_TABLES = new Set([
   'contacts','contact_interactions','sops','sop_executions',
   // Phase 1.6 Workstream E (migration 35)
   'notifications',
+  // RBTR Sponsor Outreach Queue (added 9 May 2026)
+  'psnm_sponsor_outreach',
 ]);
 
 // Classification-aware blocks. AUTH never goes through the browser proxy.
