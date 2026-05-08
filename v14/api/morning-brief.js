@@ -97,6 +97,13 @@ async function gatherAllData() {
     cash,
     billsWk,
     weather,
+    enquiryDrafts,
+    sponsorDrafts,
+    atlasDraftsPending,
+    wmsPalletCount,
+    wmsEnqCount,
+    inboundUnread,
+    mortgageLastEntry,
   ] = await Promise.all([
     // Dynamic Built Dad: try start_date first, fall back to stored day_number
     sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
@@ -183,6 +190,14 @@ async function gatherAllData() {
         };
       } catch { return null; }
     })(),
+    // ── New build outputs (9 May 2026) ─────────────────────────────────────
+    sbSelect('psnm_enquiry_drafts', "status=eq.pending_approval&select=id,draft_subject,created_at&order=created_at.desc").then(r => r ?? []),
+    sbSelect('psnm_sponsor_outreach', "status=eq.draft_pending_review&select=id,sponsor_name,sponsor_category&order=created_at.desc").then(r => r ?? []),
+    sbSelect('psnm_atlas_drafts', "status=in.(pending,unsent,approved)&select=id,company,status&order=created_at.desc&limit=20").then(r => r ?? []),
+    sbSelect('psnm_wms_pallets', "out=eq.false&select=id").then(r => Array.isArray(r) ? r.length : null),
+    sbSelect('psnm_wms_enquiries', "status=eq.enquiry&select=id,company,pallets").then(r => r ?? []),
+    sbSelect('psnm_inbound_replies', `created_at=gte.${new Date(Date.now()-86400000).toISOString()}&select=id,from_email,subject&order=created_at.desc`).then(r => r ?? []),
+    sbSelect('psnm_mortgage_log', "select=date,status,amount_owed,lender_contact&order=created_at.desc&limit=1").then(r => r?.[0] ?? null),
   ]);
 
   return {
@@ -226,6 +241,16 @@ async function gatherAllData() {
     cash_position: cash,
     bills_due_this_week: billsWk,
     weather_today: weather,
+    enquiry_drafts_pending: Array.isArray(enquiryDrafts) ? enquiryDrafts.length : 0,
+    enquiry_drafts_list: enquiryDrafts,
+    sponsor_drafts_pending: Array.isArray(sponsorDrafts) ? sponsorDrafts.length : 0,
+    sponsor_drafts_list: sponsorDrafts,
+    atlas_drafts_pending: Array.isArray(atlasDraftsPending) ? atlasDraftsPending.length : 0,
+    wms_live_pallets: wmsPalletCount,
+    wms_open_enquiries: wmsEnqCount,
+    inbound_replies_24h: Array.isArray(inboundUnread) ? inboundUnread.length : 0,
+    inbound_replies_list: inboundUnread,
+    mortgage_last_entry: mortgageLastEntry,
   };
 }
 
@@ -251,6 +276,9 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.personal: { mood_log_gap_days, nate_checkin_due, house_jobs_remaining }
 - data.legal: { apa_signed, debt_line_booked, axel_brothers_status, guy_sharron_stage, audience_to_threshold }
 - data.finance: { cash_position, bills_due_this_week }
+- data.action_queues: { enquiry_drafts_pending (count awaiting Ben approval), sponsor_drafts_pending (count awaiting Ben review), atlas_drafts_pending, inbound_replies_24h (count of inbound email replies in last 24h), inbound_replies_list (array with from_email and subject) }
+- data.wms: { wms_live_pallets (count from live WMS), wms_open_enquiries (array) }
+- data.sarah: { mortgage_last_entry (date + status of last mortgage log entry) }
 
 STRUCTURE (LOOSE, NOT RIGID)
 
@@ -262,13 +290,15 @@ Order of content (adapt naturally):
 
 2. Overnight. If anything meaningful happened overnight (yesterday's mood, reflection, priority status, unread messages, new enquiries), surface it briefly. If nothing, skip this section entirely — don't pad with "nothing much".
 
-3. Warehouse. Pallets current vs break-even. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically.
+3. Warehouse. Pallets current vs break-even. If wms_live_pallets differs from psnm_pallets_current, note the WMS count. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically. If wms_open_enquiries is non-empty, mention count. If inbound_replies_24h > 0, name the senders — these are replies from live contacts that need a response.
 
 4. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week. Resurrection day number and what to post today. Audience movement in absolute numbers.
 
 5. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
 
 6. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. Silent otherwise.
+
+3b. Approval queue. If enquiry_drafts_pending > 0, say "N inbound enquiry drafts are waiting for your go-ahead." If sponsor_drafts_pending > 0, say "N sponsor emails drafted and ready for your review." These are action items — surface them clearly but don't pad.
 
 7. One last thing. Close with the single most important action today. "One last thing — call Michelin before 3pm. That's the move today."
 
