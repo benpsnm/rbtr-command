@@ -59,6 +59,16 @@ module.exports = async (req, res) => {
 
     if (req.method === 'POST') {
       const body = req.body;
+
+      // Bulk sync — replaces entire booking set
+      if (body.bookings && Array.isArray(body.bookings)) {
+        const rows = body.bookings.map(toRow);
+        if (!rows.length) return res.status(200).json({ ok: true, count: 0 });
+        await sbPost('psnm_wms_bookings', rows, true);
+        return res.status(200).json({ ok: true, count: rows.length });
+      }
+
+      // Single booking create
       if (!body.id) body.id = 'BK' + Date.now();
       const created = await sbPost('psnm_wms_bookings', [toRow(body)], true);
       return res.status(201).json({ booking: fromRow(created[0]) });

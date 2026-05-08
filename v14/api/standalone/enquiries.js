@@ -58,6 +58,16 @@ module.exports = async (req, res) => {
 
     if (req.method === 'POST') {
       const body = req.body;
+
+      // Bulk sync — replaces entire enquiry set
+      if (body.enquiries && Array.isArray(body.enquiries)) {
+        const rows = body.enquiries.map(toRow);
+        if (!rows.length) return res.status(200).json({ ok: true, count: 0 });
+        await sbPost('psnm_wms_enquiries', rows, true);
+        return res.status(200).json({ ok: true, count: rows.length });
+      }
+
+      // Single enquiry create
       if (!body.id) body.id = 'EQ' + Date.now();
       const created = await sbPost('psnm_wms_enquiries', [toRow(body)], true);
       return res.status(201).json({ enquiry: fromRow(created[0]) });
