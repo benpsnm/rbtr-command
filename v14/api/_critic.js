@@ -203,13 +203,14 @@ Score the email against every check. Be specific and harsh. Return only valid JS
       headers: {
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1500,
         temperature: 0.0,
-        system: CRITIC_SYSTEM,
+        system: [{ type: 'text', text: CRITIC_SYSTEM, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userMessage }],
       }),
     });

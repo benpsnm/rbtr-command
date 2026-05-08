@@ -186,13 +186,17 @@ Return ONLY valid JSON as specified in the output format above (subject, body, f
       headers: {
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1800,
         temperature: 0.7,
-        system: systemPrompt,
+        system: [
+          { type: 'text', text: v21, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: v22Section },
+        ],
         messages: [{ role: 'user', content: userMessage }],
       }),
     });
