@@ -1,5 +1,17 @@
 # Project: RBTR Command + PSNM Operations
 
+## CORE RULE — agents act, Ben approves only when truly necessary
+
+Before asking anything — check if you can do it yourself. Then check if there's another path to the same result. Only when both fail do you surface to Ben. Default is agent does it. Ben doing it is the exception, not the rule.
+
+The 5% of tasks that genuinely need Ben: macOS permission dialogs requiring a physical click, Face ID or fingerprint confirmation, 2FA codes from his phone, money leaving an account, anything that legally requires his identity to sign off. That's the full list. Not file edits. Not API calls. Not build decisions. Not config changes.
+
+When escalation IS necessary, use this format and only this format: "Ben, this needs your physical input because [specific reason]. Single tap/action: [what to do]. Takes [X seconds]." One option. Not a discussion. Not three alternatives. The single best path.
+
+Everything else: handle it, document it, report it. Ben will read the report. He doesn't need to be in the middle.
+
+---
+
 ## Owner & context
 Ben Greenwood. Solo operator. PSNM warehouse + RBTR truck build + Eternal Kustoms consulting + family. Time-poor, learning fast. Read PSNM_STATE.md for full operational state.
 
@@ -31,7 +43,7 @@ After hour 7+ of a session, suggest a stop point before complex steps. Don't pus
 - Single-file SPAs for HTML UIs (wms.html is 5000+ lines, intentional)
 - Auth: Pattern A — single password, JWT cookie + x-rbtr-auth header (see v14/api/auth/middleware.js)
 - Deployment: Vercel CLI (`vercel --prod` from v14/), aliased to rbtr-jarvis.vercel.app
-- NOTE: Vercel Pro subscription canceled/suspended as of 6 May 2026. Both rbtr-jarvis and psnm-wms return 402 until billing resolved (~13 May).
+- NOTE: Vercel Pro billing resolved 8 May 2026 — deploys working. Atlas-v2.2 branch is now production.
 
 ---
 
@@ -63,7 +75,6 @@ After hour 7+ of a session, suggest a stop point before complex steps. Don't pus
 
 ## Known deferred items (DO NOT auto-fix)
 
-- Vercel billing suspended since 6 May 2026 (canceled subscription, awaiting reactivation ~13 May when eBay clears)
 - `psnm-wms` standalone has no Supabase wiring — spec at `state-snapshots/standalone-supabase-spec.md`
 - `isSameOrigin` in atlas.js is intentional path-5 fallback during cookie-auth transition — do not remove until confirmed
 - psnm-wms GitHub auto-deploy webhook not delivering — reconnect via Vercel dashboard once billing resolved
