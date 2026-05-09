@@ -74,15 +74,16 @@ module.exports = async function handler(req, res) {
       errors.push(`tasks[${i}]: invalid status "${t.status}"`);
       return;
     }
+    // All rows must have identical keys for PostgREST array insert
     rows.push({
-      description:   t.description,
-      priority:      t.priority ? parseInt(t.priority, 10) : 3,
-      source:        t.source,
-      ...(t.source_detail  && { source_detail: t.source_detail }),
-      ...(t.project        && { project: t.project }),
-      ...(t.status         && { status: t.status }),
-      ...(t.blocked_reason && { blocked_reason: t.blocked_reason }),
-      ...(t.due_date       && { due_date: t.due_date }),
+      description:    t.description,
+      priority:       t.priority ? parseInt(t.priority, 10) : 3,
+      source:         t.source,
+      source_detail:  t.source_detail  || null,
+      project:        t.project        || null,
+      status:         t.status         || 'open',
+      blocked_reason: t.blocked_reason || null,
+      due_date:       t.due_date       || null,
     });
   });
 
