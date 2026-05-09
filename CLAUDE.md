@@ -73,6 +73,22 @@ After hour 7+ of a session, suggest a stop point before complex steps. Don't pus
 
 ---
 
+## Task tracking — rbtr_tasks (9 May 2026)
+
+Persistent task system now live. Tasks survive sessions; they roll over until `complete` or `skipped`.
+
+**Tables:** `rbtr_tasks`, `rbtr_routine_log` (Supabase project `mpxgyobotiqcawmqlhbf`)
+
+**API:** `GET/POST/PUT /api/tasks` (dispatcher: `api/tasks.js` → `api/tasks/list|create|update.js`), `POST /api/tasks/bulk` (accepts Bearer CRON_SECRET)
+
+**Rules for agents:**
+- Before starting any multi-step session, `GET /api/tasks?status=open,in_progress,blocked` and read the list. Surface P1 tasks to Ben at top of session.
+- After completing a task on behalf of Ben, PUT status=complete with the task id.
+- When an agent adds tasks on behalf of Ben (e.g. from voice memos or system checks), use `/api/tasks/bulk` with source='agent' and appropriate project tag.
+- `rbtr_routine_log` is dormant — do not write to it until Ben explicitly says "switch training on".
+
+---
+
 ## Known deferred items (DO NOT auto-fix)
 
 - `psnm-wms` standalone has no Supabase wiring — spec at `state-snapshots/standalone-supabase-spec.md`
