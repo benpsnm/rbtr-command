@@ -104,6 +104,7 @@ async function gatherAllData() {
     wmsEnqCount,
     inboundUnread,
     mortgageLastEntry,
+    openTasks,
   ] = await Promise.all([
     // Dynamic Built Dad: try start_date first, fall back to stored day_number
     sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
@@ -198,6 +199,8 @@ async function gatherAllData() {
     sbSelect('psnm_wms_enquiries', "status=eq.enquiry&select=id,company,pallets").then(r => r ?? []),
     sbSelect('psnm_inbound_replies', `created_at=gte.${new Date(Date.now()-86400000).toISOString()}&select=id,from_email,subject&order=created_at.desc`).then(r => r ?? []),
     sbSelect('psnm_mortgage_log', "select=date,status,amount_owed,lender_contact&order=created_at.desc&limit=1").then(r => r?.[0] ?? null),
+    // Tasks: open + in_progress + blocked, ordered priority asc
+    sbSelect('rbtr_tasks', "status=in.(open,in_progress,blocked)&order=priority.asc,created_at.asc&select=id,description,priority,status,source,project,blocked_reason,due_date").then(r => r ?? []),
   ]);
 
   return {
@@ -251,6 +254,10 @@ async function gatherAllData() {
     inbound_replies_24h: Array.isArray(inboundUnread) ? inboundUnread.length : 0,
     inbound_replies_list: inboundUnread,
     mortgage_last_entry: mortgageLastEntry,
+    open_tasks: Array.isArray(openTasks) ? openTasks : [],
+    open_tasks_count: Array.isArray(openTasks) ? openTasks.length : 0,
+    tasks_priority_1: Array.isArray(openTasks) ? openTasks.filter(t => t.priority === 1) : [],
+    tasks_overdue: Array.isArray(openTasks) ? openTasks.filter(t => t.due_date && t.due_date < new Date().toISOString().slice(0, 10)) : [],
   };
 }
 
@@ -279,6 +286,7 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.action_queues: { enquiry_drafts_pending (count awaiting Ben approval), sponsor_drafts_pending (count awaiting Ben review), atlas_drafts_pending, inbound_replies_24h (count of inbound email replies in last 24h), inbound_replies_list (array with from_email and subject) }
 - data.wms: { wms_live_pallets (count from live WMS), wms_open_enquiries (array) }
 - data.sarah: { mortgage_last_entry (date + status of last mortgage log entry) }
+- data.tasks: { open_tasks_count (int), tasks_priority_1 (array — P1 tasks: description, status, due_date), tasks_overdue (array — tasks past due date), open_tasks (full list ordered priority asc) }
 
 STRUCTURE (LOOSE, NOT RIGID)
 
@@ -287,6 +295,8 @@ Write as one continuous spoken brief. No headings, no bullets, no numbered lists
 Order of content (adapt naturally):
 
 1. Open. "Morning Ben. [Weekday] [date]. [N] days to departure."
+
+1b. Tasks. If open_tasks_count > 0: immediately after the opening line, surface the top tasks. Read out P1 tasks (tasks_priority_1) by description — these are the non-negotiables today. If any are overdue (tasks_overdue), flag them: "Still carrying [task] from [due_date] — that one needs closing." If open_tasks_count is 0, skip this section entirely. Do NOT pad. Max 2–3 tasks named — if there are more, close with "and [N] others queued." Keep it tight: tasks are context, not a reading list.
 
 2. Overnight. If anything meaningful happened overnight (yesterday's mood, reflection, priority status, unread messages, new enquiries), surface it briefly. If nothing, skip this section entirely — don't pad with "nothing much".
 

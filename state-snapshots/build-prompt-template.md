@@ -29,6 +29,7 @@ Run these before starting any build phase. If any check fails, stop and report t
 [ ] BRANCH CONFIRMED — on correct branch (not main unless intentional)
 [ ] NO SUSPENDED BILLING — Vercel billing active (check: curl rbtr-jarvis.vercel.app)
 [ ] PSNM_STATE.md READ — operational ground truth loaded for this session
+[ ] TASK QUEUE READ — GET /api/tasks?status=open,in_progress,blocked — surface P1 tasks to Ben; add build tasks via bulk endpoint with source='agent'
 ```
 
 ---
