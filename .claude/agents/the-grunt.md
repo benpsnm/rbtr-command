@@ -27,6 +27,8 @@ grep -n "rbtr_tasks\|open_tasks" /Users/bengreenwood/Desktop/rbtr-command/v14/ap
 # Must return at least 3 hits.
 ```
 
+Final action: POST to /api/diagnose/post-build with the build name and a one-line summary of what was verified. Use: `curl -s -X POST https://rbtr-jarvis.vercel.app/api/diagnose/post-build -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d '{"triggered_by":"grunt-verify","build_summary":"[one line]"}'`
+
 Rules:
 1. Always paste tool output verbatim. Never summarise. Never collapse.
 2. Never run anything that modifies state (no vercel deploy, no git push, no payments, no env changes).

@@ -105,6 +105,7 @@ async function gatherAllData() {
     inboundUnread,
     mortgageLastEntry,
     openTasks,
+    lastDiagnosis,
   ] = await Promise.all([
     // Dynamic Built Dad: try start_date first, fall back to stored day_number
     sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
@@ -201,6 +202,8 @@ async function gatherAllData() {
     sbSelect('psnm_mortgage_log', "select=date,status,amount_owed,lender_contact&order=created_at.desc&limit=1").then(r => r?.[0] ?? null),
     // Tasks: open + in_progress + blocked, ordered priority asc
     sbSelect('rbtr_tasks', "status=in.(open,in_progress,blocked)&order=priority.asc,created_at.asc&select=id,description,priority,status,source,project,blocked_reason,due_date").then(r => r ?? []),
+    // Last auto-diagnosis run
+    sbSelect('rbtr_auto_diagnosis_log', 'order=created_at.desc&limit=1').then(r => r?.[0] ?? null),
   ]);
 
   return {
@@ -258,6 +261,18 @@ async function gatherAllData() {
     open_tasks_count: Array.isArray(openTasks) ? openTasks.length : 0,
     tasks_priority_1: Array.isArray(openTasks) ? openTasks.filter(t => t.priority === 1) : [],
     tasks_overdue: Array.isArray(openTasks) ? openTasks.filter(t => t.due_date && t.due_date < new Date().toISOString().slice(0, 10)) : [],
+    last_diagnosis: (() => {
+      if (!lastDiagnosis) return null;
+      const ageHours = (Date.now() - new Date(lastDiagnosis.created_at).getTime()) / 3600000;
+      if (ageHours >= 18) return null;
+      return {
+        shipped_count: lastDiagnosis.shipped_count,
+        auto_fixed_count: lastDiagnosis.auto_fixed_count,
+        ben_needed_count: lastDiagnosis.ben_needed_count,
+        top_ben_task: lastDiagnosis.top_ben_task,
+        triggered_by: lastDiagnosis.triggered_by,
+      };
+    })(),
   };
 }
 
@@ -287,6 +302,7 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.wms: { wms_live_pallets (count from live WMS), wms_open_enquiries (array) }
 - data.sarah: { mortgage_last_entry (date + status of last mortgage log entry) }
 - data.tasks: { open_tasks_count (int), tasks_priority_1 (array — P1 tasks: description, status, due_date), tasks_overdue (array — tasks past due date), open_tasks (full list ordered priority asc) }
+- data.last_diagnosis: null OR { shipped_count, auto_fixed_count, ben_needed_count, top_ben_task, triggered_by } — present only if a diagnosis ran within the last 18 hours
 
 STRUCTURE (LOOSE, NOT RIGID)
 
@@ -295,6 +311,8 @@ Write as one continuous spoken brief. No headings, no bullets, no numbered lists
 Order of content (adapt naturally):
 
 1. Open. "Morning Ben. [Weekday] [date]. [N] days to departure."
+
+1a. Overnight diagnosis (ONLY if data.last_diagnosis is non-null). Speak one sentence: "Overnight diagnosis: [shipped_count] items shipped clean.[If auto_fixed_count > 0: ' [auto_fixed_count] auto-fixed.'][If ben_needed_count > 0: ' [ben_needed_count] need your hands — top one is [top_ben_task].']" Skip entirely if data.last_diagnosis is null.
 
 1b. Tasks. If open_tasks_count > 0: immediately after the opening line, surface the top tasks. Read out P1 tasks (tasks_priority_1) by description — these are the non-negotiables today. If any are overdue (tasks_overdue), flag them: "Still carrying [task] from [due_date] — that one needs closing." If open_tasks_count is 0, skip this section entirely. Do NOT pad. Max 2–3 tasks named — if there are more, close with "and [N] others queued." Keep it tight: tasks are context, not a reading list.
 

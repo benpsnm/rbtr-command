@@ -115,6 +115,23 @@ Active worktrees for parallel work (see `git worktree list`):
 
 ---
 
+## Auto-diagnose pattern
+
+Every autonomous build must end by calling `POST /api/diagnose/post-build` before writing the status report.
+
+```bash
+curl -s -X POST https://rbtr-jarvis.vercel.app/api/diagnose/post-build \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"triggered_by":"[build-name]","build_summary":"[one-line]"}'
+```
+
+The endpoint verifies what shipped, auto-fixes reversible issues (unpushed branches, failed deploy retries), and surfaces Ben-needed items as rbtr_tasks. Ben hears the summary in the next Rocko morning brief — he never reads long diagnosis reports.
+
+If Vercel is 402 (billing suspended): note `log_id: null` in the status report, do not skip the call entirely (it will fail gracefully and return an error). Pattern locked 11 May 2026.
+
+---
+
 ## Known hook quirks
 
 The PreToolUse deploy guard greps the entire bash command string for `vercel --prod` patterns. This blocks intended `vercel --prod` invocations correctly, but also false-positives when those strings appear elsewhere — e.g. inside a commit message, an echo, or a grep search.

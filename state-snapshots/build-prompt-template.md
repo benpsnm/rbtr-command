@@ -104,3 +104,19 @@ Report structure:
 ```
 
 Keep it short. Ben reads the report, not the play-by-play.
+
+---
+
+## 6. PHASE FINAL — Auto-diagnose (mandatory, every build)
+
+Before writing the status report, POST to `/api/diagnose/post-build` with `triggered_by` and `build_summary`. Reversible issues auto-fix. Genuine Ben items surface in next Rocko brief. The status report references the diagnosis ID returned.
+
+```bash
+curl -s -X POST https://rbtr-jarvis.vercel.app/api/diagnose/post-build \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"triggered_by":"[build-name]","build_summary":"[one-line summary]"}' \
+  | jq '{log_id,shipped_count,auto_fixed_count,ben_needed_count,top_ben_task}'
+```
+
+Include the returned `log_id` in the status report under "## Diagnosis". If Vercel is 402 (billing suspended), log the call as pending and note `log_id: null` — do not skip the phase entirely.
