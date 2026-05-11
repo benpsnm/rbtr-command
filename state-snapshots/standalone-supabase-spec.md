@@ -1,719 +1,244 @@
-# Standalone WMS — Supabase Wire-Up Spec
-# Version: 1.0 — Written 8 May 2026 (reverse-engineered from index.html)
-
-**Purpose:** Replace localStorage with Supabase-backed persistence in psnm-wms.vercel.app.  
-**Approach:** Static SPA cannot embed service-role credentials → all DB access proxied through new v14 API endpoints.  
-**Source of truth for code build:** This file.
+# Standalone-to-Supabase Wire-up Spec
+**Date:** 7 May 2026  
+**Author:** Claude (from code audit of /Users/bengreenwood/Desktop/psnm/deploy/index.html)  
+**Status:** Planning document — no implementation started
 
 ---
 
-## Part 1 — localStorage Data Structures (current)
+## 1. CURRENT STATE
 
-### Key: `psnm_wms2`
+### Screens in standalone today (15 tabs)
 
-Top-level state object `S`:
+| Tab | Pane ID | Description |
+|-----|---------|-------------|
+| Map | `map` | Interactive 1,602-pallet warehouse grid. Click cell to assign/move/check out. Bulk assign/out mode. Aisle + floor + aisle-floor positions. |
+| Goods In | `goodsin` | Process incoming pallets. Customer select, location auto-assign or manual, rate entry, handling fee. |
+| Goods Out | `goodsout` | Process pallet collection. Search by PID/customer, calc days stored + fee, mark out. |
+| Stock | `stock` | Full pallet inventory table. Filter by customer, export CSV. |
+| Log | `movements` | Timestamped movement history (goods in, goods out, moves). Export CSV. |
+| Customers | `customers` | Customer CRUD. Name, contact, email, phone, notes. Revenue summary. |
+| Rates | `rates` | Rate calculator. Pallets × rate × weeks. Hardcoded tier table. |
+| Dashboard | `dashboard` | Top stats (occupied, weekly revenue, customers). Recent movements table. Revenue by customer chart. |
+| Bookings | `bookings` | Enquiry pipeline + active booking form. Calc weekly rate. Generate welcome email (opens Gmail compose). |
+| CRM | `crm2` | Hardcoded lead list (~200 companies, L001–L200+). Status filter (new/hot/contacted). CSV upload with broken Anthropic call. Status persisted to localStorage. |
+| Emails | `emails2` | Template email generator. Uses same lead list as CRM. Filter unsent/hot/opened. Opens Gmail compose. Status changes update localStorage. |
+| Social | `social2` | Static content — Facebook post copy/templates. Paste-and-post workflow. No live integration. |
+| Invoices | `invoices2` | Invoice generation for active bookings from `psnm_v14_bk`. Opens Gmail compose with invoice text. |
+| Media | `media2` | Static asset links/thumbnails. No data store. |
+| Auto | `auto2` | Status board for Facebook, Instagram, LinkedIn, email campaign, booking system, AI chatbot, WhatsApp. Static HTML — no live data. |
 
-```json
-{
-  "cells":      { "A-1-1": 4, "B-3-2": 17 },
-  "floor":      { "FL-1-1": 5 },
-  "aisleFloor": { "A-FL-1-1": 9 },
-  "pallets": {
-    "1": {
-      "id": 1,
-      "customer": "Acme Ltd",
-      "ref": "PO-001",
-      "desc": "Machine components",
-      "weight": "250",
-      "size": "standard",
-      "notes": "",
-      "dateIn": "2026-04-15",
-      "timeIn": "09:30",
-      "location": "A-1-1",
-      "stype": "racked",
-      "weeklyRate": 6.50,
-      "out": false,
-      "outDate": null,
-      "outTime": null
-    }
-  },
-  "customers": {
-    "Acme Ltd": {
-      "name": "Acme Ltd",
-      "contact": "John Smith",
-      "phone": "07700 900123",
-      "email": "john@acme.co.uk",
-      "rate": "6.50",
-      "deal": "none",
-      "notes": ""
-    }
-  },
-  "movements": [
-    {
-      "type": "IN",
-      "date": "2026-04-15",
-      "time": "09:30",
-      "customer": "Acme Ltd",
-      "ref": "PO-001",
-      "pallets": 1,
-      "location": "A-1-1",
-      "rate": 6.50,
-      "handling": 4.00,
-      "desc": "Machine components",
-      "notes": "Goods in"
-    }
-  ],
-  "nextId": 2
-}
-```
+### Where data is currently stored
 
-**Notes on `cells`/`floor`/`aisleFloor`:** These are occupancy maps keyed by location string → pallet ID (integer). They are derived state (can be reconstructed from pallets). Do NOT store them in Supabase — reconstruct on load from the `pallets` table (`out=false` rows, using `location` field).
+| Key | Storage | Contents |
+|-----|---------|----------|
+| `psnm_wms2` | localStorage | Core WMS state: `{cells, floor, aisleFloor, pallets, customers, movements, nextId}`. All pallet positions, all customer records, all movement history. The entire warehouse in one blob. |
+| `psnm_v14_bk` | localStorage | Active bookings array `[{id, company, contact, email, pallets, type, rate, startDate, goods, notes, status}]` |
+| `psnm_v14_eq` | localStorage | Enquiry pipeline array. Same schema as bookings. Includes DEMO1 fallback. |
+| `psnm_crm4_status` | localStorage | `{leadId: 'contacted' \| 'new' \| 'hot'}` — status overrides for the hardcoded CRM lead list. |
+| Hardcoded JS arrays | Inline JS | ~200 leads (L001–L200+) with company, city, postcode, industry, email, status. Compiled into the HTML at build time. NOT synced with psnm_outreach_targets in Supabase. |
 
-**Pallet `stype` values:** `"racked"` | `"floor"` | `"aislefloor"`  
-**Pallet `deal` values:** `"none"` | `"starter"` | `"lockin"` | `"scaleup"`  
-**Location key formats:**
-- Racked: `"A-1-1"` (aisle-bay-shelf)
-- Floor: `"FL-1-1"` (pos-stack)
-- Aisle-floor: `"A-FL-1-1"` (aisle-FL-bay-stack)
+### What auth exists
+
+Client-side SHA-256 gate (lines 6–51). Password hash embedded in HTML. `sessionStorage` session (cleared on tab close). No server, no JWT, no rate-limit enforcement (lockout is also client-side). Hash was rotated 6 May to known password `kaqtat-xudvyv-2pozgE`.
+
+### What's broken
+
+- `crm2Upload()` at line 2959: `fetch('https://api.anthropic.com/v1/messages', ...)` with no API key header. Returns 401. CSV-to-lead-list extraction feature is completely broken.
+- No Supabase connection anywhere in the file.
+- Standalone CRM lead list (~200 hardcoded entries) is entirely separate from `psnm_outreach_targets` (205 rows in Supabase). They overlap in subject matter but are not the same data.
 
 ---
 
-### Key: `psnm_v14_bk` (bookings)
+## 2. TARGET STATE
 
-Array of booking objects:
+### Which CC WMS workflows are mirrored in standalone
 
-```json
-[
-  {
-    "id": "BK1714000000000",
-    "company": "Healthcare Equipment Ltd",
-    "contact": "Sarah Jones",
-    "email": "sarah@healthequip.co.uk",
-    "phone": "07700 900456",
-    "pallets": "500",
-    "type": "floor",
-    "rate": "4.50",
-    "startDate": "2026-05-01",
-    "goods": "Medical equipment",
-    "notes": "Confirmed booking",
-    "status": "active",
-    "created": "2026-04-09T00:00:00.000Z"
-  }
-]
-```
+The Map, Goods In, Goods Out, Stock, Log, Customers, Rates, and Dashboard tabs are the shared "ops core" — these are the workflows warehouse staff actually use. They currently mirror the Command Centre's `/wms.html` in function (both were built from the same codebase at some point) but are now drifted.
 
----
+### Which staff workflows are unique to standalone (or should be)
 
-### Key: `psnm_v14_eq` (enquiries)
+- **Goods In / Goods Out on mobile** — standalone is the intended mobile-first surface for a staff member walking the warehouse. The CC is a desk tool.
+- **Quick cell lookup** — staff need to find "where is customer X's pallets" without admin context.
+- **Customers tab** — staff may need to check rates or contact info.
 
-Same shape as bookings, but `status: "enquiry"` and `id` prefix `"EQ"`:
+The following tabs are **not** appropriate for staff and should either be hidden or removed in the standalone: CRM, Emails, Bookings, Social, Invoices, Media, Auto. These are sales/admin tools only Ben uses.
 
-```json
-[
-  {
-    "id": "EQ1714000000000",
-    "company": "Healthcare Equipment Ltd",
-    "contact": "Sarah Jones",
-    "email": "sarah@healthequip.co.uk",
-    "phone": "",
-    "pallets": "500",
-    "type": "floor",
-    "rate": "",
-    "startDate": "",
-    "goods": "Mobility aids",
-    "notes": "500 pallets",
-    "status": "enquiry",
-    "created": "2026-04-09T00:00:00.000Z"
-  }
-]
-```
+### Which tables read/write from each side
+
+| Table | CC (wms.html) | Standalone | Notes |
+|-------|--------------|------------|-------|
+| psnm_outreach_targets | Read (Atlas drafts reference it) | Currently: none (hardcoded list instead) | Should be same data eventually |
+| psnm_atlas_drafts | Read/Write | No | CC-only |
+| psnm_intelligence_prospects | Read/Write | No | CC-only |
+| psnm_outreach_events | Read | No | CC-only |
+| psnm_inbound_replies | Read | No | CC-only |
+| psnm_ww_leads | Read | No | CC-only |
+| **psnm_pallets** (does not exist yet) | Would replace localStorage | Would replace localStorage | Core WMS data needs its own table |
+| **psnm_customers** (does not exist yet) | Would replace localStorage | Would replace localStorage | Core WMS data |
+| **psnm_movements** (does not exist yet) | Would replace localStorage | Would replace localStorage | Core WMS data |
+
+Note: the WMS core data (pallets, customers, movements) currently lives in localStorage and does **not** exist in Supabase at all. Before standalone can read from Supabase, this data needs migrating to new tables — or WMS needs connecting to existing Supabase psnm_outreach_targets as a start point (but that's the wrong table for pallet data).
 
 ---
 
-### Key: `psnm_crm4_status`
+## 3. ARCHITECTURE OPTIONS
 
-Object mapping lead ID → status string. The master lead list (208 entries, `CRM2_LEADS`) is hardcoded in JS. Only overrides are persisted:
+### Option A: Direct Supabase access from standalone (anon key + RLS)
 
-```json
-{
-  "L001": "contacted",
-  "L007": "opened",
-  "L032": "cold"
-}
-```
+The standalone HTML makes requests directly to Supabase REST API using the public anon key. Row-Level Security policies enforce what anon users can read/write.
 
-**CRM status values:** `"new"` | `"hot"` | `"opened"` | `"contacted"` | `"cold"`
+**Pros:**
+- No backend needed — pure static SPA remains
+- Simple to implement (add Supabase anon key to HTML, replace localStorage reads/writes with fetch calls)
+- Free tier handles the request volume easily
+- Supabase anon key is intended for exactly this pattern
+
+**Cons:**
+- Anon key is visible in the HTML source (anyone who can access the page can see it — but page is password-gated, so exposure is limited to someone who breaks the SHA-256 gate, which is trivial)
+- RLS policies must be written correctly — a mistake exposes data
+- No audit trail of who made what change (all requests look the same to Supabase)
+- Mutations from standalone bypass v14 business logic (e.g. no Telegram alert on goods-in, no rate validation)
+
+**Effort:** ~8–12h. Mostly creating the DB tables (psnm_pallets, psnm_customers, psnm_movements), migrating localStorage data, writing RLS policies, replacing ~20 read/write points in index.html.
+
+**Security:** Acceptable for a single-role ops tool on a private network. Not acceptable if the page ever becomes public or multi-tenant.
 
 ---
 
-## Part 2 — Supabase Schema
+### Option B: Proxy through v14 atlas.js (standalone calls v14 API)
 
-### Table: `psnm_pallets`
+The standalone HTML calls `https://rbtr-jarvis.vercel.app/api/atlas?action=wms_*` endpoints. v14 handles auth, validation, and DB writes. Standalone never touches Supabase directly.
+
+**Pros:**
+- No new Supabase credentials in the HTML
+- Business logic centralised in v14 (Telegram alerts, rate validation, dedup all happen server-side)
+- Auth is handled server-side — if v14 JWT cookie model is extended to standalone, it's a real auth layer not SHA-256 theatre
+- Consistent data model: both CC and standalone write through the same API
+
+**Cons:**
+- v14 must be live for standalone to function. Right now v14 is billing-suspended — standalone would also be broken.
+- Every WMS action requires a round-trip to iad1 (Washington DC). Goods-in scan on a mobile in a warehouse = 200–400ms per tap instead of instant.
+- Requires building WMS API endpoints in atlas.js (currently has no WMS CRUD endpoints)
+- Adds 12+ function routes to v14, pushing closer to Vercel's 12-function limit (v14 already hits this — each new api/ file is a function)
+
+**Effort:** ~20–30h. Build WMS CRUD API in v14, write standalone to call it, handle auth cookie cross-origin, test on mobile.
+
+**Security:** Stronger. But introduces availability coupling: billing pause on v14 = standalone down too (as happened last night).
+
+---
+
+### Recommendation
+
+**Option A: Direct Supabase access** for now.
+
+Reasoning for Ben's situation:
+1. v14 is billing-suspended and will stay fragile until payment is resolved. Coupling standalone to v14 means standalone breaks whenever v14 has problems.
+2. Ben is time-poor and broke. Option A is half the hours at a third of the complexity.
+3. The threat model for the SHA-256 gate is "casual snooping by a warehouse worker." Direct Supabase with RLS and anon key is strictly more secure than the current gate.
+4. The Vercel 12-function limit is already a constraint. Adding WMS endpoints to v14 will require rearchitecting the function layout.
+
+Option B becomes the right choice when: the unified psnm-core.js unification happens (Phase 2), because at that point standalone and CC share code and the proxy pattern is natural.
+
+---
+
+## 4. TABLE MAPPING (for Option A)
+
+New tables required (none exist yet):
+
+| Table | Columns (minimal viable) | Read | Write | RLS note |
+|-------|--------------------------|------|-------|----------|
+| `psnm_pallets` | id, pid (text), customer_name, cell_key, date_in, weekly_rate, goods_description, is_out, date_out, notes | anon | anon | anon can read all, write own session — or just anon full access (single-tenant) |
+| `psnm_customers` | id, name, contact, email, phone, notes, created_at | anon | anon | Same |
+| `psnm_movements` | id, pid, type (in/out/move), customer_name, from_cell, to_cell, qty, handling_fee, rate, operator, created_at | anon | anon (insert only) | No delete/update for integrity |
+
+Existing tables touched by standalone (read-only, for future expansion):
+
+| Table | Use | Access needed |
+|-------|-----|--------------|
+| `psnm_outreach_targets` | Replace hardcoded CRM lead list | anon read, filtered by region |
+| `psnm_atlas_drafts` | Read draft status per target | anon read (sensitive — defer) |
+
+Tables **not** touched by standalone:
+
+- `psnm_intelligence_prospects` — CC-only
+- `psnm_outreach_events` — CC-only  
+- `psnm_inbound_replies` — CC-only
+- `psnm_ww_leads` — CC-only
+
+### RLS policy pattern for new tables
 
 ```sql
-CREATE TABLE psnm_pallets (
-  id            INTEGER PRIMARY KEY,           -- matches S.nextId counter; NOT serial (imported from localStorage)
-  customer      TEXT NOT NULL,
-  ref           TEXT,
-  description   TEXT NOT NULL,
-  weight_kg     TEXT,                          -- stored as string in localStorage ("250"), keep as text to avoid lossy conversion
-  size          TEXT DEFAULT 'standard',
-  notes         TEXT,
-  date_in       DATE NOT NULL,
-  time_in       TEXT,                          -- "HH:MM" string, no timezone needed
-  location      TEXT NOT NULL,                 -- location key e.g. "A-1-1", "FL-2-1", "B-FL-3-2"
-  stype         TEXT NOT NULL CHECK (stype IN ('racked','floor','aislefloor')),
-  weekly_rate   NUMERIC(6,2) NOT NULL DEFAULT 6.50,
-  out           BOOLEAN NOT NULL DEFAULT false,
-  out_date      DATE,
-  out_time      TEXT,
-  created_at    TIMESTAMPTZ DEFAULT now()
-);
-```
-
-**Indexes:**
-```sql
-CREATE INDEX idx_psnm_pallets_customer ON psnm_pallets(customer);
-CREATE INDEX idx_psnm_pallets_out ON psnm_pallets(out);
-CREATE INDEX idx_psnm_pallets_location ON psnm_pallets(location) WHERE out = false;
+-- Example for psnm_pallets: full anon access (single-tenant, gate is auth layer)
+create policy "anon_read" on psnm_pallets for select using (true);
+create policy "anon_insert" on psnm_pallets for insert with check (true);
+create policy "anon_update" on psnm_pallets for update using (true);
+-- No delete policy — use is_out flag instead
 ```
 
 ---
 
-### Table: `psnm_customers`
+## 5. AUTH MIGRATION
 
-```sql
-CREATE TABLE psnm_customers (
-  name          TEXT PRIMARY KEY,              -- customer name IS the key in localStorage
-  contact       TEXT,
-  phone         TEXT,
-  email         TEXT,
-  rate          TEXT DEFAULT '6.50',           -- stored as string ("6.50") matching localStorage
-  deal          TEXT DEFAULT 'none' CHECK (deal IN ('none','starter','lockin','scaleup')),
-  notes         TEXT,
-  created_at    TIMESTAMPTZ DEFAULT now(),
-  updated_at    TIMESTAMPTZ DEFAULT now()
-);
-```
+### Current state
 
-**Indexes:**
-```sql
-CREATE INDEX idx_psnm_customers_email ON psnm_customers(email) WHERE email IS NOT NULL AND email != '';
-```
+Client-side SHA-256 gate in a `<script>` block at the top of index.html. Passes on `sessionStorage.getItem('psnm_auth') === '1'`. Session clears on tab close. No server sees the password.
 
----
+### Target
 
-### Table: `psnm_movements`
+Same v14 Pattern A: bcrypt hash server-side, JWT cookie, HttpOnly Secure SameSite=Strict, 30-day expiry.
 
-Append-only log. No updates or deletes.
+### Blocker
 
-```sql
-CREATE TABLE psnm_movements (
-  id            BIGSERIAL PRIMARY KEY,
-  type          TEXT NOT NULL CHECK (type IN ('IN','OUT','MOVE','ADJUST')),
-  date          DATE NOT NULL,
-  time          TEXT NOT NULL,                 -- "HH:MM"
-  customer      TEXT NOT NULL,
-  ref           TEXT,
-  pallets       INTEGER NOT NULL DEFAULT 1,
-  location      TEXT,                          -- may be comma-separated list for multi-pallet moves
-  rate          NUMERIC(6,2),                  -- null on OUT
-  handling      NUMERIC(8,2) DEFAULT 0,
-  description   TEXT,
-  notes         TEXT,
-  created_at    TIMESTAMPTZ DEFAULT now()
-);
-```
+Standalone is a **static SPA** — there is no server to run bcrypt or issue JWTs. Two sub-options:
 
-**Indexes:**
-```sql
-CREATE INDEX idx_psnm_movements_date ON psnm_movements(date DESC);
-CREATE INDEX idx_psnm_movements_customer ON psnm_movements(customer);
-CREATE INDEX idx_psnm_movements_type ON psnm_movements(type);
-```
+**Sub-option A1 (with Option A architecture):** Keep the SHA-256 gate but rotate the hash whenever the password changes. Acceptable for a warehouse ops tool used by 1–2 known staff. The gate prevents casual access; the real security is that Supabase RLS limits what anon can do.
+
+**Sub-option A2 (add a minimal auth edge function):** Deploy a single Vercel serverless function (separate from v14) on the `psnm-wms` project that does bcrypt check + issues a JWT cookie. Standalone checks the cookie before loading. This is a separate 4-function project, no conflict with v14 limits.
+
+**Sub-option B (with Option B architecture):** Re-use v14 auth endpoints directly. Standalone redirects to `rbtr-jarvis.vercel.app/login.html` for auth, then the cookie is set on the v14 domain. Cross-origin cookies don't work here — standalone would need to be on the same domain or use a token instead. Complex.
+
+### Recommended path
+
+A1 for now (keep SHA-256 gate, known password, rotate via git push). A2 when the psnm-wms project gets its own Vercel functions anyway (Phase 1–2 of the unification plan). Do not block Supabase wire-up on auth migration — they are independent.
 
 ---
 
-### Table: `psnm_bookings`
+## 6. EFFORT ESTIMATE
 
-Maps from `psnm_v14_bk` localStorage key.
+| Phase | Task | Hours | Blocks |
+|-------|------|-------|--------|
+| 0 | Write migrations for psnm_pallets, psnm_customers, psnm_movements | 2h | Nothing |
+| 0 | Export current localStorage data to seed the new tables (one-time script) | 1h | Migration |
+| 1 | Add Supabase anon key to standalone, replace localStorage `save()`/`load()` with REST calls | 4h | Migration |
+| 1 | Replace goods-in / goods-out writes | 2h | Phase 1 start |
+| 1 | Replace stock / movements reads | 2h | Phase 1 start |
+| 1 | Replace customers CRUD | 1h | Phase 1 start |
+| 2 | Replace bookings/enquiries localStorage with psnm_bookings table (new table needed) | 3h | Independent |
+| 3 | Replace hardcoded CRM list with live read from psnm_outreach_targets | 2h | Independent |
+| 3 | Fix broken CSV-extract by proxying to v14 atlas.js | 1h | v14 must be live |
+| 4 | Auth: A2 sub-option — standalone auth edge function | 4h | Independent |
 
-```sql
-CREATE TABLE psnm_bookings (
-  id            TEXT PRIMARY KEY,              -- "BK" + timestamp, matches localStorage
-  company       TEXT NOT NULL,
-  contact       TEXT NOT NULL,
-  email         TEXT,
-  phone         TEXT,
-  pallets       TEXT,                          -- stored as string ("500")
-  type          TEXT,                          -- "floor" | "racked"
-  rate          TEXT,
-  start_date    TEXT,                          -- ISO date string or empty
-  goods         TEXT,
-  notes         TEXT,
-  status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','cancelled','completed')),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
+**Recommended sequence:** Phase 0 → Phase 1 (this unblocks the core ops use case for staff). Phase 2–4 in any order.
 
----
+**What can be parallel:** Phase 2, 3, 4 are fully independent once Phase 1 is done.
 
-### Table: `psnm_enquiries`
+**What blocks what:** Phase 3 (CSV extract fix) needs v14 to be live. Everything else works regardless of v14 status.
 
-Maps from `psnm_v14_eq` localStorage key.
-
-```sql
-CREATE TABLE psnm_enquiries (
-  id            TEXT PRIMARY KEY,              -- "EQ" + timestamp
-  company       TEXT NOT NULL,
-  contact       TEXT NOT NULL,
-  email         TEXT,
-  phone         TEXT,
-  pallets       TEXT,
-  type          TEXT,
-  rate          TEXT,
-  start_date    TEXT,
-  goods         TEXT,
-  notes         TEXT,
-  status        TEXT NOT NULL DEFAULT 'enquiry' CHECK (status IN ('enquiry','converted','closed')),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
+**Total for Phase 0+1 (core wire-up):** ~12h  
+**Total for Phases 0–4 (full):** ~22h
 
 ---
 
-### Table: `psnm_crm_status`
+## 7. RISKS
 
-Maps from `psnm_crm4_status` localStorage key (just the overrides object).
+1. **localStorage data loss during migration.** The `psnm_wms2` blob contains all live pallet positions and customer data. If the migration script corrupts it, the warehouse state is gone. Mitigation: export to JSON file before any code change, store in Supabase as a backup row.
 
-```sql
-CREATE TABLE psnm_crm_status (
-  lead_id       TEXT PRIMARY KEY,              -- "L001" .. "L208"
-  status        TEXT NOT NULL CHECK (status IN ('new','hot','opened','contacted','cold')),
-  updated_at    TIMESTAMPTZ DEFAULT now()
-);
-```
+2. **Supabase anon key in HTML.** The key is publicly readable by anyone who gets past the SHA-256 gate. If the gate is bypassed (trivially, it's client-side), they have read/write access to psnm_pallets, psnm_customers, psnm_movements. Mitigation: these tables contain no PII beyond company names and contact details which are already semi-public. Not catastrophic if leaked, but not ideal.
 
----
+3. **Single-browser state right now.** `psnm_wms2` in localStorage is device-specific. If Ben uses standalone on his phone and another staff member uses it on a tablet, they have two independent states. The Supabase migration fixes this — shared DB is the main benefit.
 
-## Part 3 — Row Level Security
+4. **v14 billing suspension affects the CSV-extract fix (Phase 3).** Low priority item but it'll stay broken until v14 is live.
 
-```sql
--- Enable RLS on all new tables
-ALTER TABLE psnm_pallets    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE psnm_customers  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE psnm_movements  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE psnm_bookings   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE psnm_enquiries  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE psnm_crm_status ENABLE ROW LEVEL SECURITY;
+5. **Hardcoded lead list vs psnm_outreach_targets drift.** The ~200 hardcoded CRM entries overlap with the 205 Supabase targets but are not the same data. Merging them without duplicating or losing status flags requires a careful reconciliation step. Do not assume they can be naively unioned.
 
--- Service role has full access (bypasses RLS by default in Supabase — no policy needed)
--- No public access (anon role is blocked by RLS with no permissive policy)
--- All access goes through v14 proxy using service-role key
-```
-
-**Rule:** No policies granting access to `anon` or `authenticated` roles. The only actor is the v14 server using `SUPABASE_SERVICE_ROLE`. This is correct because psnm-wms is operator-only, not multi-tenant.
-
----
-
-## Part 4 — v14 Proxy Endpoints
-
-All endpoints live at `/api/standalone/` in v14.
-
-### Auth pattern (all endpoints)
-
-```javascript
-const { requireAuth } = require('../auth/middleware');
-
-module.exports = async (req, res) => {
-  const auth = requireAuth(req);
-  if (!auth.authorized) {
-    return res.status(401).json({ error: auth.reason });
-  }
-  // CORS
-  const origin = req.headers.origin || '';
-  const allowed = ['https://psnm-wms.vercel.app', 'http://localhost:3000'];
-  if (allowed.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-rbtr-auth');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  // ... handler
-};
-```
-
-**Auth sources accepted:**
-- `x-rbtr-auth` header (existing token — for scripts/curl testing)
-- `psnm_session` JWT cookie (browser — same session cookie as v14/wms.html)
-
-The SHA-256 gate on psnm-wms is client-side only and does NOT issue a session cookie. For the Supabase-backed version, the SHA-256 gate continues to gate the UI, and all API calls use the `x-rbtr-auth` header passed from the page (or set as a page-level constant).
-
-**Implementation decision:** Store `RBTR_AUTH_TOKEN` value as a JS constant in a `<script>` block in index.html (gated behind the existing SHA-256 check so it's never visible unauthenticated). Pass as `x-rbtr-auth` header on every fetch. This avoids needing a full cookie-session on the standalone.
-
----
-
-### Supabase client pattern (reuse across all endpoints)
-
-```javascript
-// shared: v14/api/standalone/_db.js
-const { createClient } = require('@supabase/supabase-js');
-let _client;
-function getDb() {
-  if (!_client) {
-    _client = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-  }
-  return _client;
-}
-module.exports = { getDb };
-```
-
----
-
-### Endpoint: `GET/POST/PUT/DELETE /api/standalone/pallets`
-
-**GET** — list active pallets (out=false)
-
-Query params:
-- `?all=true` — include out=true records (for movement history reconstruction)
-- `?customer=<name>` — filter by customer
-
-Response:
-```json
-{
-  "pallets": [
-    {
-      "id": 1,
-      "customer": "Acme Ltd",
-      "ref": "PO-001",
-      "desc": "Machine components",
-      "weight": "250",
-      "size": "standard",
-      "notes": "",
-      "dateIn": "2026-04-15",
-      "timeIn": "09:30",
-      "location": "A-1-1",
-      "stype": "racked",
-      "weeklyRate": 6.50,
-      "out": false,
-      "outDate": null,
-      "outTime": null
-    }
-  ],
-  "nextId": 42
-}
-```
-
-Note: response uses camelCase to match localStorage exactly. Endpoint translates `date_in → dateIn`, `weekly_rate → weeklyRate`, etc.
-
-**POST** — create pallet(s). Body: array of pallet objects (same camelCase shape as above, without `id`). Server assigns `id` from `SELECT MAX(id)+1` with gap-fill fallback.
-
-Response: `{ "pallets": [{ ...created }], "nextId": <new max+1> }`
-
-**PUT** — update a pallet. Body: `{ id, ...fields }`. Only `out`, `outDate`, `outTime`, `location`, `weeklyRate`, `notes`, `ref` can be updated.
-
-Response: `{ "pallet": { ...updated } }`
-
-**DELETE** `?id=<n>&confirm=true` — hard delete. Only for migration cleanup. Requires `?confirm=true` to prevent accidental deletion.
-
----
-
-### Endpoint: `GET/POST/PUT/DELETE /api/standalone/customers`
-
-**GET** — all customers
-
-Response: `{ "customers": { "Acme Ltd": { name, contact, phone, email, rate, deal, notes } } }`
-
-(Object keyed by name to match `S.customers` localStorage shape exactly.)
-
-**POST** — upsert customer. Body: `{ name, contact, phone, email, rate, deal, notes }`
-
-Uses `INSERT ... ON CONFLICT (name) DO UPDATE`.
-
-Response: `{ "customer": { ...upserted } }`
-
-**PUT** — same as POST (alias, both do upsert).
-
-**DELETE** `?name=<name>` — delete customer (only if no active pallets).
-
----
-
-### Endpoint: `GET/POST /api/standalone/movements`
-
-Append-only. No PUT/DELETE.
-
-**GET** — paginated movement log.
-
-Query params:
-- `?limit=200` (default 200)
-- `?offset=0`
-- `?customer=<name>`
-- `?type=IN|OUT`
-- `?from=YYYY-MM-DD`
-
-Response: `{ "movements": [...], "total": 847 }`
-
-(Each movement in camelCase: `{ type, date, time, customer, ref, pallets, location, rate, handling, desc, notes }`)
-
-**POST** — append movement(s). Body: single object or array.
-
-Response: `{ "movements": [{ id, ...fields }] }`
-
----
-
-### Endpoint: `GET/POST/PUT/DELETE /api/standalone/bookings`
-
-**GET** — all bookings (status=active by default).
-
-Query: `?status=active|cancelled|completed|all`
-
-Response: `{ "bookings": [...] }` (camelCase, matching `psnm_v14_bk` array shape)
-
-**POST** — create booking. Body: booking object (without `id`; server generates `"BK" + Date.now()`).
-
-**PUT** — update booking. Body: `{ id, ...fields }`. Typically used to set `status: "cancelled"`.
-
-**DELETE** `?id=<id>` — hard delete.
-
----
-
-### Endpoint: `GET/POST/PUT/DELETE /api/standalone/enquiries`
-
-Same pattern as bookings but for `psnm_v14_eq`. Server generates `"EQ" + Date.now()` IDs.
-
----
-
-### Endpoint: `GET/POST/DELETE /api/standalone/crm`
-
-**GET** — all status overrides.
-
-Response: `{ "status": { "L001": "contacted", "L007": "opened" } }` (matches `psnm_crm4_status` shape)
-
-**POST** — upsert status for one lead. Body: `{ leadId: "L001", status: "contacted" }`
-
-Uses `INSERT ... ON CONFLICT (lead_id) DO UPDATE SET status = ..., updated_at = now()`.
-
-Response: `{ "ok": true }`
-
-**DELETE** `?leadId=L001` — reset lead to default status (removes override row, JS will show master `st` value).
-
----
-
-## Part 5 — Client Rewrite Strategy
-
-### Fetch wrapper (add to index.html `<script>` section, after auth gate)
-
-```javascript
-const PROXY = 'https://rbtr-jarvis.vercel.app/api/standalone';
-const AUTH_TOKEN = '<RBTR_AUTH_TOKEN_VALUE>';   // injected at build time OR set as env on Vercel
-
-async function proxyGet(path, params = {}) {
-  const url = new URL(PROXY + path);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const r = await fetch(url, { headers: { 'x-rbtr-auth': AUTH_TOKEN } });
-  if (!r.ok) throw new Error(`proxy ${path} → ${r.status}`);
-  return r.json();
-}
-
-async function proxyPost(path, body) {
-  const r = await fetch(PROXY + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-rbtr-auth': AUTH_TOKEN },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error(`proxy ${path} POST → ${r.status}`);
-  return r.json();
-}
-```
-
-**Security note:** `AUTH_TOKEN` is a JS constant in the page. It is gated behind the SHA-256 password check (the token is never served to unauthenticated visitors because the gate fires before DOMContentLoaded). This is acceptable for operator-only tooling. Post-Supabase, Phase 4 of PSNM_LOCKED_PLAN_v1.md replaces this with proper server-side auth.
-
-### Replace `save()` / `load()`
-
-```javascript
-// OLD
-function save(){ localStorage.setItem('psnm_wms2', JSON.stringify(S)); }
-function load(){ const d=localStorage.getItem('psnm_wms2'); if(d) S=Object.assign(S,JSON.parse(d)); }
-
-// NEW — async save (call save() anywhere; it debounces writes)
-let _saveTimer;
-function save() {
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(_flushSave, 400);
-}
-async function _flushSave() {
-  try {
-    // Reconstruct cells/floor/aisleFloor from pallets on the server
-    // Only send the data tables, not the derived maps
-    await Promise.all([
-      proxyPost('/pallets/sync', { pallets: S.pallets, nextId: S.nextId }),
-      proxyPost('/customers/sync', { customers: S.customers }),
-    ]);
-    // movements are appended individually at time of action (see movement sections)
-  } catch(e) { console.error('[psnm:save]', e); toast('Save failed — working offline', true); }
-}
-
-async function load() {
-  try {
-    const [pd, cd, md, bd, ed, crd] = await Promise.all([
-      proxyGet('/pallets'),
-      proxyGet('/customers'),
-      proxyGet('/movements', { limit: 500 }),
-      proxyGet('/bookings'),
-      proxyGet('/enquiries'),
-      proxyGet('/crm'),
-    ]);
-    // Rebuild S
-    S.pallets = {};
-    pd.pallets.forEach(p => { S.pallets[p.id] = p; });
-    S.nextId = pd.nextId;
-    S.customers = cd.customers;
-    S.movements = md.movements;
-    // Reconstruct occupancy maps
-    S.cells = {}; S.floor = {}; S.aisleFloor = {};
-    Object.values(S.pallets).filter(p => !p.out).forEach(p => {
-      if (p.location.startsWith('FL')) S.floor[p.location] = p.id;
-      else if (p.location.includes('-FL-')) S.aisleFloor[p.location] = p.id;
-      else S.cells[p.location] = p.id;
-    });
-    // Bookings/enquiries
-    v14Bookings = bd.bookings;
-    v14Enquiries = ed.enquiries;
-    // CRM
-    const _saved = crd.status;
-    crm2Leads.forEach(l => { if (_saved[l.id]) l.st = _saved[l.id]; });
-  } catch(e) {
-    console.error('[psnm:load]', e);
-    toast('Loading from local backup…', false);
-    // Fallback: use existing localStorage data if Supabase unreachable
-    const d = localStorage.getItem('psnm_wms2');
-    if (d) S = Object.assign(S, JSON.parse(d));
-    v14Bookings = JSON.parse(localStorage.getItem('psnm_v14_bk') || '[]');
-    v14Enquiries = JSON.parse(localStorage.getItem('psnm_v14_eq') || '[]');
-    const _saved = JSON.parse(localStorage.getItem('psnm_crm4_status') || '{}');
-    crm2Leads.forEach(l => { if (_saved[l.id]) l.st = _saved[l.id]; });
-  }
-}
-```
-
-**Offline fallback:** localStorage remains populated in parallel during migration period. After migration is confirmed clean, remove localStorage writes in Phase 3 cleanup PR.
-
-### Sync endpoint `/pallets/sync` and `/customers/sync`
-
-These bulk-replace endpoints handle the "save everything" semantics of the old `save()` function. They receive the full `S.pallets` object and upsert all rows.
-
-```
-POST /api/standalone/pallets/sync
-Body: { pallets: { "1": {...}, "2": {...} }, nextId: 42 }
-```
-
-Server iterates the object, does bulk upsert via `supabase.from('psnm_pallets').upsert(rows)`. Same for customers.
-
----
-
-## Part 6 — `vercel.json` CORS (v14)
-
-Add to v14's `vercel.json` headers block:
-
-```json
-{
-  "source": "/api/standalone/(.*)",
-  "headers": [
-    { "key": "Access-Control-Allow-Origin", "value": "https://psnm-wms.vercel.app" },
-    { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-    { "key": "Access-Control-Allow-Headers", "value": "Content-Type, x-rbtr-auth" }
-  ]
-}
-```
-
-Note: `Access-Control-Allow-Origin` is set to the exact origin (not `*`) so cookies work if needed later. CORS preflight OPTIONS is handled in each endpoint.
-
----
-
-## Part 7 — Migration Tool (`migrate-to-supabase.html`)
-
-Standalone HTML file at `/Users/bengreenwood/Desktop/psnm/deploy/migrate-to-supabase.html`.
-
-**Flow:**
-1. Reads `psnm_wms2` from localStorage → counts pallets, customers, movements
-2. Reads `psnm_v14_bk`, `psnm_v14_eq`, `psnm_crm4_status`
-3. Asks user to confirm: "Migrate N pallets, M customers, P movements?"
-4. POSTs to `/api/standalone/pallets/sync` (all pallets incl. out=true)
-5. POSTs to `/api/standalone/customers/sync`
-6. POSTs to `/api/standalone/movements` in batches of 50
-7. POSTs bookings, enquiries individually
-8. POSTs CRM status overrides
-9. Re-reads from Supabase via GET, compares counts
-10. Reports: "Migrated N/N pallets ✓, M/M customers ✓, P/P movements ✓" or shows mismatches
-
-**This tool is run once by Ben manually. It is NOT run by the autonomous build.** The build creates the tool; Ben runs it after verifying Phase 5.
-
----
-
-## Part 8 — Phase Sequence (build order)
-
-```
-Phase 0: Pre-flight + branch
-Phase 1: Supabase schema (CREATE TABLE, RLS, indexes) + smoke test
-Phase 2: v14 proxy endpoints (all 7 files in /api/standalone/)
-Phase 3: v14 deploy + curl test each endpoint
-Phase 4: index.html client rewrite (fetch wrapper + load() + save() + per-section wiring)
-  Phase 4a: pallets (highest volume, most complex)
-  Phase 4b: customers
-  Phase 4c: movements (append-only — simplest)
-  Phase 4d: bookings + enquiries
-  Phase 4e: CRM status
-Phase 5: migrate-to-supabase.html tool
-Phase 6: E2E verification (preview deploy, smoke test each section)
-Phase 7: Production deploy (ONLY if billing resolved AND Phase 6 green)
-Phase 8: Final report
-```
-
----
-
-## Part 9 — Rollback Plan
-
-**If proxy endpoints break v14:**
-```bash
-cd /Users/bengreenwood/Desktop/rbtr-command/v14
-vercel rollback   # rolls back v14 to previous production deployment
-```
-
-**If psnm-wms standalone breaks:**
-```bash
-cd /Users/bengreenwood/Desktop/psnm/deploy
-vercel rollback   # rolls back standalone to pre-build deployment
-```
-
-**Data:** Supabase tables are additive (new tables only, no changes to existing tables). Dropping them is safe: `DROP TABLE IF EXISTS psnm_pallets, psnm_customers, psnm_movements, psnm_bookings, psnm_enquiries, psnm_crm_status;`
-
-localStorage data is untouched during build (offline fallback preserves it). If Supabase sync fails, the app falls back to localStorage automatically.
-
----
-
-## Part 10 — Stop Conditions
-
-Stop and write status report if:
-1. Supabase table CREATE fails after 3 retries
-2. v14 proxy endpoint returns non-2xx for valid auth after 3 fix+redeploy cycles
-3. CORS preflight fails from psnm-wms.vercel.app origin
-4. `vercel --prod` fails for v14 (billing issue on that project too)
-5. Standalone billing still suspended at Phase 7 → stop before Phase 7, report tables+endpoints ready but standalone deploy deferred
-
----
-
-## Part 11 — Decisions
-
-| Decision | Choice | Reason |
-|---|---|---|
-| Auth in standalone | x-rbtr-auth header token in JS (gated by SHA-256) | No session infrastructure in static SPA; adding one is Phase 4 of PSNM plan |
-| `save()` debounce | 400ms | Prevents write storm on rapid UI actions (e.g. goods-in 20 pallets) |
-| cells/floor/aisleFloor in DB | Not stored — reconstructed on load | Derived from pallets.location; storing them causes dual-write consistency bugs |
-| `nextId` | MAX(id)+1 on GET /pallets | Simpler than a sequence; works for migration (preserves existing IDs) |
-| Offline fallback | Yes — localStorage read on fetch error | Ops staff must not be blocked if Supabase is down |
-| Movements bulk load limit | 500 on initial load | Keeps load time under 1s; paginate older history on demand |
-| CRM leads source | Still hardcoded JS array; only overrides in DB | ~208 leads; not worth a full table until Atlas outreach is integrated |
+6. **No rollback on pallet writes once live on Supabase.** Currently localStorage writes are synchronous and local — easy to recover from. A Supabase write that partially fails (network drop mid-goods-in) could leave orphan state. Mitigation: wrap goods-in in a transaction or use upsert-by-pid.

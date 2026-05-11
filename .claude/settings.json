@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE_PATH=$(jq -r '.tool_input.file_path'); if [[ \"$FILE_PATH\" =~ v14/.*\\.js$ ]]; then node --check \"$FILE_PATH\" && echo 'HOOK: syntax ok' || { echo 'HOOK: SYNTAX FAIL — do not deploy'; exit 1; }; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "COMMAND=$(jq -r '.tool_input.command'); if echo \"$COMMAND\" | grep -qE 'vercel[[:space:]]+--prod|vercel[[:space:]]+deploy[[:space:]]+--prod'; then echo 'HOOK BLOCKED: production deploy requires explicit Ben approval per CLAUDE.md' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

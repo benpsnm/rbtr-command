@@ -275,6 +275,29 @@ async function handler(req, res) {
       await sendTelegramAlert(msg).catch(() => null);
     }
 
+    // ── 7. Auto-responder trigger (shadow mode) ──────────────────────────────
+    // Fire-and-forget — intentionally not awaited. Triggers classify→enrich→draft
+    // chain as a separate Vercel invocation. Output queued in psnm_enquiry_drafts.
+    // NEVER sends email. Set AUTORESPONDER_ENABLED=false in env to disable.
+    if (replyId && !inserted?.error && process.env.AUTORESPONDER_ENABLED !== 'false') {
+      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+      const host  = req.headers.host || 'rbtr-jarvis.vercel.app';
+      fetch(`${proto}://${host}/api/autorespond/orchestrate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rbtr-auth': process.env.RBTR_AUTH_TOKEN || '',
+        },
+        body: JSON.stringify({
+          reply_id:   replyId,
+          from_email: fromEmail,
+          from_name:  fromName  || null,
+          subject:    subject   || null,
+          body_text:  bodyText  || null,
+        }),
+      }).catch(e => console.warn('[inbound_parse] auto-responder trigger error:', e.message));
+    }
+
     return res.status(200).json({
       ok: true,
       reply_id:    replyId,
