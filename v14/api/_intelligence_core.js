@@ -976,11 +976,12 @@ async function loadFactRegistry() {
     { claim_type: 'facility',    claim_key: 'spec',       claim_value: 'ambient only',           source: 'site_survey' },
     { claim_type: 'facility',    claim_key: 'postcode',   claim_value: 'S66 8HR',               source: 'site_survey' },
     { claim_type: 'facility',    claim_key: 'motorway_access', claim_value: 'M18/M1',           source: 'site_survey' },
-    { claim_type: 'offer_terms', claim_key: 'rate_tier_1_100',    claim_value: '£3.95/pallet/week (1-100 pallets)',          source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'rate_tier_101_500',  claim_value: '£3.50/pallet/week (101-500 pallets)',         source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'rate_tier_500_plus', claim_value: '£2.95/pallet/week (500+ pallets)',            source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_1_49',     claim_value: '£3.95/pallet/week (1-49 pallets)',           source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_50_149',   claim_value: '£3.45/pallet/week (50-149 pallets)',         source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'rate_tier_150_plus', claim_value: '£2.95/pallet/week (150+ pallets)',           source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'minimum_term',       claim_value: '4-week minimum, rolling monthly thereafter', source: 'manual' },
+    { claim_type: 'offer_terms', claim_key: 'notice_period',      claim_value: '30-day notice after initial 4 weeks',        source: 'manual' },
     { claim_type: 'offer_terms', claim_key: 'canonical_offer',    claim_value: '1 week free WITH 12-week minimum commitment', source: 'manual' },
-    { claim_type: 'offer_terms', claim_key: 'notice_period',      claim_value: '30-day notice after initial 12 weeks',       source: 'manual' },
     { claim_type: 'offer_terms', claim_key: 'goods_in_out',       claim_value: '£3.50 per pallet movement',                  source: 'manual' },
     { claim_type: 'offer_terms', claim_key: 'onboarding',         claim_value: '3-5 working days from contract',             source: 'manual' },
     { claim_type: 'facility',    claim_key: 'no_fulfilment',      claim_value: 'no pick-pack, no fulfilment, no e-commerce dispatch', source: 'site_survey' },
@@ -1309,10 +1310,12 @@ async function harvestDaily() {
   if (dayOfWeek === 1) {
     ctier_result = await harvest({ batch_size: 100, days_back: 1095 }); // up to 3 years back
   }
-  const enrich_result  = await enrich({ limit: 50 });
-  const dispatch_result = await scoreAndDispatch({ limit: 10 });
+  const enrich_result          = await enrich({ limit: 50 });
+  // Auto-enrich high-quality outreach targets that still have no email
+  const outreach_enrich_result = await enrichOutreachTargets({ limit: 10 });
+  const dispatch_result        = await scoreAndDispatch({ limit: 10 });
 
-  return { ok: true, harvest: harvest_result, ctier_harvest: ctier_result, enrich: enrich_result, dispatch: dispatch_result };
+  return { ok: true, harvest: harvest_result, ctier_harvest: ctier_result, enrich: enrich_result, outreach_enrich: outreach_enrich_result, dispatch: dispatch_result };
 }
 
 // ── GET STATS ─────────────────────────────────────────────────────────────────
@@ -1380,6 +1383,123 @@ const SIC_DESCRIPTIONS = {
   47799: 'Retail sale of other second-hand goods in stores',
 };
 
+// ── AUTO-ENRICH OUTREACH TARGETS ─────────────────────────────────────────────
+// Runs against psnm_outreach_targets where quality_score > 75 AND email IS NULL.
+// Uses Claude web search to find company website, derive email pattern, guess DM email.
+// Updates email, decision_maker_name, decision_maker_role, and enrichment_confidence.
+// Called from harvestDaily() — runs after the intelligence_prospects enrich pass.
+async function enrichOutreachTargets({ limit = 10 } = {}) {
+  if (!ANTHROPIC_KEY) return { ok: false, error: 'ANTHROPIC_API_KEY not set' };
+
+  const cap = Math.min(limit, 20);
+  const rows = await sbSelect(
+    'psnm_outreach_targets',
+    `quality_score=gt.75&email=is.null&status=eq.not_contacted&order=quality_score.desc&limit=${cap}&select=id,company,city,postcode,industry,website,decision_maker_name,decision_maker_role,research_notes`
+  );
+
+  if (!rows || rows.length === 0) return { ok: true, enriched: 0, message: 'No high-quality targets need email enrichment' };
+
+  let enriched = 0, failed = 0;
+
+  for (const row of rows) {
+    const companyInfo = [
+      row.company,
+      row.city ? `based in ${row.city}` : null,
+      row.postcode || null,
+      row.industry ? `industry: ${row.industry}` : null,
+      row.website ? `website: ${row.website}` : null,
+      row.decision_maker_name ? `known contact: ${row.decision_maker_name}${row.decision_maker_role ? ` (${row.decision_maker_role})` : ''}` : null,
+      row.research_notes ? `notes: ${row.research_notes}` : null,
+    ].filter(Boolean).join(', ');
+
+    const prompt = `You are finding a direct email address for a specific person at a UK company, to be used for professional B2B outreach.
+
+Company: ${row.company}
+${companyInfo}
+
+Steps:
+1. Search the company website for any email addresses (contact@, info@, sales@, or any personal email)
+2. If you find a generic email, identify the email domain and determine the pattern (firstname.lastname@, firstname@, firstlast_initial@, etc.)
+3. If a decision-maker name is provided, derive their direct email using the pattern
+4. If no name is provided, identify the most relevant operations/supply-chain/logistics decision-maker from LinkedIn or the website
+5. Validate the email pattern confidence
+
+Return ONLY valid JSON, no prose:
+{
+  "email": "derived email address or null",
+  "email_confidence": 0-100,
+  "email_source": "found_directly|pattern_derived|inferred",
+  "pattern_evidence": "the example email you found that revealed the pattern, or null",
+  "contact_name": "full name of decision-maker or null",
+  "contact_role": "their role/title or null",
+  "notes": "brief source notes"
+}`;
+
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'web-search-2025-03-05',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 400,
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      const data = await r.json().catch(() => null);
+      const text = (data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+
+      let parsed = null;
+      const stripped = text.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/im, '').trim();
+      try { parsed = JSON.parse(stripped); } catch {}
+      if (!parsed) {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+      }
+
+      if (parsed && parsed.email) {
+        const patch = {
+          email: parsed.email,
+          status: 'not_contacted', // keep status unchanged — email now available
+        };
+        if (parsed.contact_name && !row.decision_maker_name) patch.decision_maker_name = parsed.contact_name;
+        if (parsed.contact_role && !row.decision_maker_role) patch.decision_maker_role = parsed.contact_role;
+        // Store enrichment metadata in research_notes append
+        const enrichNote = `[auto-enrich ${new Date().toISOString().slice(0,10)}: ${parsed.email_source || 'unknown'}, confidence ${parsed.email_confidence || '?'}%, evidence: ${parsed.pattern_evidence || 'none'}]`;
+        patch.research_notes = row.research_notes ? `${row.research_notes} | ${enrichNote}` : enrichNote;
+
+        const q = `id=eq.${encodeURIComponent(row.id)}`;
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/psnm_outreach_targets?${q}`, {
+          method: 'PATCH',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify(patch),
+        });
+        if (res.ok) {
+          enriched++;
+          console.log(`[enrichOutreachTargets] ${row.company} → ${parsed.email} (${parsed.email_confidence}%)`);
+        } else {
+          failed++;
+        }
+      } else {
+        failed++;
+        console.warn(`[enrichOutreachTargets] ${row.company} → no email found`);
+      }
+    } catch (e) {
+      failed++;
+      console.warn(`[enrichOutreachTargets] ${row.company} error: ${e.message}`);
+    }
+    await sleep(3000);
+  }
+
+  return { ok: true, enriched, failed, total: rows.length };
+}
+
 // ── HARVEST INSOLVENCY DAILY (cron 06:15) ────────────────────────────────────
 async function harvestInsolvencyDaily() {
   const autorun = process.env.PSNM_INTELLIGENCE_AUTORUN;
@@ -1397,4 +1517,4 @@ async function harvestDefenceWeekly() {
   return harvestDefence({ cap: 50 });
 }
 
-module.exports = { harvest, enrich, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect, loadFactRegistry };
+module.exports = { harvest, enrich, enrichOutreachTargets, scoreAndDispatch, harvestDaily, harvestInsolvencyDaily, harvestDefenceWeekly, harvestInsolvency, harvestDefence, getStats, getProspect, loadFactRegistry };
