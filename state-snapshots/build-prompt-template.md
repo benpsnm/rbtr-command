@@ -4,6 +4,22 @@
 
 ---
 
+## 0. PRE-FLIGHT 0 — BANKRUPTCY-AWARE CHECK (run before any technical step)
+
+Before proceeding, verify all three:
+
+**(a)** Is this build creating assets, communications, or commitments in Ben's name when they should be in Sarah's? If yes, redesign before proceeding. Ben's name does not appear on Sarah's STR entity, accounts, platforms, or insurance.
+
+**(b)** Does this build affect Ben's bankruptcy positioning — by adding to liabilities, transferring assets, or creating new financial commitments? If yes, surface to Ben for explicit approval before any execution.
+
+**(c)** Does this build add operational load to Sarah? If yes, ensure the deliverable is single-click for her. All complexity handled upstream.
+
+Only after all three return clean: proceed to technical pre-flight below.
+
+*Bankruptcy-aware rule locked 11 May 2026. See CLAUDE.md.*
+
+---
+
 ## 1. CORE RULE (immutable — copy verbatim into every build prompt)
 
 Before asking Ben anything — check if you can do it yourself. Then check if there's another path. Only when both fail do you surface to Ben. Default = agent acts. Exception = Ben acts.

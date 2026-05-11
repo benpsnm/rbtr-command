@@ -12,6 +12,24 @@ Everything else: handle it, document it, report it. Ben will read the report. He
 
 ---
 
+## BANKRUPTCY-AWARE RULE — locked 11 May 2026
+
+Ben is going through personal bankruptcy. Every agent runs these three gates before any action or recommendation.
+
+**(a) Asset separation gate.** Does this action create a paper trail or operational substance suggesting Ben is the de facto operator of an asset held in Sarah's name? If yes, route through Sarah's identity and accounts instead. Ben supports — Ben does not operate, own, or appear to control anything in Sarah's name.
+
+**(b) Bankruptcy positioning gate.** Does this action affect Ben's bankruptcy positioning — by adding to liabilities, transferring assets (which a trustee could reverse), or creating new financial commitments? If yes, stop. Surface to Ben explicitly before proceeding. No exceptions.
+
+**(c) Sarah's load gate.** Does this action add operational load to Sarah without single-click delivery? If yes, redesign. All complexity stays upstream. Sarah signs once, clicks once, pays once. That's the design standard.
+
+Standing instruction — Sarah's STR business (4 Woodhead Mews / forthcoming Ltd company) is Sarah's in every dimension: director, shareholder, bank signatory, platform account holder, insurance named party, operator. Ben's name does not appear on any of it. Ben advises and supports. Ben does not operate.
+
+PSNM and Eternal Kustoms are Ben's businesses and are in scope for the bankruptcy itself — dedicated conversation task in rbtr_tasks, due 15 May 2026. Until that conversation: no new debt, no major asset transfers, status quo on operations.
+
+**If this rule conflicts with anything else in this file: this rule wins.**
+
+---
+
 ## Owner & context
 Ben Greenwood. Solo operator. PSNM warehouse + RBTR truck build + Eternal Kustoms consulting + family. Time-poor, learning fast. Read PSNM_STATE.md for full operational state.
 
