@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Mortgage Log — Woodhead Mews</title>
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #1a1a1f;
+    --border: #2a2a32;
+    --text: #e8e8ed;
+    --muted: #6e6e7a;
+    --accent: #7c6af7;
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    min-height: 100vh;
+    padding: 0 0 40px;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+  .form-row { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input, textarea, select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    font-family: inherit;
+    margin-top: 4px;
+  }
+  button:active { opacity: 0.7; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .chip-ok     { background: rgba(52,211,153,0.15); color: var(--green); }
+  .chip-warn   { background: rgba(251,191,36,0.15);  color: var(--amber); }
+  .chip-bad    { background: rgba(248,113,113,0.15); color: var(--red); }
+  .chip-grey   { background: rgba(110,110,122,0.15); color: var(--muted); }
+  .entry {
+    border-top: 1px solid var(--border);
+    padding: 14px 0;
+    display: grid;
+    gap: 6px;
+  }
+  .entry:first-child { border-top: none; }
+  .entry-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .entry-date { font-size: 13px; font-weight: 600; }
+  .entry-amounts { font-size: 13px; color: var(--muted); }
+  .entry-amounts .paid { color: var(--green); font-weight: 600; }
+  .entry-amounts .owed { color: var(--amber); }
+  .entry-contact { font-size: 12px; color: var(--muted); }
+  .entry-notes { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--green);
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: transform 0.3s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .empty { text-align: center; color: var(--muted); padding: 30px 0; font-size: 14px; }
+  .loading { text-align: center; color: var(--muted); padding: 20px 0; font-size: 14px; }
+  #login-wall {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  #login-wall p { color: var(--muted); margin-bottom: 16px; }
+  #login-wall a {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    text-decoration: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Mortgage Log</h1>
+    <div class="sub">4 Woodhead Mews, Barnsley S74 0RH</div>
+  </div>
+</header>
+
+<div id="login-wall">
+  <p>You need to be logged in to use this.</p>
+  <a href="/login.html">Log in</a>
+</div>
+
+<div class="container" id="app" style="display:none">
+
+  <div class="card">
+    <h2>Add Entry</h2>
+    <form id="entry-form" autocomplete="off">
+      <div class="row-2">
+        <div class="form-row">
+          <label for="date">Date</label>
+          <input type="date" id="date" name="date">
+        </div>
+        <div class="form-row">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="">— select —</option>
+            <option value="up to date">Up to date</option>
+            <option value="payment made">Payment made</option>
+            <option value="arrears">Arrears</option>
+            <option value="query raised">Query raised</option>
+            <option value="awaiting response">Awaiting response</option>
+            <option value="lender contacted">Lender contacted</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="form-row">
+          <label for="amount_paid">Amount Paid (£)</label>
+          <input type="number" id="amount_paid" name="amount_paid" placeholder="600.00" step="0.01" min="0">
+        </div>
+        <div class="form-row">
+          <label for="amount_owed">Outstanding Balance (£)</label>
+          <input type="number" id="amount_owed" name="amount_owed" placeholder="e.g. 185000" step="0.01" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="lender_contact">Lender / Contact Name</label>
+        <input type="text" id="lender_contact" name="lender_contact" placeholder="e.g. Nationwide, Mrs Wilson">
+      </div>
+      <div class="form-row">
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" placeholder="Any details — what was said, reference numbers, next steps..."></textarea>
+      </div>
+      <button type="submit" id="submit-btn">Save Entry</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Recent Entries</h2>
+    <div id="entries-list"><div class="loading">Loading...</div></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">Saved</div>
+
+<script>
+const API = '/api/mortgage/log';
+
+function statusChip(status) {
+  if (!status) return '';
+  const s = status.toLowerCase();
+  let cls = 'chip-grey';
+  if (['up to date', 'payment made'].includes(s)) cls = 'chip-ok';
+  else if (['arrears'].includes(s)) cls = 'chip-bad';
+  else if (['query raised', 'awaiting response', 'lender contacted'].includes(s)) cls = 'chip-warn';
+  return `<span class="status-chip ${cls}">${status}</span>`;
+}
+
+function fmt(n) {
+  if (n == null) return null;
+  return '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]} ${y}`;
+}
+
+function renderEntries(entries) {
+  const el = document.getElementById('entries-list');
+  if (!entries || entries.length === 0) {
+    el.innerHTML = '<div class="empty">No entries yet. Add your first one above.</div>';
+    return;
+  }
+  el.innerHTML = entries.map(e => {
+    const amountParts = [];
+    if (e.amount_paid != null) amountParts.push(`<span class="paid">${fmt(e.amount_paid)} paid</span>`);
+    if (e.amount_owed != null) amountParts.push(`<span class="owed">${fmt(e.amount_owed)} outstanding</span>`);
+    return `<div class="entry">
+      <div class="entry-header">
+        <span class="entry-date">${fmtDate(e.date)}</span>
+        ${statusChip(e.status)}
+      </div>
+      ${amountParts.length ? `<div class="entry-amounts">${amountParts.join(' · ')}</div>` : ''}
+      ${e.lender_contact ? `<div class="entry-contact">Contact: ${e.lender_contact}</div>` : ''}
+      ${e.notes ? `<div class="entry-notes">${e.notes.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function loadEntries() {
+  try {
+    const r = await fetch(API, { credentials: 'include' });
+    if (r.status === 401) { showLogin(); return; }
+    const data = await r.json();
+    if (data.ok) renderEntries(data.entries);
+  } catch { document.getElementById('entries-list').innerHTML = '<div class="empty">Could not load entries.</div>'; }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showLogin() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-wall').style.display = 'block';
+}
+
+document.getElementById('entry-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const data = {
+    date:           document.getElementById('date').value || null,
+    status:         document.getElementById('status').value || null,
+    amount_paid:    document.getElementById('amount_paid').value || null,
+    amount_owed:    document.getElementById('amount_owed').value || null,
+    lender_contact: document.getElementById('lender_contact').value || null,
+    notes:          document.getElementById('notes').value || null,
+  };
+
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    if (r.status === 401) { showLogin(); return; }
+    const result = await r.json();
+    if (result.ok) {
+      document.getElementById('entry-form').reset();
+      document.getElementById('date').value = new Date().toISOString().slice(0,10);
+      showToast('Saved');
+      loadEntries();
+    } else {
+      showToast('Error — try again');
+    }
+  } catch {
+    showToast('Error — check connection');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Entry';
+  }
+});
+
+// Check auth on load
+async function init() {
+  try {
+    const r = await fetch('/api/auth/check', { credentials: 'include' });
+    if (!r.ok || r.status === 401) { showLogin(); return; }
+    const d = await r.json();
+    if (!d.ok && !d.authenticated) { showLogin(); return; }
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('date').value = new Date().toISOString().slice(0,10);
+    loadEntries();
+  } catch {
+    // If auth check fails, try loading anyway (cookies present)
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('date').value = new Date().toISOString().slice(0,10);
+    loadEntries();
+  }
+}
+
+init();
+</script>
+</body>
+</html>

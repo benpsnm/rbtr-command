@@ -1,0 +1,25 @@
+{
+  "NOTE": "This file is a reference copy. Hooks are actually loaded from .claude/settings.json under the 'hooks' key. Claude Code does not load hooks.json directly.",
+  "PostToolUse": [
+    {
+      "matcher": "Edit|Write",
+      "filePattern": "v14/.*\\.js$",
+      "command": "node --check ${file} && echo 'syntax ok' || echo 'SYNTAX FAIL — block deploy'",
+      "blockOnFailure": true
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "commandPattern": "vercel.*--prod",
+      "command": "echo 'BLOCKED: production deploy requires manual approval per CLAUDE.md'; exit 1",
+      "blockOnFailure": true
+    },
+    {
+      "matcher": "Bash",
+      "commandPattern": "git push.*main|git push.*production",
+      "command": "echo 'BLOCKED: pushing to main/production requires manual approval per CLAUDE.md'; exit 1",
+      "blockOnFailure": true
+    }
+  ]
+}
