@@ -23,9 +23,10 @@ const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const TELEGRAM_BOT  = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT = process.env.TELEGRAM_CHAT_ID;
-const GMAIL_USER    = process.env.GMAIL_USER    || 'beniproautobodies@gmail.com';
-const GMAIL_PASS    = process.env.GMAIL_APP_PASSWORD;
+const GMAIL_USER    = process.env.PSNM_GMAIL_USER || 'palletstoragenearme@gmail.com';
+const GMAIL_PASS    = process.env.PSNM_GMAIL_APP_PASSWORD;
 
+const DRY_RUN    = process.argv.includes('--dry-run');
 const STATE_FILE = path.join(__dirname, '.outreach-check-state.json');
 const LOG_FILE   = `${process.env.HOME}/Library/Logs/outreach-reply-check.log`;
 
@@ -150,7 +151,7 @@ function extractBodyPreview(rawSource) {
 // ── Gmail IMAP fetch ──────────────────────────────────────────────────────────
 async function fetchNewReplies(sinceIso) {
   if (!GMAIL_PASS) {
-    log('GMAIL_APP_PASSWORD not set — Gmail check skipped. Add to scripts/.env');
+    log('PSNM_GMAIL_APP_PASSWORD not set — Gmail check skipped. Add to scripts/.env');
     return [];
   }
 
@@ -202,7 +203,7 @@ async function fetchNewReplies(sinceIso) {
   } catch (err) {
     log(`IMAP error: ${err.message}`);
     if (err.authenticationFailed) {
-      log('Authentication failed — check GMAIL_APP_PASSWORD in scripts/.env');
+      log('Authentication failed — check PSNM_GMAIL_APP_PASSWORD in scripts/.env');
     }
   } finally {
     try { await client.logout(); } catch {}
@@ -345,20 +346,30 @@ async function handleUrgency(reply, classification) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  log('--- Outreach reply check start ---');
+  if (DRY_RUN) log('--- Outreach reply check start [DRY-RUN — no writes] ---');
+  else log('--- Outreach reply check start ---');
 
   const state = loadState();
+  log(`Polling inbox: ${GMAIL_USER}`);
   log(`Checking for replies since ${state.last_checked}`);
 
   const replies = await fetchNewReplies(state.last_checked);
 
   if (replies.length === 0) {
     log('No new replies from outreach contacts');
-    saveState({ last_checked: new Date().toISOString() });
+    if (!DRY_RUN) saveState({ last_checked: new Date().toISOString() });
     return;
   }
 
   log(`Found ${replies.length} reply(ies) from outreach contacts`);
+
+  if (DRY_RUN) {
+    for (const reply of replies) {
+      log(`[DRY-RUN] Would process: ${reply.company} <${reply.from}> — "${reply.subject}"`);
+    }
+    log('--- Outreach reply check complete [DRY-RUN — state not updated] ---');
+    return;
+  }
 
   for (const reply of replies) {
     // Dedup — skip if already in Supabase

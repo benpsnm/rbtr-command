@@ -24,9 +24,10 @@ const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const TELEGRAM_BOT  = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT = process.env.TELEGRAM_CHAT_ID;
-const GMAIL_USER    = process.env.GMAIL_USER    || 'beniproautobodies@gmail.com';
-const GMAIL_PASS    = process.env.GMAIL_APP_PASSWORD;
+const GMAIL_USER    = process.env.PSNM_GMAIL_USER || 'palletstoragenearme@gmail.com';
+const GMAIL_PASS    = process.env.PSNM_GMAIL_APP_PASSWORD;
 
+const DRY_RUN    = process.argv.includes('--dry-run');
 const STATE_FILE = path.join(__dirname, '.ww-enquiry-check-state.json');
 const LOG_FILE   = `${process.env.HOME}/Library/Logs/ww-enquiry-check.log`;
 
@@ -154,7 +155,7 @@ function extractBodyPreview(rawSource) {
 // ── Gmail IMAP fetch ──────────────────────────────────────────────────────────
 async function fetchNewEmails(sinceIso) {
   if (!GMAIL_PASS) {
-    log('GMAIL_APP_PASSWORD not set — Gmail check skipped. Add to scripts/.env');
+    log('PSNM_GMAIL_APP_PASSWORD not set — Gmail check skipped. Add to scripts/.env');
     return [];
   }
 
@@ -216,7 +217,7 @@ async function fetchNewEmails(sinceIso) {
   } catch (err) {
     log(`IMAP error: ${err.message}`);
     if (err.authenticationFailed) {
-      log('Auth failed — check GMAIL_APP_PASSWORD in scripts/.env');
+      log('Auth failed — check PSNM_GMAIL_APP_PASSWORD in scripts/.env');
     }
   } finally {
     try { await client.logout(); } catch {}
@@ -508,25 +509,35 @@ async function processEnquiry(email, state) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  log('--- WW enquiry check start ---');
+  if (DRY_RUN) log('--- WW enquiry check start [DRY-RUN — no writes] ---');
+  else log('--- WW enquiry check start ---');
 
-  if (!ANTHROPIC_KEY) {
+  if (!DRY_RUN && !ANTHROPIC_KEY) {
     log('FATAL: ANTHROPIC_API_KEY not set — cannot classify or draft. Check scripts/.env');
     process.exit(1);
   }
 
   const state = loadState();
+  log(`Polling inbox: ${GMAIL_USER}`);
   log(`Checking for WW emails since ${state.last_checked}`);
 
   const emails = await fetchNewEmails(state.last_checked);
 
   if (emails.length === 0) {
     log('No WW enquiry emails found');
-    saveState({ ...state, last_checked: new Date().toISOString() });
+    if (!DRY_RUN) saveState({ ...state, last_checked: new Date().toISOString() });
     return;
   }
 
   log(`Found ${emails.length} potential WW email(s)`);
+
+  if (DRY_RUN) {
+    for (const email of emails) {
+      log(`[DRY-RUN] Would process: "${email.subject}" from ${email.from} (${email.detection})`);
+    }
+    log('--- WW enquiry check complete [DRY-RUN — state not updated] ---');
+    return;
+  }
 
   for (const email of emails) {
     // Dedup via state file
