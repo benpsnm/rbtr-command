@@ -223,8 +223,32 @@ async function gatherAllData() {
     sbSelect('rbtr_tasks', 'status=eq.blocked&blocked_reason=not.is.null&order=priority.asc&limit=5&select=description,priority,project,blocked_reason').then(r => r ?? null),
     // Auto-diagnose last run
     sbSelect('rbtr_auto_diagnosis_log', 'order=created_at.desc&limit=1').then(r => r?.[0] ?? null),
-    // Garmin sleep — placeholder until Connect API integration
-    Promise.resolve(null),
+    // Wellness: yesterday's check-in + Garmin data (if synced) + bloods reminder
+    (async () => {
+      try {
+        const yest = yesterday();
+        const [daily, lastBloods] = await Promise.all([
+          sbSelect('rbtr_wellness_daily', `date=eq.${yest}&limit=1`),
+          sbSelect('rbtr_wellness_bloods', 'order=date.desc&limit=1'),
+        ]);
+        const d = daily?.[0] ?? null;
+        const lastPanel = lastBloods?.[0] ?? null;
+        const daysSincePanel = lastPanel?.date ? daysSince(lastPanel.date) : null;
+        return {
+          sleep_hours:    d?.sleep_hours ?? null,
+          sleep_score:    d?.sleep_score ?? null,
+          hrv:            d?.hrv ?? null,
+          resting_hr:     d?.resting_hr ?? null,
+          recovery_score: d?.recovery_score ?? null,
+          garmin_synced:  !!(d?.sleep_score || d?.hrv),
+          training_done:  d?.training_done ?? null,
+          training_type:  d?.training_type ?? null,
+          last_bloods_date: lastPanel?.date ?? null,
+          days_since_bloods: daysSincePanel,
+          bloods_overdue: daysSincePanel !== null && daysSincePanel > 180,
+        };
+      } catch { return null; }
+    })(),
     // Extended mindset from yesterday's evening reflection
     sbSelect('evening_reflections', `reflection_date=eq.${yesterday()}&select=mood_score,one_line,one_line_reflection,tomorrow_priority,raw_thoughts,what_hit_me`).then(r => r?.[0] ?? null),
   ]);
@@ -271,7 +295,7 @@ async function gatherAllData() {
     bills_due_this_week: billsWk,
     weather_today: weather,
     outreach_replies_unresponded: Array.isArray(outreachReplies) ? outreachReplies : [],
-    garmin_sleep: garminSleep,
+    wellness: garminSleep,
     workshop_tasks: workshopTasks,
     customer_touchpoints: customerTouchpoints,
     rbtr_build_tasks: rbtrBuildTasks,
@@ -311,7 +335,7 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.personal: { mood_log_gap_days, nate_checkin_due, house_jobs_remaining }
 - data.legal: { apa_signed, debt_line_booked, axel_brothers_status, guy_sharron_stage, audience_to_threshold }
 - data.finance: { cash_position, bills_due_this_week }
-- data.garmin_sleep: null (Garmin API not yet connected — omit from brief)
+- data.wellness: { sleep_hours, sleep_score, hrv, resting_hr, recovery_score, garmin_synced, training_done, training_type, last_bloods_date, days_since_bloods, bloods_overdue } — Ben's wellness data from yesterday. If garmin_synced is false, only show manually-logged fields (sleep_hours, training_done). If no data at all, skip section entirely.
 - data.workshop_tasks: array of { description, priority, due_date, project } — physical hands-on tasks across build + consulting
 - data.customer_touchpoints: { replies_needing_response, enquiries_pending, total } — customer actions requiring Ben's response today
 - data.rbtr_build_tasks: array of { description, priority, due_date } — RBTR truck build open tasks (top 3)
@@ -349,6 +373,8 @@ Order of content (adapt naturally):
 8. Content + blocked. If data.content_due_24h has entries, name the platform and timing ("Instagram post goes out at 2pm — check it's approved"). If data.blocked_systems_tasks has entries, name the top blocker ("Vercel billing still blocking — unblocks deploy"). Skip each if empty.
 
 9. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
+
+9b. Wellness. ONLY include this section if data.wellness has any values. Keep to one sentence max. If Garmin is synced: "Last night — [X]h sleep, HRV [Y], recovery [Z]." If training was logged yesterday: "Trained [type] yesterday." If bloods are overdue (days_since_bloods > 180): "Bloods are overdue — book Medichecks today." Skip entire section if data.wellness is null or all fields are null.
 
 10. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. If data.last_diagnosis is non-null, surface its single key finding in one sentence. Silent otherwise.
 

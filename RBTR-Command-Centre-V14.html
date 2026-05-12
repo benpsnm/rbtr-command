@@ -483,6 +483,7 @@ label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-fam
   <div class="nav-item" onclick="show('nutrition')"><span class="ic">🥗</span>Nutrition</div>
   <div class="nav-item" onclick="show('relationship')"><span class="ic">❤️</span>Ben & Sarah</div>
   <div class="nav-item" onclick="show('mindset')"><span class="ic">🧠</span>Mindset & Mood</div>
+  <div class="nav-item" onclick="show('wellness')"><span class="ic">💊</span>Wellness Tracker<span class="nav-badge green">NEW</span></div>
 
   <div class="nav-sec">Launch</div>
   <div class="nav-item" onclick="show('firstvideo')"><span class="ic">🎬</span>First Video<span class="nav-badge green">GO</span></div>
@@ -7211,6 +7212,431 @@ function renderAirbnbBookings(){
   <div class="card"><div class="ct">On Progress</div><div style="font-size:12px;line-height:1.9;color:var(--off-white);">You don't need to go fast. You need to go consistently. One house job a day. One workout a day. One piece of content a week. In a year that's 52 videos, 365 workouts, and a house that's ready to rent.</div></div>
   <div class="card"><div class="ct">On the Boys</div><div style="font-size:12px;line-height:1.9;color:var(--off-white);">Hudson and Benson don't need a perfect dad. They need a present one. The truck, the expedition, the debt payback — they'll understand all of it one day. What they'll remember is whether you were there.</div></div>
 </div>
+</section>
+
+<!-- ==================== WELLNESS TRACKER ==================== -->
+<section class="section" id="sec-wellness">
+<div class="ph"><svg viewBox="0 0 120 120" style="width:36px;height:36px;flex-shrink:0;"><rect width="120" height="120" rx="6" fill="#000"/><polygon points="20,75 40,42 52,58 60,38 68,58 80,42 100,75" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/><polygon points="57,42 60,38 63,42 61,44 59,44" fill="#fff"/><text x="60" y="78" text-anchor="middle" font-family="Ultra,serif" font-size="14" fill="#fff">ROCK BOTTOM</text><line x1="22" y1="83" x2="44" y2="83" stroke="#fff" stroke-width="0.8"/><text x="60" y="86" text-anchor="middle" font-family="Ultra,serif" font-size="7" fill="#fff" letter-spacing="2">to</text><line x1="76" y1="83" x2="98" y2="83" stroke="#fff" stroke-width="0.8"/><text x="60" y="100" text-anchor="middle" font-family="Ultra,serif" font-size="14" fill="#fff">ROAMING</text></svg><div class="ph-titles"><div class="pt">WELLNESS TRACKER</div><div class="ps">Body. Bloods. Compounds. Recovery.</div></div></div>
+
+<!-- (a) Today's Check-In + (b) Compound Log -->
+<div class="g2" style="margin-bottom:18px;">
+
+  <!-- (a) TODAY'S CHECK-IN -->
+  <div class="card ab">
+    <div class="ct">TODAY'S CHECK-IN</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Daily log — takes 90 seconds.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">WEIGHT (kg)</label>
+        <input type="number" id="wl-weight" step="0.1" placeholder="0.0" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">SLEEP (hrs)</label>
+        <input type="number" id="wl-sleep" step="0.5" min="0" max="14" placeholder="0.0" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">MOOD (1-10)</label>
+        <input type="number" id="wl-mood" min="1" max="10" placeholder="—" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">ENERGY (1-10)</label>
+        <input type="number" id="wl-energy" min="1" max="10" placeholder="—" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">LIBIDO (1-10)</label>
+        <input type="number" id="wl-libido" min="1" max="10" placeholder="—" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">PROTEIN (g)</label>
+        <input type="number" id="wl-protein" placeholder="180 target" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">WATER (litres)</label>
+        <input type="number" id="wl-water" step="0.5" placeholder="3.0 min" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">TRAINED TODAY?</label>
+        <select id="wl-trained" style="width:100%;padding:6px 8px;font-size:13px;">
+          <option value="">— select —</option>
+          <option value="Push">Yes — Push</option>
+          <option value="Pull">Yes — Pull</option>
+          <option value="Legs">Yes — Legs</option>
+          <option value="Cardio">Yes — Cardio</option>
+          <option value="Functional">Yes — Functional</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">ALCOHOL (units)</label>
+        <input type="number" id="wl-alcohol" min="0" placeholder="0" style="width:100%;padding:6px 8px;font-size:13px;">
+      </div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">SIDE EFFECTS / ANYTHING NOTABLE</label>
+      <textarea id="wl-side-effects" placeholder="Any side effects, unusual symptoms, or notes..." style="width:100%;min-height:52px;padding:6px 8px;font-size:12px;resize:vertical;"></textarea>
+    </div>
+    <button class="btn pri" style="width:100%;" onclick="wlSaveDaily()">Log Today</button>
+    <div id="wl-daily-msg" style="display:none;margin-top:8px;font-size:12px;color:var(--green);text-align:center;"></div>
+  </div>
+
+  <!-- (b) COMPOUND LOG -->
+  <div class="card gb">
+    <div class="ct">COMPOUND LOG</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Log what you took. You enter the amounts — no suggestions here.</div>
+    <div style="margin-bottom:8px;">
+      <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">COMPOUND</label>
+      <select id="wl-compound" style="width:100%;padding:6px 8px;font-size:13px;">
+        <option value="">— select —</option>
+        <option value="Retatrutide">Retatrutide</option>
+        <option value="MOTC">MOT-C</option>
+        <option value="BPC157">BPC-157</option>
+        <option value="TB500">TB-500</option>
+        <option value="NAD+">NAD+</option>
+        <option value="SLU-PP-332">SLU-PP-332</option>
+        <option value="Tesamorelin">Tesamorelin</option>
+        <option value="GHK-Cu">GHK-Cu</option>
+        <option value="Test E">Test Enanthate</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">AMOUNT LOGGED</label>
+      <input type="text" id="wl-compound-amount" placeholder='e.g. "200mcg subQ delt L"' style="width:100%;padding:6px 8px;font-size:13px;">
+    </div>
+    <div style="margin-bottom:8px;">
+      <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">TIMING</label>
+      <select id="wl-compound-timing" style="width:100%;padding:6px 8px;font-size:13px;">
+        <option value="Morning">Morning</option>
+        <option value="PWO">Post-Workout</option>
+        <option value="PM">Evening / PM</option>
+        <option value="EOD">EOD</option>
+        <option value="E3D">Every 3 Days</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:10px;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:3px;">NOTES</label>
+      <textarea id="wl-compound-notes" placeholder="Optional notes..." style="width:100%;min-height:48px;padding:6px 8px;font-size:12px;resize:vertical;"></textarea>
+    </div>
+    <button class="btn" style="width:100%;border-color:var(--green);color:var(--green);" onclick="wlSaveCompound()">Log Compound</button>
+    <div id="wl-compound-msg" style="display:none;margin-top:8px;font-size:12px;color:var(--green);text-align:center;"></div>
+    <div class="sdiv" style="margin-top:16px;"><h3>RECENT LOGS</h3></div>
+    <div id="wl-compound-recent" style="font-size:11px;color:var(--muted);"></div>
+  </div>
+</div>
+
+<!-- (c) Garmin + (d) Bloods -->
+<div class="g2" style="margin-bottom:18px;">
+
+  <!-- (c) GARMIN OVERNIGHT -->
+  <div class="card bb">
+    <div class="ct">GARMIN OVERNIGHT</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Last night's recovery data.</div>
+    <div id="wl-garmin-data">
+      <div style="background:rgba(26,115,232,0.08);border:1px solid rgba(26,115,232,0.2);border-radius:6px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--blue);margin-bottom:6px;">Garmin not connected yet</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.7;">When connected, this card shows: sleep score, HRV, resting heart rate, recovery score — synced each morning automatically.</div>
+      </div>
+      <button class="btn sm" style="width:100%;border-color:var(--blue);color:var(--blue);" onclick="show('settings')">Settings → Connect Garmin</button>
+    </div>
+    <div class="sdiv" style="margin-top:14px;"><h3>WHAT WILL SHOW HERE</h3></div>
+    <div class="sr"><span class="sl">Sleep score</span><span class="sv" id="wl-g-sleep">—</span></div>
+    <div class="sr"><span class="sl">HRV</span><span class="sv" id="wl-g-hrv">—</span></div>
+    <div class="sr"><span class="sl">Resting HR</span><span class="sv" id="wl-g-rhr">—</span></div>
+    <div class="sr"><span class="sl">Recovery</span><span class="sv" id="wl-g-recovery">—</span></div>
+    <div class="sr"><span class="sl">Sleep duration</span><span class="sv" id="wl-g-duration">—</span></div>
+  </div>
+
+  <!-- (d) BLOODS HISTORY -->
+  <div class="card pb">
+    <div class="ct">BLOODS HISTORY</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Upload results after each panel. Key markers visible at a glance.</div>
+    <div id="wl-bloods-list">
+      <div style="font-size:11px;color:var(--muted);padding:10px 0;text-align:center;">No panels logged yet. Upload your first bloods after baseline testing.</div>
+    </div>
+    <button class="btn sm" style="width:100%;margin-top:10px;border-color:var(--purple);color:var(--purple);" onclick="openModal('modal-wl-bloods')">Upload New Panel</button>
+    <div class="sdiv" style="margin-top:14px;"><h3>RECOMMENDED PANEL</h3></div>
+    <div style="font-size:11px;color:var(--off-white);line-height:1.8;">
+      Medichecks Advanced Well Man — £159<br>
+      + Oestradiol sensitive (separate order, ~£39)<br>
+      <span style="color:var(--muted);">Cadence: baseline now → 8 weeks → every 6 months</span>
+    </div>
+  </div>
+</div>
+
+<!-- (e) Supplements + (f) Training plan -->
+<div class="g2" style="margin-bottom:18px;">
+
+  <!-- (e) SUPPLEMENT STACK -->
+  <div class="card">
+    <div class="ct">SUPPLEMENT STACK</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Active supplements. Monthly cost auto-total.</div>
+    <div id="wl-supps-list">
+      <div style="font-size:11px;color:var(--muted);padding:8px 0;">Loading...</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #1a1a1a;">
+      <div style="font-size:11px;color:var(--muted);">Est. monthly total</div>
+      <div style="font-family:'Ultra',serif;font-size:18px;color:var(--amber);" id="wl-supps-total">—</div>
+    </div>
+    <button class="btn sm" style="width:100%;margin-top:10px;" onclick="openModal('modal-wl-supp')">+ Add Supplement</button>
+  </div>
+
+  <!-- (f) TRAINING PLAN -->
+  <div class="card ab">
+    <div class="ct">TRAINING PLAN — 3-DAY SPLIT</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Rotate through these. Not day-specific — fit around the workshop.</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-family:var(--font-cond);color:var(--accent);letter-spacing:.5px;margin-bottom:4px;">DAY A — PUSH</div>
+      <div style="font-size:11px;color:var(--off-white);line-height:1.8;">Bench Press 4×6–8 · OHP 3×8–10 · Incline DB 3×10–12<br>Lateral Raises 4×12–15 · Skull Crushers 3×10–12 · Cable PD 3×12–15</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-family:var(--font-cond);color:var(--blue);letter-spacing:.5px;margin-bottom:4px;">DAY B — PULL</div>
+      <div style="font-size:11px;color:var(--off-white);line-height:1.8;">Deadlift 4×4–6 · Pull-Ups 4×6–10 · DB Row 3×8–10<br>Face Pulls 4×15–20 · Hammer Curls 3×10–12 · Incline Curl 3×12–15</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-family:var(--font-cond);color:var(--green);letter-spacing:.5px;margin-bottom:4px;">DAY C — LEGS + CORE</div>
+      <div style="font-size:11px;color:var(--off-white);line-height:1.8;">Squat 4×6–8 · RDL 3×10–12 · Leg Press 3×12–15<br>Lunges 3×10 · Calf Raises 4×15–20 · Farmer's Carry 3×40m</div>
+    </div>
+    <button class="btn sm pri" style="width:100%;" onclick="wlLogTrainingSession()">Trained Today — Log It</button>
+    <div id="wl-train-confirm" style="display:none;margin-top:8px;font-size:12px;color:var(--green);text-align:center;"></div>
+  </div>
+</div>
+
+<!-- (g) BLOODS REMINDERS -->
+<div class="sdiv"><h3>BLOODS REMINDERS</h3></div>
+<div class="g2" style="margin-bottom:18px;">
+  <div class="card">
+    <div class="ct">NEXT PANEL DUE</div>
+    <div style="font-family:'Ultra',serif;font-size:36px;color:var(--accent);" id="wl-bloods-countdown">—</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="wl-bloods-next-date">No panel scheduled. Book baseline now.</div>
+    <div style="margin-top:12px;font-size:11px;color:var(--off-white);line-height:1.8;">Medichecks finger-prick: kit arrives 3–5 days · results in 2–5 days. Order 2 weeks before you need results.</div>
+    <button class="btn sm" style="margin-top:10px;width:100%;" onclick="window.open('https://www.medichecks.com/products/well-man-advanced-blood-test','_blank')">Order Medichecks Well Man →</button>
+  </div>
+  <div class="card ab">
+    <div class="ct">LAST PANEL</div>
+    <div style="font-size:13px;color:var(--muted);" id="wl-last-panel-date">No panels on record yet.</div>
+    <div class="sdiv" style="margin-top:14px;"><h3>CADENCE</h3></div>
+    <div class="sr"><span class="sl">Before starting</span><span class="sv acc">Baseline — now</span></div>
+    <div class="sr"><span class="sl">8 weeks in</span><span class="sv">Hormones + liver + FBC</span></div>
+    <div class="sr"><span class="sl">Every 6 months</span><span class="sv">Full panel repeat</span></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.7;">If haematocrit approaches 52% at any check: stop and consult clinic before continuing.</div>
+  </div>
+</div>
+
+<!-- Wellness JS -->
+<script>
+(function(){
+  const SB_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+  const ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjY2ODIsImV4cCI6MjA4OTg0MjY4Mn0.Lo-3Q0PbbOZmNsw3iAOzytgn80O0l7TKHXTYwhqsWog';
+
+  function sbHeaders(){ return { 'apikey': ANON, 'Authorization': 'Bearer '+ANON, 'Content-Type': 'application/json' }; }
+
+  function today(){ return new Date().toISOString().split('T')[0]; }
+
+  window.wlSaveDaily = async function() {
+    const training_type = document.getElementById('wl-trained').value;
+    const payload = {
+      date: today(),
+      weight_kg:    parseFloat(document.getElementById('wl-weight').value) || null,
+      sleep_hours:  parseFloat(document.getElementById('wl-sleep').value) || null,
+      mood:         parseInt(document.getElementById('wl-mood').value) || null,
+      energy:       parseInt(document.getElementById('wl-energy').value) || null,
+      libido:       parseInt(document.getElementById('wl-libido').value) || null,
+      protein_g:    parseInt(document.getElementById('wl-protein').value) || null,
+      water_l:      parseFloat(document.getElementById('wl-water').value) || null,
+      alcohol_units:parseInt(document.getElementById('wl-alcohol').value) || 0,
+      training_done: training_type && training_type !== 'No',
+      training_type: training_type && training_type !== 'No' ? training_type : null,
+      side_effects: document.getElementById('wl-side-effects').value || null,
+    };
+    try {
+      const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_daily', {
+        method:'POST', headers: {...sbHeaders(),'Prefer':'resolution=merge-duplicates,return=minimal'},
+        body: JSON.stringify(payload)
+      });
+      const msg = document.getElementById('wl-daily-msg');
+      msg.style.display='block';
+      msg.textContent = r.ok ? 'Logged.' : 'Error — '+r.status;
+      msg.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+    } catch(e){ console.error('[wellness daily]',e); }
+  };
+
+  window.wlSaveCompound = async function() {
+    const compound = document.getElementById('wl-compound').value;
+    if (!compound){ alert('Select a compound.'); return; }
+    const payload = {
+      date: today(),
+      compound,
+      amount_logged: document.getElementById('wl-compound-amount').value || null,
+      timing: document.getElementById('wl-compound-timing').value || null,
+      notes:  document.getElementById('wl-compound-notes').value || null,
+    };
+    try {
+      const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_compounds_log', {
+        method:'POST', headers: {...sbHeaders(),'Prefer':'return=minimal'}, body: JSON.stringify(payload)
+      });
+      const msg = document.getElementById('wl-compound-msg');
+      msg.style.display='block';
+      msg.textContent = r.ok ? 'Logged.' : 'Error — '+r.status;
+      msg.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+      if(r.ok){ wlLoadCompoundRecent(); document.getElementById('wl-compound-amount').value=''; document.getElementById('wl-compound-notes').value=''; }
+    } catch(e){ console.error('[wellness compound]',e); }
+  };
+
+  window.wlLogTrainingSession = async function() {
+    const trained_type = prompt('What session? (Push / Pull / Legs / Cardio / Functional)','Push');
+    if (!trained_type) return;
+    const payload = { date: today(), training_done: true, training_type: trained_type.trim() };
+    const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_daily', {
+      method:'POST', headers: {...sbHeaders(),'Prefer':'resolution=merge-duplicates,return=minimal'}, body: JSON.stringify(payload)
+    });
+    const el = document.getElementById('wl-train-confirm');
+    el.style.display='block';
+    el.textContent = r.ok ? 'Session logged. Good work.' : 'Error saving — '+r.status;
+  };
+
+  async function wlLoadSupplements() {
+    try {
+      const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_supplements?active=eq.true&order=name.asc', { headers: sbHeaders() });
+      if (!r.ok) return;
+      const rows = await r.json();
+      const el = document.getElementById('wl-supps-list');
+      if (!rows.length){ el.innerHTML='<div style="font-size:11px;color:var(--muted);">No supplements added yet.</div>'; return; }
+      let total = 0;
+      el.innerHTML = rows.map(s => {
+        total += parseFloat(s.monthly_cost_gbp || 0);
+        return `<div class="sr"><span class="sl" style="font-size:11px;">${s.name}</span><span class="sv" style="font-size:11px;">£${parseFloat(s.monthly_cost_gbp||0).toFixed(0)}/mo</span></div>`;
+      }).join('');
+      document.getElementById('wl-supps-total').textContent = '£'+total.toFixed(0)+'/mo';
+    } catch(e){ console.error('[wellness supps]',e); }
+  }
+
+  async function wlLoadCompoundRecent() {
+    try {
+      const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_compounds_log?order=created_at.desc&limit=5', { headers: sbHeaders() });
+      if (!r.ok) return;
+      const rows = await r.json();
+      const el = document.getElementById('wl-compound-recent');
+      el.innerHTML = rows.length ? rows.map(c=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111;font-size:11px;"><span style="color:var(--off-white);">${c.compound}</span><span style="color:var(--muted);">${c.date} · ${c.timing||'—'}</span></div>`).join('') : '<div style="color:var(--muted);">No logs yet.</div>';
+    } catch(e){ console.error('[wellness compound recent]',e); }
+  }
+
+  async function wlLoadBloods() {
+    try {
+      const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_bloods?order=date.desc&limit=5', { headers: sbHeaders() });
+      if (!r.ok) return;
+      const rows = await r.json();
+      if (!rows.length) return;
+      const el = document.getElementById('wl-bloods-list');
+      el.innerHTML = rows.map(b=>`<div class="sr"><span class="sl" style="font-size:11px;">${b.date}</span><span class="sv" style="font-size:11px;">${b.panel_type||'Panel'}</span></div>`).join('');
+      document.getElementById('wl-last-panel-date').textContent = 'Last panel: '+rows[0].date+' — '+rows[0].panel_type;
+    } catch(e){ console.error('[wellness bloods]',e); }
+  }
+
+  async function wlLoadGarmin() {
+    try {
+      const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
+      const r = await fetch(`${SB_URL}/rest/v1/rbtr_wellness_daily?date=eq.${yesterday}&limit=1`, { headers: sbHeaders() });
+      if (!r.ok) return;
+      const rows = await r.json();
+      if (!rows.length || (!rows[0].sleep_score && !rows[0].hrv)) return;
+      const d = rows[0];
+      document.getElementById('wl-garmin-data').style.display='none';
+      if(d.sleep_score) document.getElementById('wl-g-sleep').textContent = d.sleep_score+' / 100';
+      if(d.hrv) document.getElementById('wl-g-hrv').textContent = d.hrv+' ms';
+      if(d.resting_hr) document.getElementById('wl-g-rhr').textContent = d.resting_hr+' bpm';
+      if(d.recovery_score) document.getElementById('wl-g-recovery').textContent = d.recovery_score+' / 100';
+      if(d.sleep_hours) document.getElementById('wl-g-duration').textContent = d.sleep_hours+'h';
+    } catch(e){ /* silently skip */ }
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{ wlLoadSupplements(); wlLoadCompoundRecent(); wlLoadBloods(); wlLoadGarmin(); });
+  } else {
+    wlLoadSupplements(); wlLoadCompoundRecent(); wlLoadBloods(); wlLoadGarmin();
+  }
+})();
+</script>
+
+<!-- Modal: Upload Bloods -->
+<div class="mo" id="modal-wl-bloods"><div class="md"><button class="mc" onclick="closeModal('modal-wl-bloods')">✕</button>
+<div class="md-title">LOG BLOOD PANEL</div>
+<label>Panel Date</label><input type="date" id="wl-b-date" style="margin-bottom:8px;">
+<label>Panel Type</label><select id="wl-b-type" style="margin-bottom:8px;"><option value="Medichecks Advanced Well Man">Medichecks Advanced Well Man</option><option value="NHS">NHS</option><option value="Custom">Custom</option></select>
+<label>Total Testosterone (nmol/L)</label><input type="number" step="0.1" id="wl-b-tt" style="margin-bottom:8px;">
+<label>Free Testosterone (pmol/L)</label><input type="number" step="0.1" id="wl-b-ft" style="margin-bottom:8px;">
+<label>Oestradiol E2 (pmol/L)</label><input type="number" step="0.1" id="wl-b-e2" style="margin-bottom:8px;">
+<label>SHBG (nmol/L)</label><input type="number" step="0.1" id="wl-b-shbg" style="margin-bottom:8px;">
+<label>Haematocrit (%)</label><input type="number" step="0.1" id="wl-b-hct" style="margin-bottom:8px;">
+<label>ALT (U/L)</label><input type="number" id="wl-b-alt" style="margin-bottom:8px;">
+<label>Notes</label><textarea id="wl-b-notes" style="margin-bottom:14px;min-height:60px;"></textarea>
+<button class="btn pri" style="width:100%;" onclick="wlSaveBloods()">Save Panel</button>
+</div></div>
+
+<!-- Modal: Add Supplement -->
+<div class="mo" id="modal-wl-supp"><div class="md"><button class="mc" onclick="closeModal('modal-wl-supp')">✕</button>
+<div class="md-title">ADD SUPPLEMENT</div>
+<label>Name</label><input type="text" id="wl-s-name" style="margin-bottom:8px;" placeholder="e.g. Creatine Monohydrate">
+<label>Daily Dose</label><input type="text" id="wl-s-dose" style="margin-bottom:8px;" placeholder="e.g. 5g">
+<label>Timing</label><input type="text" id="wl-s-timing" style="margin-bottom:8px;" placeholder="e.g. Morning with food">
+<label>Monthly Cost (£)</label><input type="number" step="0.01" id="wl-s-cost" style="margin-bottom:8px;">
+<label>Supplier / Source</label><input type="text" id="wl-s-source" style="margin-bottom:8px;" placeholder="e.g. Myprotein">
+<label>Notes</label><textarea id="wl-s-notes" style="margin-bottom:14px;min-height:52px;"></textarea>
+<button class="btn pri" style="width:100%;" onclick="wlSaveSupp()">Add Supplement</button>
+</div></div>
+
+<script>
+(function(){
+  const SB_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+  const ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjY2ODIsImV4cCI6MjA4OTg0MjY4Mn0.Lo-3Q0PbbOZmNsw3iAOzytgn80O0l7TKHXTYwhqsWog';
+  function h(){ return { 'apikey': ANON, 'Authorization': 'Bearer '+ANON, 'Content-Type': 'application/json' }; }
+
+  window.wlSaveBloods = async function() {
+    const payload = {
+      date:       document.getElementById('wl-b-date').value || new Date().toISOString().split('T')[0],
+      panel_type: document.getElementById('wl-b-type').value,
+      notes:      document.getElementById('wl-b-notes').value || null,
+      key_markers: {
+        total_t:  parseFloat(document.getElementById('wl-b-tt').value) || null,
+        free_t:   parseFloat(document.getElementById('wl-b-ft').value) || null,
+        e2:       parseFloat(document.getElementById('wl-b-e2').value) || null,
+        shbg:     parseFloat(document.getElementById('wl-b-shbg').value) || null,
+        hct:      parseFloat(document.getElementById('wl-b-hct').value) || null,
+        alt:      parseFloat(document.getElementById('wl-b-alt').value) || null,
+      }
+    };
+    const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_bloods', {
+      method:'POST', headers:{...h(),'Prefer':'return=minimal'}, body:JSON.stringify(payload)
+    });
+    if(r.ok){ closeModal('modal-wl-bloods'); alert('Panel saved.'); }
+    else alert('Error: '+r.status);
+  };
+
+  window.wlSaveSupp = async function() {
+    const name = document.getElementById('wl-s-name').value;
+    if(!name){ alert('Enter a name.'); return; }
+    const payload = {
+      name, daily_dose: document.getElementById('wl-s-dose').value||null,
+      timing: document.getElementById('wl-s-timing').value||null,
+      monthly_cost_gbp: parseFloat(document.getElementById('wl-s-cost').value)||null,
+      source: document.getElementById('wl-s-source').value||null,
+      notes: document.getElementById('wl-s-notes').value||null,
+      active: true
+    };
+    const r = await fetch(SB_URL+'/rest/v1/rbtr_wellness_supplements', {
+      method:'POST', headers:{...h(),'Prefer':'return=minimal'}, body:JSON.stringify(payload)
+    });
+    if(r.ok){ closeModal('modal-wl-supp'); alert('Supplement added.'); }
+    else alert('Error: '+r.status);
+  };
+})();
+</script>
 </section>
 
 <!-- ==================== AIRBNB CERTIFICATES ==================== -->
