@@ -67,6 +67,24 @@ const yesterday = () => new Date(Date.now() - 86400000).toISOString().slice(0, 1
 const daysUntil = (iso) => Math.max(0, Math.ceil((new Date(iso) - Date.now()) / 86400000));
 const daysSince = (iso) => iso ? Math.floor((Date.now() - new Date(iso)) / 86400000) : null;
 
+function getWeekIso() {
+  const d = new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function getEndOfWeek() {
+  const now = new Date();
+  const day = now.getUTCDay() || 7;
+  const daysToFriday = 5 - day;
+  const friday = new Date(now);
+  friday.setUTCDate(friday.getUTCDate() + (daysToFriday >= 0 ? daysToFriday : daysToFriday + 7));
+  return friday.toISOString().slice(0, 10);
+}
+
 // ── Data gathering (identical contract to /api/briefing-data) ─────────────────
 async function gatherAllData() {
   const today_iso = new Date().toISOString().slice(0, 10);
@@ -110,6 +128,9 @@ async function gatherAllData() {
     lastDiagnosis,
     garminSleep,
     mindsetYesterday,
+    todaysPlan,
+    weekGoals,
+    yesterdayDailyLog,
   ] = await Promise.all([
     // Dynamic Built Dad: try start_date first, fall back to stored day_number
     sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
@@ -251,6 +272,19 @@ async function gatherAllData() {
     })(),
     // Extended mindset from yesterday's evening reflection
     sbSelect('evening_reflections', `reflection_date=eq.${yesterday()}&select=mood_score,one_line,one_line_reflection,tomorrow_priority,raw_thoughts,what_hit_me`).then(r => r?.[0] ?? null),
+    // Today's plan — tasks due today ordered by priority
+    sbSelect('rbtr_tasks', `due_date=eq.${today_iso}&status=in.(open,in_progress)&order=priority.asc&limit=5&select=description,priority,project`).then(r => r ?? []),
+    // Week goals — try rbtr_week_goals first (may not exist yet), fallback to P1-P2 tasks due by Friday
+    (async () => {
+      const weekIso = getWeekIso();
+      const goals = await sbSelect('rbtr_week_goals', `week_iso=eq.${weekIso}&order=status.asc&limit=3&select=goal,target_outcome,status,progress_pct`).catch(() => null);
+      if (Array.isArray(goals) && goals.length > 0) return { source: 'week_goals_table', items: goals };
+      const endOfWeek = getEndOfWeek();
+      const fallback = await sbSelect('rbtr_tasks', `due_date=lte.${endOfWeek}&status=in.(open,in_progress)&priority=lte.2&order=priority.asc&limit=3&select=description,priority,project,due_date`).catch(() => null);
+      return { source: 'tasks_fallback', items: fallback ?? [] };
+    })(),
+    // Yesterday's daily log events (table may not exist yet — graceful null)
+    sbSelect('rbtr_daily_log', `log_date=eq.${yesterday()}&order=created_at.asc`).catch(() => null),
   ]);
 
   return {
@@ -309,6 +343,9 @@ async function gatherAllData() {
       (Date.now() - new Date(lastDiagnosis.created_at).getTime()) < 18 * 3600000
       ? lastDiagnosis : null,
     mindset_yesterday: mindsetYesterday,
+    todays_plan: Array.isArray(todaysPlan) ? todaysPlan : [],
+    week_goals: weekGoals,
+    yesterday_daily_log: Array.isArray(yesterdayDailyLog) ? yesterdayDailyLog : [],
   };
 }
 
@@ -327,6 +364,10 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 
 - data.date (YYYY-MM-DD), data.weekday, data.days_to_departure, data.built_dad_day, data.weather
 - data.overnight: { wins, flags, reflection_from_last_night, priority_set_yesterday, priority_completed }
+- data.tasks_completed_yesterday: array of { description, priority, project } — tasks marked complete yesterday. PRIMARY source for "yesterday's wins" narrative.
+- data.yesterday_daily_log: array of { event_type, description, related_project } — manually logged events (deploys, decisions, milestones, cash). Supplement to tasks_completed_yesterday. May be empty.
+- data.todays_plan: array of { description, priority, project } — tasks due today, ordered by priority. Use to frame what's happening today.
+- data.week_goals: { source: 'week_goals_table'|'tasks_fallback', items: array } — if source=week_goals_table, items are { goal, target_outcome, status, progress_pct }; if source=tasks_fallback, items are { description, priority, project, due_date }. Use to frame the week context.
 - data.psnm: { pallets_current, pallets_to_breakeven, warm_leads_due_today, hot_leads, hot_lead_count, new_enquiries_24h, urgent_enquiries, overdue_followups, outreach_batch_today }
 - data.outreach_replies_unresponded: array of { from_email, classification, next_action, outreach_id } — cold outreach replies needing Ben's attention (classification=interested or questions, not yet responded to)
 - data.sponsors: { hot_signals (array), replies_pending, touches_queued_today, approach_due_this_week }
@@ -341,7 +382,6 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.rbtr_build_tasks: array of { description, priority, due_date } — RBTR truck build open tasks (top 3)
 - data.sarah_family_tasks: array of { description, priority, due_date, project } — tasks Sarah/family need to act on in next 3 days
 - data.airbnb_tasks: array of { description, priority, due_date } — AirBnB critical path tasks due in 7 days
-- data.tasks_completed_yesterday: array of { description, priority, project } — tasks marked complete yesterday (wins recap)
 - data.deal_flow: array of { description, priority, project, due_date } — active deals across Coffee Brothers, T6.1 sale, EK, Nate swap
 - data.content_due_24h: array of { caption, platform, scheduled_at } — social content due to post in next 24h
 - data.blocked_systems_tasks: array of { description, priority, project, blocked_reason } — tasks stuck waiting on something
@@ -356,31 +396,40 @@ Order of content (adapt naturally):
 
 1. Open. "Morning Ben. [Weekday] [date]. [N] days to departure."
 
-2. Yesterday's wins + mindset. If data.tasks_completed_yesterday has entries, name 1-2 of the most meaningful. If data.mindset_yesterday has raw_thoughts or what_hit_me, pull one honest line. Don't pad. If neither has content, skip entirely.
+2. Yesterday's wins — LEAD with this, it's the daily continuity frame.
+   Source: data.tasks_completed_yesterday PLUS data.yesterday_daily_log (if entries exist).
+   Format: "Yesterday you [specific win], [specific win], and [specific win]." Name 2-3 real things — use actual task descriptions, shorten for speech. If daily log has deploy/cash/milestone events, weave those in too. If data.mindset_yesterday has raw_thoughts or what_hit_me, close with one honest line. If no data at all, skip.
 
-3. Warehouse. Pallets current vs break-even. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically.
+3. Today's plan — the narrative bridge from yesterday to today.
+   Source: data.todays_plan (tasks due today, priority order).
+   Format: "Today — [P1 item] on [project], then [P2 item]." Keep to 1 sentence. If empty, skip.
 
-3b. Outreach replies. If data.outreach_replies_unresponded or data.customer_touchpoints.replies_needing_response has entries, name each company and their classification ("interested" or "has questions"). These are replies to cold outreach — they need a response. A suggested draft is waiting in Supabase. Say: "[Company] replied — [classification]. Draft's ready, needs your go-ahead." If none, skip this section entirely.
+4. Week goals — the bigger frame.
+   Source: data.week_goals. If source=week_goals_table: name up to 3 goals with progress % if nonzero. If source=tasks_fallback: name top 1-2 high-priority items due this week. Format: "By Friday: [goal 1], [goal 2]." If items empty, skip.
 
-4. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week (data.rbtr_build_tasks — name the top task). Resurrection day number and what to post today. Audience movement in absolute numbers.
+5. Warehouse. Pallets current vs break-even. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically.
 
-5. Workshop plan. If data.workshop_tasks has entries, name the top 1-2 physical tasks for today and which project they belong to. "In the workshop today: [task] on [project]." Skip if empty.
+5b. Outreach replies. If data.outreach_replies_unresponded or data.customer_touchpoints.replies_needing_response has entries, name each company and their classification ("interested" or "has questions"). These are replies to cold outreach — they need a response. A suggested draft is waiting in Supabase. Say: "[Company] replied — [classification]. Draft's ready, needs your go-ahead." If none, skip this section entirely.
 
-6. Deal flow. If data.deal_flow has entries, name active deals briefly. "Coffee Brothers quote still open. T6.1 sale — [next step]." Skip if empty.
+6. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week (data.rbtr_build_tasks — name the top task). Resurrection day number and what to post today. Audience movement in absolute numbers.
 
-7. AirBnB + Sarah. If data.airbnb_tasks or data.sarah_family_tasks has anything due this week, surface the most time-critical item. "Sarah needs to [action] by [date] for the AirBnB launch." One sentence max. Skip if nothing due.
+7. Workshop plan. If data.workshop_tasks has entries, name the top 1-2 physical tasks for today and which project they belong to. "In the workshop today: [task] on [project]." Skip if empty.
 
-8. Content + blocked. If data.content_due_24h has entries, name the platform and timing ("Instagram post goes out at 2pm — check it's approved"). If data.blocked_systems_tasks has entries, name the top blocker ("Vercel billing still blocking — unblocks deploy"). Skip each if empty.
+8. Deal flow. If data.deal_flow has entries, name active deals briefly. "Coffee Brothers quote still open. T6.1 sale — [next step]." Skip if empty.
 
-9. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
+9. AirBnB + Sarah. If data.airbnb_tasks or data.sarah_family_tasks has anything due this week, surface the most time-critical item. "Sarah needs to [action] by [date] for the AirBnB launch." One sentence max. Skip if nothing due.
 
-9b. Wellness. ONLY include this section if data.wellness has any values. Keep to one sentence max. If Garmin is synced: "Last night — [X]h sleep, HRV [Y], recovery [Z]." If training was logged yesterday: "Trained [type] yesterday." If bloods are overdue (days_since_bloods > 180): "Bloods are overdue — book Medichecks today." Skip entire section if data.wellness is null or all fields are null.
+10. Content + blocked. If data.content_due_24h has entries, name the platform and timing ("Instagram post goes out at 2pm — check it's approved"). If data.blocked_systems_tasks has entries, name the top blocker ("Vercel billing still blocking — unblocks deploy"). Skip each if empty.
 
-10. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. If data.last_diagnosis is non-null, surface its single key finding in one sentence. Silent otherwise.
+11. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
 
-11. One last thing. Close with the single most important action today. "One last thing — call Michelin before 3pm. That's the move today."
+11b. Wellness. ONLY include this section if data.wellness has any values. Keep to one sentence max. If Garmin is synced: "Last night — [X]h sleep, HRV [Y], recovery [Z]." If training was logged yesterday: "Trained [type] yesterday." If bloods are overdue (days_since_bloods > 180): "Bloods are overdue — book Medichecks today." Skip entire section if data.wellness is null or all fields are null.
 
-12. Sign off. "That's your day."
+12. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. If data.last_diagnosis is non-null, surface its single key finding in one sentence. Silent otherwise.
+
+13. One last thing. Close with the single most important action today. "One last thing — call Michelin before 3pm. That's the move today."
+
+14. Sign off. "That's your day."
 
 TONE RULES — STRICT
 
