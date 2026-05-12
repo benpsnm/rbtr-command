@@ -20,8 +20,11 @@ const RBTR_AUTH_TOKEN = process.env.RBTR_AUTH_TOKEN;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'sales@palletstoragenearme.co.uk';
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Ben @ Pallet Storage Near Me';
+const crypto = require('crypto');
 const calcQuote = require('./_quote_calc');
 const intelligence = require('./_intelligence_core');
+const { parse: parseCookies } = require('cookie');
+const jwt = require('jsonwebtoken');
 const { validateDraft } = require('./_draft_validator');
 const { verifyDraft } = require('./_claim_verifier');
 
@@ -59,6 +62,7 @@ async function sbUpdate(table, match, row) {
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
+
 async function sendTelegramAlert(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -93,6 +97,19 @@ function checkAuth(req, action) {
   const isSameOrigin = host && (origin.includes(host) || referer.includes(host)) &&
     (host === 'rbtr-jarvis.vercel.app' || host.endsWith('.vercel.app') || host.startsWith('localhost'));
   if (supplied === RBTR_AUTH_TOKEN || isSameOrigin) return { ok: true };
+  // Path 4.5 — valid psnm_session cookie
+  try {
+    const cookies = parseCookies(req.headers.cookie || '');
+    const sessionToken = cookies['psnm_session'];
+    if (sessionToken) {
+      const signingKey = process.env.SESSION_SIGNING_KEY;
+      if (signingKey) {
+        const payload = jwt.verify(sessionToken, signingKey, { algorithms: ['HS256'] });
+        const now = Math.floor(Date.now() / 1000);
+        if (payload.role === 'wms' && payload.exp > now) return { ok: true };
+      }
+    }
+  } catch { /* fall through */ }
   return { ok: false, error: 'x-rbtr-auth header missing or invalid' };
 }
 
@@ -337,16 +354,18 @@ async function sendEmail(body) {
       hint: 'Set SENDGRID_API_KEY in Vercel env. See BEN_TODO.md for SendGrid setup steps.',
     };
   }
-  const { to, subject, text, html, from, from_name } = body || {};
+  const { to, subject, text, html, from, from_name, custom_args } = body || {};
   if (!to || !subject || !(text || html)) return { ok: false, error: 'to + subject + text|html required' };
   const payload = {
     personalizations: [{ to: [{ email: to }] }],
     from: { email: from || EMAIL_FROM, name: from_name || EMAIL_FROM_NAME },
+    reply_to: { email: 'replies@parse.palletstoragenearme.co.uk', name: 'Pallet Storage Near Me' },
     subject,
     content: [],
   };
   if (text) payload.content.push({ type: 'text/plain', value: text });
   if (html) payload.content.push({ type: 'text/html', value: html });
+  if (custom_args) payload.custom_args = custom_args;
   const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
@@ -657,16 +676,47 @@ async function dispatchApproved(body) {
   const cfg = await getAtlasConfig();
   if (cfg.paused) return { ok: false, error: 'Atlas is paused — toggle in Settings to resume' };
 
+  // Guard: order prospect_id first, then approved_at, so the earliest-approved draft
+  // wins when two drafts for the same prospect are both approved. See 29 April
+  // incident — old pipeline dispatched 2 drafts to same prospect within 6 seconds.
   const approved = await sbSelect('psnm_atlas_drafts',
-    'status=eq.approved&select=id,prospect_id,touch_number,subject,body&order=approved_at.asc&limit=50');
+    'status=eq.approved&select=id,prospect_id,touch_number,subject,body,critic_log&order=prospect_id.asc,approved_at.asc&limit=50');
   if (!approved?.length) return { ok: true, sent: 0, failed: 0, message: 'No approved drafts to send' };
 
   const dailyLimit = cfg.daily_send_limit || 50;
   const toSend = approved.slice(0, dailyLimit);
 
-  const sentCount = [], failedCount = [];
+  const sentCount = [], failedCount = [], skippedCount = [];
+  // One draft per prospect per batch. Set populated as we dispatch.
+  const dispatchedProspectIds = new Set();
 
   for (const draft of toSend) {
+    // ── Per-prospect deduplication (29 April incident guard) ──────────────────
+    // If we already dispatched a draft for this prospect in this batch run,
+    // mark the duplicate as superseded and skip it. The earliest-approved draft
+    // (guaranteed by ORDER prospect_id.asc, approved_at.asc above) was already sent.
+    if (draft.prospect_id && dispatchedProspectIds.has(draft.prospect_id)) {
+      const skipEntry = {
+        ts: new Date().toISOString(),
+        attempt: 'auto_skip',
+        verdict: 'superseded',
+        failed_checks: ['duplicate_prospect_in_batch'],
+        reason: 'auto-skipped: duplicate prospect_id in same batch dispatch; earlier draft was sent',
+      };
+      await sbUpdate('psnm_atlas_drafts', { id: draft.id }, {
+        status: 'superseded',
+        critic_log: [...(draft.critic_log || []), skipEntry],
+        send_result: { skipped: true, reason: 'duplicate_prospect_in_batch', at: new Date().toISOString() },
+      }).catch(err => {
+        console.error('[dispatch_dedup] failed to mark draft superseded:', { draft_id: draft.id, error: err.message });
+        return null;
+      });
+      skippedCount.push({ id: draft.id, prospect_id: draft.prospect_id });
+      continue;
+    }
+    if (draft.prospect_id) dispatchedProspectIds.add(draft.prospect_id);
+    // ── end deduplication guard ───────────────────────────────────────────────
+
     try {
       // Primary: look up email from psnm_outreach_targets (classic Atlas prospect)
       let toEmail = null, toName = null;
@@ -699,12 +749,15 @@ async function dispatchApproved(body) {
           body: JSON.stringify({
             personalizations: [{ to: [{ email: toEmail, name: toName || toEmail }] }],
             from: { email: EMAIL_FROM, name: EMAIL_FROM_NAME },
+            reply_to: { email: 'replies@parse.palletstoragenearme.co.uk', name: 'Pallet Storage Near Me' },
             subject: draft.subject,
             content: [{ type: 'text/plain', value: draft.body }],
+            custom_args: { draft_id: draft.id, lead_id: draft.prospect_id || '', source: 'v2_2_stack' },
           }),
         });
+        const sgMsgId = sgRes.status === 202 ? sgRes.headers.get('X-Message-Id') : null;
         sendOk = sgRes.status === 202;
-        sendResult = { status: sgRes.status, at: new Date().toISOString() };
+        sendResult = { status: sgRes.status, at: new Date().toISOString(), ...(sgMsgId ? { sg_message_id: sgMsgId } : {}) };
         if (!sendOk) sendResult.error = await sgRes.text().catch(() => 'unknown');
       } else {
         sendOk = false;
@@ -713,7 +766,7 @@ async function dispatchApproved(body) {
 
       const now = new Date().toISOString();
       if (sendOk) {
-        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult });
+        await sbUpdate('psnm_atlas_drafts', { id: draft.id }, { status: 'sent', sent_at: now, send_result: sendResult, ...(sendResult.sg_message_id ? { sg_message_id: sendResult.sg_message_id } : {}) });
         if (draft.prospect_id) {
           await sbInsert('psnm_outreach_touches', [{
             target_id: draft.prospect_id,
@@ -744,6 +797,14 @@ async function dispatchApproved(body) {
 
   const queued = approved.length - toSend.length;
 
+  if (skippedCount.length > 0) {
+    await sendTelegramAlert(
+      `⚠️ Dispatch deduplication: ${skippedCount.length} draft(s) auto-superseded — duplicate prospect_id in same batch.\n` +
+      `IDs: ${skippedCount.map(s => s.id.slice(0, 8)).join(', ')}\n` +
+      `Review in WMS → Intelligence → Approval Queue.`
+    ).catch(() => null);
+  }
+
   if (failedCount.length > 3) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -765,8 +826,9 @@ async function dispatchApproved(body) {
     ok: true,
     sent: sentCount.length,
     failed: failedCount.length,
+    skipped: skippedCount.length,
     queued_for_tomorrow: queued,
-    results: { sent: sentCount, failed: failedCount },
+    results: { sent: sentCount, failed: failedCount, skipped: skippedCount },
   };
 }
 

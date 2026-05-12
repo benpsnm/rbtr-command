@@ -12,6 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const crypto = require('crypto');
+const { runPipeline, runFromAngle, rewriteAndCritique, critiqueExisting, auditTouchCounts, applyTouchCountFix } = require('./_intelligence_pipeline');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const MODEL_DEFAULT = process.env.ANTHROPIC_MODEL_DEFAULT || 'claude-sonnet-4-5-20250929';
@@ -502,6 +503,96 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ error: 'ANTHROPIC_API_KEY not set', reply: "Backend's not wired yet." });
     return;
   }
+
+  // ─── v2.2 Atlas Intelligence Pipeline routes ──────────────────────────────
+  // Injected here so these actions bypass ROCKO message handling entirely.
+  // Auth: x-rbtr-auth header OR same-origin (.vercel.app / localhost).
+  {
+    const rawBody = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const v22action = req.query?.action || rawBody?.action;
+    if (typeof v22action === 'string' && v22action.startsWith('v2_2_')) {
+      const tok = process.env.RBTR_AUTH_TOKEN;
+      const supplied = req.headers?.['x-rbtr-auth'];
+      const host = req.headers?.host || '';
+      const isSameOrigin = host.endsWith('.vercel.app') || host.startsWith('localhost');
+      const authOk = !tok || supplied === tok || isSameOrigin;
+      if (!authOk) { res.status(401).json({ error: 'x-rbtr-auth required' }); return; }
+
+      const v22json = (status, data) => { res.setHeader('Content-Type','application/json'); res.status(status).end(JSON.stringify(data, null, 2)); };
+
+      if (v22action === 'v2_2_audit_touch_counts') {
+        const audit = await auditTouchCounts();
+        return v22json(200, audit);
+      }
+
+      if (v22action === 'v2_2_fix_touch_counts') {
+        const { confirmed, audit } = rawBody;
+        if (!confirmed) return v22json(400, { error: 'confirmed=true required. Run v2_2_audit_touch_counts first and pass the audit object.' });
+        if (!audit?.discrepancies) return v22json(400, { error: 'audit object with discrepancies array required' });
+        const fix = await applyTouchCountFix(audit);
+        return v22json(200, fix);
+      }
+
+      if (v22action === 'v2_2_critique_existing') {
+        const { draft_id } = rawBody;
+        if (!draft_id) return v22json(400, { error: 'draft_id required' });
+        const result = await critiqueExisting(draft_id);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_rewrite_and_critique') {
+        const { source_draft_id, new_body } = rawBody;
+        if (!source_draft_id || !new_body) return v22json(400, { error: 'source_draft_id + new_body required' });
+        const result = await rewriteAndCritique(source_draft_id, new_body);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_run_from_angle') {
+        const { angle_id } = rawBody;
+        if (!angle_id) return v22json(400, { error: 'angle_id required' });
+        const result = await runFromAngle(angle_id);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_run_pipeline') {
+        const { lead_id, company } = rawBody;
+        const input = lead_id || company;
+        if (!input) return v22json(400, { error: 'lead_id or company required' });
+        const result = await runPipeline(input);
+        return v22json(200, result);
+      }
+
+      if (v22action === 'v2_2_smoke_test') {
+        const SMOKE_LEADS = [
+          { name: 'Gripple Ltd',        note: 'Wire manufacturer Sheffield — standard B2B industrial' },
+          { name: 'AF Blakemore & Son', note: 'FMCG distribution Doncaster — large distributor' },
+          { name: 'AJ Webb and Sons',   note: 'Fresh produce — critic must catch ambient-only conflict' },
+          { name: 'ABI Electronics Ltd',note: 'Electronics manufacturing Barnsley — different industry lens' },
+          { name: 'GW Engineering',     note: 'Micro owner-run engineering — peer tone required' },
+        ];
+        const testList = rawBody?.leads || SMOKE_LEADS;
+        const results = [];
+        for (const lead of testList) {
+          const input = lead.lead_id || lead.name || lead.company;
+          if (!input) { results.push({ input, error: 'no identifier' }); continue; }
+          const r = await runPipeline(input);
+          results.push({
+            input, note: lead.note || null,
+            final_status: r.final_status,
+            draft_id: r.draft_id,
+            quality_score: r.layers?.enricher?.quality_score,
+            reasoner_confidence: r.layers?.reasoner?.confidence,
+            critic_verdict: r.layers?.critic_final?.verdict,
+            error: r.error || null,
+          });
+        }
+        return v22json(200, { smoke_test_at: new Date().toISOString(), count: results.length, results, note: 'All drafts in pending_approval. Review before any dispatch.' });
+      }
+
+      return v22json(400, { error: 'unknown v2_2 action', valid: ['v2_2_audit_touch_counts','v2_2_fix_touch_counts','v2_2_run_pipeline','v2_2_smoke_test'] });
+    }
+  }
+  // ─── end v2.2 routes ──────────────────────────────────────────────────────
 
   const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   let { message, history = [], context = {}, mode = 'auto', session_id, elevated } = payload;

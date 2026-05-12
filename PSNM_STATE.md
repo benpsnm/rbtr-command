@@ -1,319 +1,301 @@
-# PSNM_STATE — Live System Truth
-# Last updated: 2026-04-28 EOD (Atlas v2.0 locked, quality gate live, Phase 1 intelligence in production)
-# Rule: AI tools read this file first before answering anything about PSNM state.
+# PSNM_STATE.md — Single source of truth
+
+**Last updated:** 2026-05-06 ~15:15  
+**Last updated by:** Ben + Claude (Phase 0c-alt complete — app-layer auth live in v14)  
+**Rule:** AI tools read this file FIRST in every session before answering anything about state. Every change to the system requires updating this file in the same commit. No exceptions.
 
 ---
 
-## CANONICAL ARCHITECTURE
+## Quick context for any new session
 
-**One host. One URL. One source repo.**
+Pallet Storage Near Me (PSNM) is a 1,602-pallet ambient warehouse at Unit 3C, Hellaby Industrial Estate, Rotherham S66 8HR. Operated solo by Ben Greenwood. Two production deployments share PSNM operations:
 
-| Layer | Detail |
-|-------|--------|
-| **Host** | Vercel (rbtr-jarvis.vercel.app) |
-| **Repo** | github.com/benpsnm/rbtr-command → `v14/` subdirectory |
-| **Deploy** | `vercel deploy --prod` from `v14/` OR push to main (auto-deploy) |
-| **Database** | Supabase `mpxgyobotiqcawmqlhbf` — shared between WMS and customer-facing |
-| **WMS source** | `v14/public/wms.html` (4,077 lines — rich WMS + Intelligence tab) |
-| **WMS auth** | PSNM_STAFF_PASSCODE env var, checked via `/api/supabase-proxy?action=wms_check` |
+- **`rbtr-jarvis.vercel.app`** — Command Centre (Rocko). Ben's omniscient view. Contains PSNM operations + RBTR expedition + AirBnB + JMW legal + Eternal Kustoms + personal trackers. Currently serves PSNM via /wms.html.
+- **`psnm-wms.vercel.app`** — Standalone PSNM WMS for ops staff. Currently lacks Atlas/PIP/WW Leads (drift from CC). Backed up to github.com/benpsnm/psnm-wms.
 
-**Netlify abandoned** — credit limit pause triggered 2026-04-27. Local backups retained at `~/Desktop/psnm/WMS/PSNM_v14_LIVE.html` and `PSNM_v14.html`. Do not attempt to redeploy to Netlify.
+Architectural goal: shared `psnm-core.js` so both surfaces stay in sync. Spec at `/tmp/psnm-unification-spec.md`.
 
 ---
 
-## URLs
+## Production deployments
 
-| Route | Purpose |
-|-------|---------|
-| `/wms.html` | Rich operational WMS — Ben's daily tool |
-| `/quote.html` | Customer quote widget |
-| `/terms.html` | T&Cs |
-| `/api/atlas` | Booking, Atlas priority engine, social pipeline, Atlas v2 outreach, strategy docs |
-| `/api/cron-morning-brief` | Daily 7am Telegram brief |
-| `/api/supabase-proxy` | Auth + DB proxy |
+### rbtr-jarvis.vercel.app (Command Centre)
+- Vercel project: v14, ID prj_WmfOs1RwgvTdWk9thP6mZWHVLpWf
+- Source: this repo, working branch feature/atlas-v2.2-intelligence-stack
+- Deploy method: manual `vercel --prod` from /Users/bengreenwood/Desktop/rbtr-command/v14
+- Auth: **LIVE — Phase 0c-alt complete (6 May)**. Pattern A single-password JWT cookie session. Login page at /login.html. Cookie `psnm_session` HttpOnly Secure SameSite=Strict 30d. Header path (`x-rbtr-auth`) unchanged — crons/scripts unaffected.
 
----
-
-## WMS Tabs (at /wms.html)
-
-Map · Goods In · Goods Out · Stock · Log · Customers · Rates · Dashboard · Tasks · CRM · Scripts · Revenue · Compliance · Links · Invoicing · Statements · Suppliers · **🧠 Intelligence** · **📋 Strategy**
-
-**Intelligence tab** reads live from Supabase:
-- KPI strip: warehouse occupancy + pipeline stats
-- Enquiries Pipeline (psnm_enquiries)
-- Hot Leads (psnm_outreach_targets, ordered by priority_score)
-- Outreach Summary (psnm_outreach_touches)
-- Occupancy Trend (psnm_occupancy_snapshots, last 7)
-- **Atlas v2 Approval Queue** — review/approve/reject/edit AI-generated drafts
-- **Generate Drafts** — triggers batch generation via Anthropic API
-- **Dispatch Approved** — sends approved drafts via SendGrid
-- **Leads Browser** — all 205 prospects, sortable/filterable, editable side panel
-- **Atlas Settings** — daily limit, tone mix, territory filter, pause toggle
-
-**Strategy tab** renders markdown docs:
-- Locked Plan (PSNM_LOCKED_PLAN_v1.md)
-- Atlas v2 Framework (ATLAS_V2_FRAMEWORK.md)
-- System Prompt (_atlas_system_prompt.md)
+### psnm-wms.vercel.app (Standalone)
+- Vercel project: psnm-wms, ID prj_VMnipQ7zEPUMGUjsHyYg1NU74oYz
+- Source: /Users/bengreenwood/Desktop/psnm/deploy/index.html
+- Backed up to github.com/benpsnm/psnm-wms (private)
+- Deploy method: manual `vercel --prod` from /Desktop/psnm/deploy/
+- Auth: client-side SHA256 password gate only (weak). Phase 0c-alt deferred — standalone is static SPA with no backend to protect.
+- Feature gap: no Atlas, no PIP, no WW Leads (drifted from Command Centre)
 
 ---
 
-## Warehouse
+## Production environment variables (rbtr-jarvis project)
 
-- **Capacity**: 1,602 pallet positions (1,024 racked + 454 aisle floor + 104 open floor)
-- **Break-even**: 912 pallets at 57% occupancy
-- **Location**: Unit 3C Hellaby Industrial Estate, Rotherham S66 8HR
-
-## Pricing (current)
-
-| Band | Rate |
-|------|------|
-| 1–49 pallets | £3.95/pallet/week |
-| 50–149 pallets | £3.45/pallet/week |
-| 150+ pallets | £2.95/pallet/week |
-
-- Goods-in: £3.50/movement
-- Goods-out: £3.50/movement
-- Onboarding fee: £50 (waived for 50+ pallets on 12-week+ commitment)
-
-## NEW OFFER (canonical — as of 2026-04-28)
-
-**Trial offer: First week free — when you commit to 12 weeks**
-
-| Term | Detail |
-|------|--------|
-| Week 1 | Storage free. G-in/out at standard £3.50/pallet. |
-| Weeks 2–12 | Standard tier pricing applies. |
-| After week 12 | Rolling monthly, 30 days notice to cancel. |
-| Eligibility | One trial per company (tracked by CH number / trading name). |
-| Walk-away | Day 5 conversation — exit with no further charges if not satisfied. |
-| Onboarding fee | £50, waived at 50+ pallets — compatible with trial offer. |
-
-**Retired offer (DELETE any reference):** ~~Free first month, no deposit, no contract~~
-**Notice period:** 30 days (consistent across all T&Cs, outreach, config). Previously had "14 days" in time_effort — corrected 2026-04-28.
-
-## Fixed Costs (monthly)
-
-| Month | Fixed cost |
-|-------|-----------|
-| April 2026 | £8,280 |
-| May 2026 | £9,280 |
-| June 2026 | £10,280 |
-| July 2026+ | £13,613 |
+| Variable | Length | Notes |
+|---|---|---|
+| RBTR_AUTH_TOKEN | 64 chars | API auth header value, used as `x-rbtr-auth` |
+| CRON_SECRET | 64 chars | NEW 6 May. Bearer auth on cron endpoints |
+| SENDGRID_INBOUND_SECRET | 32 chars | Query param secret for inbound parse webhook |
+| SENDGRID_WEBHOOK_PUBLIC_KEY | 180 chars | NEW 6 May. PEM-wrapped ECDSA P-256 public key for event webhook signature verification |
+| WMS_PASSWORD_HASH | 60 chars | NEW 6 May. bcrypt cost 10. Hash of CC admin password. |
+| SESSION_SIGNING_KEY | 64 chars | NEW 6 May. 64 hex char HMAC key for JWT HS256 signing. |
+| SUPABASE_URL | n/a | https://mpxgyobotiqcawmqlhbf.supabase.co |
+| SUPABASE_SERVICE_ROLE | 41 chars | Service-role key for backend writes |
+| PSNM_INTELLIGENCE_AUTORUN | n/a | Currently `false`. Cron-driven intelligence stack runs are off. Flip to `true` after Phase 0c |
+| TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM | n/a | WhatsApp outbound only, no inbound webhook |
+| ANTHROPIC_MODEL_HEAVY, ANTHROPIC_MODEL_DEFAULT, ANTHROPIC_MODEL | n/a | LLM model identifiers used by atlas.js intelligence stack |
+| BEN_PHONE, BRIEF_HOUR, BRIEF_TIMEZONE | n/a | Cron config for morning/evening briefs |
+| ELEVENLABS_VOICE_ID | n/a | Voice clone for TTS in briefs |
 
 ---
 
-## Supabase Project
+## Database state (Supabase project mpxgyobotiqcawmqlhbf)
 
-- **Project ref**: `mpxgyobotiqcawmqlhbf`
-- **WMS table**: `psnmwhm_store` (RLS disabled, anon key, single-row warehouse state)
-- **Pipeline tables**: `psnm_enquiries`, `psnm_customers`, `psnm_occupancy_snapshots`, `psnm_offer_config`, `psnm_outreach_targets`, `psnm_outreach_touches`, `psnm_social_posts`, `psnm_atlas_drafts`, `psnm_atlas_config`, `psnm_ww_leads`, `psnm_intelligence_prospects`
-- **All pipeline tables**: anon SELECT policy `USING (true)` active
-- **psnm_atlas_drafts**: stores generated email drafts (status: pending_approval → approved/rejected → sent/failed)
-- **psnm_atlas_config**: single row `id='main'`, daily_send_limit=50, paused=false, tone_mix='balanced'
-- **psnm_ww_leads**: WhichWarehouse inbound leads (status: new → contacted → converted/lost). Populated by POST /api/atlas?action=inbound_email (SendGrid Inbound Parse webhook). Auth: SENDGRID_INBOUND_SECRET query param (bypasses x-rbtr-auth). WMS Intelligence tab surfaces leads with warm response generator.
-  - **WAM path**: `source='whichwarehouse_wam'`. Detected by `WW-XXXX` + `whichwarehouse member` in body. All WAM-specific fields stored as JSON in `notes` column (keys: wam, ww_reference, opportunity_tier, product_nature, storage_only, duration_type, duration_weeks, brief_overview, pallet_weight_kg, pallet_volume_m3, origin_port, amazon_mention, parse_confidence, parse_flags, pallet_count_exact, quote). Quote auto-calculated by `api/_quote_calc.js` at ingest time.
-  - **Direct path**: `source='whichwarehouse'` or `'email_inbound'`. notes = raw text (2000 char). No auto-quote.
-  - **Scenario routing** (for generate_ww_response): blocked → hazmat triage; awkward_data → clarifying Q; location_mismatch → distance reframe; port_pressure → direct-from-port pitch; happy_path → full quote email.
+### Migrations applied (latest)
+- 47_lead_enrichment.sql — Companies House + web + news enrichment cache
+- 48_lead_angles.sql — angle generation per lead
+- 49_atlas_drafts_sg_message_id.sql — adds sg_message_id column to drafts (FIXED 6 May)
+- 50_psnm_outreach_events.sql — SendGrid event capture
+- 51_atlas_drafts_superseded_status.sql — status='superseded' for dispatch dedup
+- 52_psnm_inbound_replies.sql — inbound reply capture (NEW 5 May)
 
-## Vercel Environment Variables (production)
+### Table row counts (as of 6 May 2026 ~11:30)
+| Table | Count | Notes |
+|---|---|---|
+| psnm_outreach_targets | 205 | Master prospect list |
+| psnm_intelligence_prospects | 44 | PIP harvested |
+| psnm_atlas_drafts | 48 | See breakdown below |
+| psnm_outreach_events | 8 | 6 orphaned (pre-Fix A). 2 from Fix B test dispatch — both have draft_id + sg_message_id populated |
+| psnm_inbound_replies | 2 | Both test rows from ben.greenwood89@yahoo.com on 5 May |
+| psnm_ww_leads | 10 | All status='new', 6 from today (6 May) — UNACTIONED |
 
-| Var | Purpose |
-|-----|---------|
-| SUPABASE_URL | Supabase project URL |
-| SUPABASE_SERVICE_ROLE | Service role key (server-side only) |
-| SUPABASE_ANON_KEY | Anon key (used by wms.html client-side via proxy) |
-| PSNM_STAFF_PASSCODE | WMS login gate |
-| SENDGRID_API_KEY | Booking confirmation emails |
-| TELEGRAM_BOT_TOKEN | Booking alerts + daily brief |
-| TELEGRAM_CHAT_ID | 8669062243 |
-| RBTR_AUTH_TOKEN | Atlas API auth |
-| ANTHROPIC_API_KEY | AI features |
-| ELEVENLABS_API_KEY | Voice (rotation pending — sk_2932... exposed) |
-| SENDGRID_INBOUND_SECRET | WW webhook auth — **LIVE in production** (set 2026-04-28). Gate verified: wrong secret → 401, correct → 200. |
+### psnm_atlas_drafts by status
+| Status | Count |
+|---|---|
+| sent | 11 (10 have sg_message_id=NULL — pre-migration sends; 1 backfilled: Marc Deakin Fix C) |
+| superseded | 17 (1 Fix B test draft + 16 Bug 3 no-email drafts — all archived) |
+| failed | 0 (RESOLVED — see Bug 3 below) |
+| needs_revision | 11 (critic flagged, never re-fixed) |
+| pending_approval | 6 |
+| pending_critic | 2 |
+| rejected | 2 (Gripple + ABI Electronics, rejected 5 May per dispatch dedup audit) |
 
-## Integrations (live as of 2026-04-28)
-
-- **SendGrid**: booking confirmation emails + Atlas v2 cold outreach dispatch + WW inbound parse (DNS pending Monday)
-- **Telegram**: booking alerts + daily 7am brief + WW lead alerts → TELEGRAM_CHAT_ID=8669062243
-- **Anthropic API (claude-sonnet-4-6)**: Atlas v2 draft generation + Daily General's Brief + WW warm response generation
-- **Buffer**: PSNM Facebook + Instagram connected (free tier, login: sales@palletstoragenearme.co.uk). 12 posts seeded in psnm_social_posts; posting schedule to be queued. Make.com automation not yet wired.
-- **WhichWarehouse**: inbound lead webhook built + deployed; DNS+Parse config pending Monday
-- **WAM auto-quote pipeline**: full end-to-end — parser, quote calc, scenario routing, WMS UI with quote panel + RH&D clipboard, response generator. 4/4 smoke tests PASS (happy_path/port_pressure/blocked/awkward_data). `api/_quote_calc.js` underscore-prefixed (not a Vercel function, safe within 12-fn limit).
-- **Prospect Intelligence Engine**: Companies House harvest → score (A/B/C) → Claude enrich → Atlas dispatch. Actions routed via atlas.js (intel_harvest/intel_enrich/intel_dispatch/intel_stats/intel_prospect). Cron: 06:00 daily + Monday C-tier sweep (days_back: 1095). WMS card in Intelligence tab. Table: `psnm_intelligence_prospects`. **COMPANIES_HOUSE_API_KEY live in Vercel.** Current DB: **44 total — A:3 B:24 C:17.** Region mapping fixed (lookup table, 11 records corrected). Enrichment JSON parser fixed (robust extraction). A-tier enrichment ran: 0/3 emails found (too new, no web presence). C-tier fix: WMS Harvest button now uses days_back:1095; weekly Monday cron sweep added.
-
-## Social Media
-
-### PSNM — Active (as of 2026-04-28)
-
-| Platform | Account | Followers | Status |
-|----------|---------|-----------|--------|
-| Facebook | PSNM Page | ~42 | ✅ Active, connected to Buffer |
-| Instagram | PSNM | ~37 | ✅ Active, connected to Buffer |
-| LinkedIn | PSNM Company Page | — | ⚠️ Exists, dormant — no personal account driving it |
-
-Buffer login: sales@palletstoragenearme.co.uk (free tier). 12 posts seeded in `psnm_social_posts`. Posting schedule + queue: Ben to configure today.
-
-**Gap:** No Ben Greenwood personal LinkedIn. Required before LinkedIn outreach (Atlas v2 Touch 2 — LinkedIn DM) can work. Week 2–3 priority.
-
-### Other Accounts (not PSNM, do not cross-post)
-
-| Account | Platform | Followers | Notes |
-|---------|---------|-----------|-------|
-| Sons of Guns | FB | ~1,000 | Phase 2 — Airbnb after Barnsley reno |
-| Sons of Guns | IG | ~2,000 | Phase 2 — Airbnb after Barnsley reno |
-| Co-Lab Custom Studios | IG | ~57,000 | Parked until PSNM break-even (locked plan). Future RBTR asset. |
-| Co-Lab Custom Studios | FB | — | Parked (same rule) |
-| RBTR | FB + IG | — | Placeholders squatted, dormant |
-| Ben Greenwood | FB | — | Personal — occasional "what I'm building now" soft signal-boost OK |
-| ben_son_of_a_gun | IG | — | Personal |
-| Axel Brothers | — | — | Kids — personal, keep separate |
-
-### Rules
-
-- **Never** post PSNM content via Co-Lab or Sons of Guns audiences — algorithmic punishment, brand confusion, Riley exposure risk.
-- Ben Greenwood FB (personal) may post occasional "what I'm building" content as a soft signal-boost for PSNM.
-- All Buffer scheduling for PSNM uses the sales@ login, not personal email.
-- Co-Lab audiences stay parked until PSNM reaches break-even (per locked plan).
+Source breakdown: 41 legacy (no source tag), 7 tagged v2.2_stack.
 
 ---
 
-## Phase 2 — LIVE (built 2026-04-28)
+## Live systems
 
-**Both sources live on feature/intelligence-engine-phase2. Merge to main + deploy production is final step.**
+### Atlas v2.2 Intelligence Stack (live, deployed 5 May)
+4-layer pipeline: Enricher → Reasoner → Drafter v2.2 → Critic. Runs on cron when `PSNM_INTELLIGENCE_AUTORUN=true` (currently false). Per-prospect dedup guard active in dispatchApproved() with Telegram alert on duplicate detection.
 
-### 2a. Insolvency monitor (Gazette scraping) — ✅ BUILT
-- **Trigger**: London Gazette Atom feed — notice types 2430/2920/2930/2110 (administration, winding up, CVA)
-- **Filter**: 22 logistics SIC codes — only failed 3PLs/warehouses/courier companies trigger customer search
-- **Pipeline:** Gazette → `harvestInsolvency()` → Claude web search (affected customers) → `enrich()` → score A → `psnm_intelligence_prospects`
-- **Pitch type:** `insolvency_rescue` — Atlas v2 INSOLVENCY RESCUE PITCH template
-- **Urgency window:** 21 days from notice date. Urgent (<7 days) dispatched first in `scoreAndDispatch()`
-- **Cron:** `intel_harvest_insolvency_daily` at 06:15 daily
-- **WMS:** 🚨 Insolvency button, urgency banner, red source badge
+### SendGrid Event Webhook (live 6 May, was broken 5 May)
+- Endpoint: `/api/sendgrid_events`
+- ECDSA P-256 signature verification (separate file pattern, raw body read via async iterator to preserve signed bytes)
+- Was broken from 5 May ~16:00 to 6 May ~09:25 because SENDGRID_WEBHOOK_PUBLIC_KEY env var was empty. All events during this window returned 401 signature_verification_failed.
+- Fixed 6 May 09:25 by setting public key from SendGrid dashboard with proper PEM wrapping. Verified working — 6 events captured since.
 
-### 2b. Defence supplier ingestion — ✅ BUILT
-- **Source:** Claude web search × 5 queries → CH verify → insert
-- **Pipeline:** `harvestDefence()` → 5 queries targeting UK SME defence supply chain → CH number verify → enrich → score B → `psnm_intelligence_prospects`
-- **Pitch type:** `defence_supplier` — Atlas v2 DEFENCE SUPPLY CHAIN PITCH template
-- **Key rule:** NEVER claim ISO 9001 / Cyber Essentials / SC clearance. Holmes Dream 100 tone max.
-- **Cron:** `intel_harvest_defence_weekly` at 06:30 Sunday only
-- **WMS:** 🛡 Defence button, green source badge
+### SendGrid Inbound Parse (live, 5 May)
+Two webhooks configured:
+- `parse.palletstoragenearme.co.uk` → `/api/sendgrid_inbound` — captures replies to Reply-To header at `replies@parse.palletstoragenearme.co.uk`
+- `inbound.palletstoragenearme.co.uk` → `/api/atlas?action=inbound_email` — captures WhichWarehouse leads (older path)
+- Both in PARSED mode (Send Raw OFF). Switched 5 May after raw mode dropped subject/body.
+- Reply-To header injected into outbound at sendEmail() and dispatchApproved()
 
-### Phase 2 infrastructure (both sources)
-- `getProspectSource()`, `getSafeTriggers()`, `getUrgencyWindowEnds()` helpers in `_intelligence_core.js`
-- Phase 2 trigger_signals format: JSON object with `_source` key (vs Phase 1 JSON array)
-- `scoreAndDispatch()` priority: urgentInsolvency → chA → defB → chB
-- `generateDraftViaAtlas()` detects `pitch_type` and injects source-specific context block
-- Full validation gate (same as Phase 1) — validator-gated, Telegram alert on failure
+### Cron jobs (rbtr-jarvis Vercel project)
+All require `Authorization: Bearer $CRON_SECRET` (NEW 6 May). Vercel internal cron scheduler bypasses by sending header automatically.
 
----
+| Path | Schedule |
+|---|---|
+| /api/cron-morning-brief | 06:00 daily (RBTR brief) |
+| /api/cron-morning-brief?mode=psnm-brief | 06:00 daily (PSNM brief) |
+| /api/cron-morning-brief?mode=evening | 21:00 daily |
+| /api/cron-backup | 03:00 daily |
+| /api/atlas?action=intel_harvest_daily | 06:00 daily |
+| /api/atlas?action=intel_harvest_insolvency_daily | 06:15 daily |
+| /api/atlas?action=intel_harvest_defence_weekly | 06:30 Sundays |
 
-## ATLAS V2 OUTREACH — Locked Template v2.0
-
-**Version:** v2.0 — locked 2026-04-28
-**Reference email:** `v14/api/docs/_atlas_v2_reference_email.md` (POO-CH POUCH, Grade B, Wales)
-**Canonical system prompt:** `v14/api/docs/_atlas_system_prompt.md`
-
-### Key principles
-
-| Principle | Rule |
-|-----------|------|
-| **Subject** | Company name + specific hook or question. Under 60 chars. |
-| **Opener** | Industry + location specific. Not generic. First sentence earns the read. |
-| **Geographic argument** | Factual drive times only. Phrase: "GB's logistics heartland". |
-| **Trial offer** | "First week free with 12-week commitment. Onboarding 3-5 working days. Day 5 walk-away." |
-| **Onboarding timing** | "Typically 3-5 working days from contract signed. We coordinate haulier booking — minimal admin your side." |
-| **Word count** | 120–170 body words. Every sentence earns its place. |
-| **Sign-off** | 6 lines: Ben Greenwood / Founder / Hellaby S66 8HR / Tel / sales@ / website |
-
-### Permanently prohibited
-
-- "48-hour", "same-week start", "next-day" collection/onboarding
-- "Zero paperwork" or "no paperwork"
-- "No deposit"
-- "1 in 4" or any conversion rate stat (PSNM has no verified data)
-- "Population-weighted centre of Great Britain" (not defensible)
-- Specific percentage savings claims ("saves 30%", "25-30% vs Midlands")
-- Competitor rate benchmarking ("Midlands rates £4.50-5.50")
-- "Less than a daily coffee" comparisons
-- "Real facility" / "real despatch" defensive framing
-
-### Quality gate — `_draft_validator.js` (v2.0, 2026-04-28)
-
-Every draft is validated before entering the approval queue. Drafts with any error-severity issue are routed to `needs_revision` status in WMS (amber border, issues listed inline). Ben can Override & Approve, Reject, or Fix & Approve from the Needs Revision tab.
-
-**Validate retroactively:** WMS → Outreach Queue → 🔍 Validate button runs `POST /api/atlas?action=validate_existing` against all `pending_approval` drafts.
-
-**Integration points:**
-- `atlas.js` `generateDrafts()` — validates after Claude response, before DB insert
-- `_intelligence_core.js` `scoreAndDispatch()` — same
-- `atlas.js` `validateExistingDrafts()` — retroactive scan
-
-### Cron behaviour — ARMED for 29 Apr 2026
-
-| Time | Job | What it does |
-|------|-----|--------------|
-| 06:00 | `intel_harvest_daily` | Companies House: last 2 days new incorporations → `psnm_intelligence_prospects` |
-| 06:00 | `cron-morning-brief` | AI-generated General's Brief → Telegram (occupancy, pipeline, weather, priorities) |
-| After harvest | Auto-enrichment | Claude enriches all unenriched A/B prospects (email, hook, industry) |
-| After enrichment | Auto-dispatch (top 10 A-tier) | `scoreAndDispatch()` → validator-gated → `pending_approval` or `needs_revision` |
-| On >3 dispatch failures | Telegram alert | `sendTelegramAlert()` fires with failure list |
-
-**Draft generation**: manual via WMS Intelligence tab → "Generate Drafts" button OR auto via intel_dispatch cron
-**Dispatch**: manual only — Ben approves in WMS before any email sends
-**Nothing fires without approval** — validator is gate 1, Ben is gate 2
+### Telegram bot
+- Uses long-polling (no inbound webhook). Bot name: rocko bot.
+- Alerts fired by: dispatch dedup guard, inbound reply capture, morning brief, evening reflection.
 
 ---
 
-## Atlas v2 Deferred (Week 2)
+## 🔴 Known bugs in production
 
-- Touches 2–5 (LinkedIn DM, phone script, follow-up email, decision call)
-- Reply inbox monitoring + auto-reply drafts
-- Drip sequence scheduling
-- Multi-channel via Make.com
+### Bug 1 — sg_message_id capture (FIXED 6 May)
+- Root cause investigated and resolved (see /tmp/bug1-diagnosis.md for full analysis)
+- Fix A: sendgrid_events.js now captures sg_message_id on every event insert (commit d72c983)
+- Fix B: dispatchApproved() confirmed working — test dispatch captured sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g
+- Fix C: Marc Deakin draft (id=6933cb45) backfilled with sg_message_id=XYr0qyZmSqqV646RVHB4pQ
+- Remaining: 10 Apr 27-29 drafts have sg_message_id=NULL — unrecoverable (SendGrid activity history expired). Accepted.
+- Future dispatches: fully linked (draft → sg_message_id → events → inbound replies)
 
----
+### Bug 2 — Outreach events orphaned (PARTIALLY RESOLVED 6 May)
+- 6 pre-Fix-A events in psnm_outreach_events still have draft_id=NULL, sg_message_id=NULL (old dispatches — no custom_args in payload)
+- These 6 orphaned events are unrecoverable — accepted
+- New events (post-Fix A) correctly capture both draft_id and sg_message_id (verified via Fix B test)
 
-## TODO (Ben actions only)
+### Bug 3 — 16 failed drafts (RESOLVED 6 May)
+- Root cause: all 16 had `error: no_email` — v2.1 pipeline generated drafts for 4 prospects with null email addresses; no email was ever sent
+- Single failure pattern, no code bug; the no_email guard worked correctly
+- Affected prospects (all still uncontacted, email=null): Clugston Distribution Services (quality 82), International Stones UK (78), Stanton Logistics (75), All Shires Foods Ltd (68) + 1 orphan (Poo-Ch Pouch, no prospect record)
+- Action: all 16 bulk-superseded 6 May with critic_log entry. Status is now clean (failed=0)
+- Next: find email addresses for the 4 named prospects; generate fresh v2.2 drafts once unified WMS is live
+- Full diagnosis: /tmp/bug3-diagnosis.md
 
-1. **Run full initial harvest** (one-time): `curl -X POST 'https://rbtr-jarvis.vercel.app/api/atlas?action=intel_harvest' -H 'x-rbtr-auth: TOKEN' -H 'Content-Type: application/json' -d '{"batch_size":100,"days_back":365}'` — pulls last 365 days. Then run Enrich on top 50 A/B via WMS button.
-2. Wire Make.com social scenario (see ~/Desktop/MASTER_AUDIT/BEN_TODO.md → Priority 7)
-2. **READY — follow ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md (~13 min, 3 sections):**
-   - Section 1: Hostinger DNS — MX record `inbound` → `mx.sendgrid.net` priority 10
-   - Section 2: SendGrid Inbound Parse — add `inbound.palletstoragenearme.co.uk`, webhook URL with secret
-   - Section 3: Hostinger email filter on sales@ — forward @whichwarehouse.com/.net to `leads@inbound.palletstoragenearme.co.uk`, keep copy
-3. WhichWarehouse account — Ben has emailed WW to change lead delivery to sales@palletstoragenearme.co.uk (architecture: WW → sales@ → filter → inbound subdomain → SendGrid Parse → auto-quoter)
-4. `SENDGRID_INBOUND_SECRET` **already live in Vercel** — no action needed
+### Open issue 4 — 11 needs_revision drafts in limbo
+- Critic flagged, never re-processed by Reasoner
+- These are sitting in pending_approval queue with critic_log content invisible in UI
 
----
-
-## MERGE / CONSOLIDATION HISTORY
-
-| Date | Action |
-|------|--------|
-| 2026-04-27 AM | System B (Vercel) built: quote, booking API, Atlas, Telegram, SendGrid |
-| 2026-04-27 PM | Pass 1: RLS opened on all B-side tables, psnmwhm_store fixed |
-| 2026-04-27 PM | Pass 2: Intelligence tab merged into PSNM_v14_LIVE.html |
-| 2026-04-27 PM | Netlify paused (credit limit) — WMS moved to Vercel /wms.html |
-| 2026-04-27 PM | ✅ Single canonical host. One URL. One repo. |
-| 2026-04-28 AM | Atlas v2 deployed: draft generation, approval queue, dispatch, CRM browser, strategy tab |
-| 2026-04-28 AM | All 11 smoke tests passed. 10 drafts pre-generated for top prospects. |
-| 2026-04-28 AM | PWA manifest + branded icons (installable as Mac/iPhone app) |
-| 2026-04-28 AM | Daily General's Brief — AI-generated ops brief replacing basic stats (fires 07:00 BST) |
-| 2026-04-28 AM | Test data cleared — clean baseline for launch. Zero occupancy snapshot seeded (1602 capacity, 912 BE). |
-| 2026-04-28 PM | WW lead integration shipped — psnm_ww_leads table live, inbound_email endpoint deployed, parser smoke tested (PASS). DNS+Parse config pending Monday. |
-| 2026-04-28 PM | WAM auto-quote pipeline shipped — parser + `_quote_calc.js` + scenario engine + WMS UI (quote panel, RH&D clipboard, source filter). 4/4 smoke tests PASS. |
-| 2026-04-28 PM | SendGrid Inbound Parse infrastructure ready — SENDGRID_INBOUND_SECRET live in Vercel, secret gate verified. Ben's manual config (DNS + SendGrid + filter) documented at ~/Desktop/MASTER_AUDIT/SENDGRID_INBOUND_SETUP.md. |
-| 2026-04-28 PM | **Atlas v2.0 template locked** — POO-CH POUCH approved as canonical reference email. System prompt marked v2.0 LOCKED. Reference: `v14/api/docs/_atlas_v2_reference_email.md`. |
-| 2026-04-28 PM | **Copy calibration complete (5 iterations)** — Removed: "1 in 4" stat, "30% dispatch reduction", "population-weighted centre", "zero paperwork", "no deposit", "real facility/despatch", "48-hour", "same-week start", competitor rate benchmarks. Post-processing enforcement layer added to `generateDraftViaAtlas()`. |
-| 2026-04-28 PM | **Quality gate deployed** — `_draft_validator.js`: 10 forbidden rules (hard errors), 9 required checks, voice-drift heuristics. Integrated into `atlas.js` generateDrafts() + `_intelligence_core.js` scoreAndDispatch(). WMS Outreach Queue gains Pending/Needs Revision/Approved tabs with per-issue display. Retroactive scan: 5/6 stale 48h drafts moved to needs_revision. POO-CH POUCH: 0 errors, 0 warnings. |
-| 2026-04-28 PM | **Intelligence Engine Phase 1 live** — 44 prospects (A:3 B:24 C:17). Harvest/score/enrich/dispatch all working. Postcode region mapping fixed (11 records). C-tier scoring fixed (days_back:1095). COMPANIES_HOUSE_API_KEY live in Vercel. |
-| 2026-04-28 PM | **Morning automation armed** — 06:00 cron: harvest → enrich → auto-dispatch top 10 A-tier (validator-gated). Telegram alert on >3 failures. General's Brief at 06:00. |
-| 2026-04-28 PM | **Trial offer locked across all surfaces** — quote.html, terms.html, psnm_offer_config, _atlas_system_prompt.md, outreach hooks, _ww_response_prompt.md all updated. Retired: "free first month / no deposit / no contract." |
-| 2026-04-28 PM | **Buffer connected** — PSNM Facebook + Instagram live on Buffer (free tier, sales@). 12 posts seeded. Make.com wire: tomorrow. |
-| 2026-04-28 PM | **Business fundamentals** — VAT registered. NatWest Business account active. Landlord conversation positive. |
-| 2026-04-28 EOD | **Phase 2 scoped** — Insolvency monitor (Gazette scraping) + Defence supplier ingestion. Both deferred to 29 Apr 2026. Est. 75–90 min build. |
-| 2026-04-28 EOD | **Phase 2 built** — Gazette insolvency monitor + defence supplier ingestion. `harvestInsolvency()` + `harvestDefence()` live in `_intelligence_core.js`. Two new Atlas v2 pitch templates (INSOLVENCY RESCUE + DEFENCE SUPPLY CHAIN). `scoreAndDispatch()` 4-tier priority. WMS urgency banner, source filter, source counter strip. 2 new crons (06:15 daily + 06:30 Sun). Commits: 9b80791 (core) + 177e34b (WMS). Pending: deploy to production + test harvests. |
+### Open issue 5 — 10 unactioned WhichWarehouse leads
+- All status='new'
+- 2 from 29 Apr, 2 from 30 Apr, 6 from 6 May (today)
+- Today's 6 are urgent — real inbound business
+- ACTION: Ben handling 6 May 10:00
 
 ---
 
-_This file is the canonical source of truth. Update it in the same commit whenever state changes._
+## Atlas config (live)
+
+- daily_send_limit: 50
+- paused: false
+- tone_mix: balanced
+- territory_filter: S Yorkshire, W Yorkshire, Derbyshire, Notts
+
+---
+
+## Recent work history (most recent first)
+
+### 6 May 2026
+- 09:00 — Marc Deakin reply sent (peer-to-peer logistics relationship at AF Blakemore)
+- 09:10 — Phase 0a shipped: CRON_SECRET set on rbtr-jarvis production, all 7 cron endpoints now require Bearer auth
+- 09:25 — Phase 0b config shipped: SENDGRID_WEBHOOK_PUBLIC_KEY set with PEM wrapping (was empty for 18 hours)
+- 09:25 — Laptop crash, recovered
+- 09:30 — Phase 0b verified: 6 events flowed into psnm_outreach_events (but Bug 2 surfaced — events orphaned)
+- 09:50 — Ground-truth audit run: surfaced Bugs 1, 2, 3 + state file 7 days out of date
+- 09:55 — PSNM_STATE.md updated to current truth
+- ~10:00 — Bug 1 root cause diagnosed (3-layer analysis, full memo at /tmp/bug1-diagnosis.md)
+- ~10:10 — Fix A: sg_message_id added to sendgrid_events.js event insert (commit d72c983), deployed
+- ~10:20 — Fix C: Marc Deakin draft sg_message_id backfilled from send_result JSON (id=6933cb45)
+- ~10:30 — Fix B: Test dispatch to yahoo.com verified — sg_message_id=hkTfUwv5Q1O4PoXz1oTo5g captured on draft; 2 events arrived with draft_id + sg_message_id both populated. Capture pipeline confirmed end-to-end.
+- ~11:00 — Fix B cleanup: test draft marked superseded, test prospect marked do_not_contact, .env.production removed. PSNM_STATE.md updated.
+- ~11:30 — Bug 3 resolved: all 16 failed drafts diagnosed (single pattern: no_email), bulk-superseded. failed=0, superseded=17. 4 high-value prospects (Clugston, Int'l Stones, Stanton, All Shires) flagged for email enrichment + re-draft.
+- ~12:00–15:15 — Phase 0c-alt complete: app-layer auth built and deployed to v14 production. Commit 094cb5a. All 8 end-to-end tests passed. Blast radius zero.
+
+### 5 May 2026
+- Atlas v2.2 intelligence stack shipped to production (Enricher/Reasoner/Drafter/Critic)
+- SendGrid Event Webhook URL migrated to /api/sendgrid_events (signature verification rebuilt with separate file pattern, raw body handling)
+- 29 April double-dispatch incident audited (old pipeline). Gripple + ABI rejected with critic_log audit trail
+- Migration 51 (superseded status) applied
+- Dispatch dedup guard added to dispatchApproved() with Telegram alert
+- Migration 52 (psnm_inbound_replies) applied
+- Inbound reply capture pipeline built end-to-end: SendGrid Inbound Parse → /api/sendgrid_inbound → DB + Telegram alert
+- Reply-To header added to all outbound (sendEmail + dispatchApproved)
+- DNS MX records configured for parse.palletstoragenearme.co.uk
+- 39 commits of drift pushed origin/main on Command Centre repo
+- Vercel upgraded to Pro plan
+- /Desktop/psnm/deploy backed up to github.com/benpsnm/psnm-wms
+
+### 29 April 2026
+- Double-dispatch incident: 19 drafts → 6 prospects in same morning batch (old v2.1 pipeline). Caused 2 prospects (Charlotte Hill at Gripple, Shaun Hayes at ABI) to receive 2 emails 6 seconds apart.
+
+---
+
+## Phase 0c-alt — App-Layer Auth — COMPLETE (6 May 2026)
+
+Shipped v14 production. Replaces stale Supabase login. Pattern A: single password, JWT cookie session, 30-day fixed expiry. OR'd with existing x-rbtr-auth header so all crons/scripts continue working unchanged.
+
+- Commit: 094cb5a (feat(auth): app-layer auth for v14)
+- Deploy: aq0jeo2gg → rbtr-jarvis.vercel.app
+- Files: api/auth/{login,logout,middleware,check}.js + public/login.html + atlas.js (+15 lines path 4.5 cookie) + wms.html (sync XHR auth check + topbar logout button)
+- Cookie: psnm_session, HttpOnly Secure SameSite=Strict, Path=/, Max-Age 30d, JWT HS256
+- Env: WMS_PASSWORD_HASH, SESSION_SIGNING_KEY (both in v14 production, verified)
+- Deps: bcryptjs@3.0.3, jsonwebtoken@9.0.3, cookie@1.1.1
+- Tests: 8/8 passed end-to-end including blast-radius (d: x-rbtr-auth, e: Bearer CRON_SECRET)
+- Secrets stored: /tmp/auth-build-state-2026-05-06.md
+
+Deferred:
+- psnm-wms standalone auth (no backend to protect — pure static SPA)
+- standalone CSV-extract feature broken (fetch to api.anthropic.com with no key — proxy through v14 later)
+- atlas.js path 4.5 shadowed by isSameOrigin — intentional, removed in follow-up after cookie auth proven
+- wms.html scripts at lines 4090/4265 not auth-gated (atlas.js will 401 their calls during redirect window — benign)
+- localStorage not cleared on logout (single-role pattern, not a privacy issue)
+
+## Deferred for tomorrow
+
+1. **Standalone CSV-extract proxy** — `psnm-wms.vercel.app/index.html` line 2959 calls `api.anthropic.com/v1/messages` without an API key (broken feature, no exposure). Fix: proxy through `v14/api/atlas.js`. Low priority.
+2. **Standalone password gate decision** — psnm-wms is static SPA (no backend). Decide: leave public-static or port Pattern A login from v14. Architecture conversation only.
+3. **`run_intelligence_cycle` grep** — not in atlas.js action list (test e returned 400 not 401). Verify no cron calls this action: `grep -r 'run_intelligence_cycle' v14/`
+4. **isSameOrigin removal** — follow-up PR: remove `isSameOrigin` path from `checkAuth()` once cookie auth is proven. Cookie path currently shadowed for normal browser traffic.
+5. **Email enrichment** — find addresses for Clugston Distribution Services, International Stones UK, Stanton Logistics, All Shires Foods Ltd; generate fresh v2.2 drafts.
+
+---
+
+## Active spec / planning docs
+
+- `/tmp/psnm-unification-spec.md` — 5,242-word unification spec from 5 May night
+- `/tmp/v21-drafts-review.md` — 5 May review of 3 unsent v2.1 drafts (still pending action)
+- (PSNM_POSSIBILITIES.md was created 26 April but not currently in repo — needs restoration)
+
+---
+
+## Phase plan locked from spec review (5 May)
+
+| Phase | Description | Estimate | Status |
+|---|---|---|---|
+| 0a | CRON_SECRET | 1h | DONE 6 May |
+| 0b | SendGrid event signature key fix | 1h | DONE 6 May |
+| 0c | Vercel Password Protection on both deployments | 1h | SUPERSEDED by 0c-alt |
+| 0c-alt | App-layer auth (bcrypt+JWT cookie, Pattern A) on v14 | ~3h | **DONE 6 May** (commit 094cb5a) |
+| 0.5 | API auth (token injected at page load, verified by /api/atlas) | 4-6h | pending |
+| 1 | Reconcile standalone drift (bring psnm-wms up to CC parity) | 2-3h | pending |
+| 2 | Extract psnm-core.js (shared component for both deployments) | 4-6h | pending |
+| 3 | Inbound Replies Inbox UI | 3-4h | pending |
+| 4 | Outreach Events Timeline UI | 3h | pending |
+| 5 | Draft History + Critic Log UI | 3.5h | pending |
+| 6 | Connect new psnm-wms GitHub repo as Vercel deploy source | 1h | pending |
+| 7 | Draft Response feature (Atlas-generated replies to inbound) | TBD | pending |
+
+Bug fixes (pre-Phase 0c):
+- Bug 1: FIXED 6 May (Fix A + Fix B + Fix C — capture pipeline verified end-to-end)
+- Bug 2: PARTIALLY RESOLVED — 6 old orphaned events unrecoverable; new events now correctly linked
+- Bug 3: RESOLVED 6 May — all 16 no_email drafts superseded; 4 prospects flagged for email enrichment
+
+---
+
+## Decisions locked (from spec review)
+
+- Architecture: monorepo with two entry HTML files, shared `psnm-core.js`
+- Auth: separate passwords for standalone vs Command Centre (operator vs Ben)
+- Both deployments will be feature-complete with full PSNM stack including Atlas, Inbox, Events, Critic Log
+- Command-Centre-only modules (RBTR, AirBnB, JMW, Eternal, personal) NEVER appear in standalone
+- API auth model: option (b) — token injected at page load, verified by /api/atlas
+- Reply-To header literals to be refactored to env vars (EMAIL_REPLY_TO, EMAIL_REPLY_TO_NAME) — pending
+- 29 April double-dispatch batch (Gripple, ABI, Barnsley, Spar Doncaster, Sheffield produce, Bidfood Nottingham): do NOT re-dispatch for 6-8 weeks; use different angle when re-engaging
+
+---
+
+## Working agreements for AI tools
+
+1. **Read this file FIRST.** Before answering anything about state, capacity, what's deployed, what's broken — read this file first.
+2. **Update this file as part of every change.** A change to the system without an update to this file is incomplete work.
+3. **Trust observable output, not narrative.** Verify with `cat`, `curl`, `vercel inspect`, DB queries — not assumptions or memory.
+4. **Show full output.** Do not summarise as "above" or "completed" without the actual evidence.
+5. **Stop on unexpected output.** If a step's result doesn't match expectations, halt and report — do not guess or proceed.
+6. **No production changes without explicit confirmation.** Read-only diagnostics are fine; deploys, env changes, and DB writes need a yes from Ben in chat.
+
+---
+
+## Sensitive references
+
+- All env var values: stored in Vercel project settings only. Never echo to chat.
+- CRON_SECRET, RBTR_AUTH_TOKEN, SUPABASE_SERVICE_ROLE: save to 1Password
+- SendGrid public key: IS public, safe to share
+- SENDGRID_INBOUND_SECRET (993f6f4fac8f4c2c9b36cfc4ace32bad): query param secret, not catastrophic if leaked but rotate if exposed externally

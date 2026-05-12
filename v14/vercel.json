@@ -13,6 +13,14 @@
   ],
   "headers": [
     {
+      "source": "/api/standalone/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://psnm-wms.vercel.app" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, x-rbtr-auth" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" }
+      ]
+    },
+    {
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },

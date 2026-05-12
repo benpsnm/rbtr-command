@@ -56,6 +56,7 @@ CLASSIFICATION TYPES:
 - quote_request: specifically asking for a price/quote
 - price_check: asking about rates only, may be shopping around
 - existing_customer: from someone who appears to already store with PSNM
+- already_placed: enquirer mentions they have already found alternative storage or are no longer looking
 - job_application: looking for employment
 - press: media, PR, or journalist enquiry
 - complaint: dissatisfied customer or complaint
@@ -84,14 +85,19 @@ OUTPUT FORMAT — return ONLY valid JSON, no prose, no markdown:
 }
 
 CONFIDENCE scoring guidance:
-- 90-100: crystal clear, all key info present
-- 70-89: good signal but some info missing (e.g. no pallet count)
+- 90-100: crystal clear, all key info present (pallet count, goods type, timing, business context)
+- 70-89: good signal but some info missing (e.g. no pallet count stated in email body)
 - 50-69: partial info, may be residential/consumer, some ambiguity
-- 30-49: very vague, likely personal/residential, or hard to categorise
-- 0-29: spam, gibberish, or completely irrelevant
+- 30-49: very vague, no business context, or hard to categorise
+- 0-29: spam, gibberish, already_placed, or completely irrelevant
+
+IMPORTANT — attachment blind spot: You can only read the email body text. If the email says "see attached" or "details in the PDF" for key information like pallet count or goods type, you cannot read those attachments. In this case: set confidence to max 65 and add "attachment_required" to red_flags.
+
+IMPORTANT — urgency over-scoring guard: If an email uses urgency words ("urgent", "ASAP") but provides no pallet count, no goods description, and no business context, do NOT score urgency as "immediate". Set urgency to "unknown" and reduce confidence by 20 points. Vague urgency language from non-business senders should be treated with scepticism.
 
 red_flags array — include any of: "spam", "hazmat", "chilled_goods", "residential_sender",
-"unrealistic_demand", "competitor_research", "no_business_context", "suspicious_domain"`;
+"unrealistic_demand", "competitor_research", "no_business_context", "suspicious_domain",
+"attachment_required", "vague_urgency"`;
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 async function handler(req, res) {

@@ -48,13 +48,19 @@ async function sendPsnmBrief() {
   const julyCliff = new Date('2026-07-01T00:00:00Z');
   const daysToCliff = Math.ceil((julyCliff - now) / 86400000);
 
+  const yesterday = new Date(now - 86400000).toISOString();
+
   // Pull all data concurrently
-  const [snapshots, enquiries, hotLeads, pendingDrafts, recentTouches] = await Promise.all([
+  const [snapshots, enquiries, hotLeads, pendingDrafts, recentTouches, autoresponderLog, enrichedReady] = await Promise.all([
     sbGet('psnm_occupancy_snapshots', 'order=date.desc&limit=1&select=pallets,date'),
     sbGet('psnm_enquiries', 'status=not.eq.lost&order=created_at.desc&limit=20&select=id,company,pallets,status,created_at,source'),
     sbGet('psnm_outreach_targets', 'order=hot_flag.desc,priority_score.desc&limit=5&select=id,company,city,priority_score,hot_flag,decision_maker_name,estimated_pallet_need,current_touch_count,status,last_touched_at'),
     sbGet('psnm_atlas_drafts', 'status=eq.pending_approval&select=id'),
     sbGet('psnm_outreach_touches', `sent_date=gte.${sevenDaysAgo}&order=sent_date.desc&limit=15&select=id,target_id,sent_date,outcome,touch_type`),
+    // Auto-responder shadow stats: last 24h log entries
+    sbGet('psnm_autoresponse_log', `select=decision,confidence_score`).catch(() => null),
+    // High-quality outreach targets that now have emails (auto-enriched, not yet contacted)
+    sbGet('psnm_outreach_targets', 'quality_score=gt.75&email=not.is.null&status=eq.not_contacted&order=quality_score.desc&limit=5&select=id,company,email,decision_maker_name,decision_maker_role,quality_score').catch(() => null),
   ]);
 
   // Process occupancy
@@ -68,6 +74,17 @@ async function sendPsnmBrief() {
 
   // Pending drafts
   const pendingCount = Array.isArray(pendingDrafts) ? pendingDrafts.length : 0;
+
+  // Auto-responder shadow stats
+  const arLog = Array.isArray(autoresponderLog) ? autoresponderLog : [];
+  const arDrafted = arLog.filter(r => r.decision === 'drafted').length;
+  const arClassified = arLog.length;
+  const arAvgConf = arClassified > 0
+    ? Math.round(arLog.reduce((s, r) => s + (Number(r.confidence_score) || 0), 0) / arClassified)
+    : null;
+
+  // Newly enriched high-quality targets ready to email
+  const enrichedTargets = Array.isArray(enrichedReady) ? enrichedReady : [];
 
   // In-flight: recent touches, look up prospect names
   const touches = Array.isArray(recentTouches) ? recentTouches : [];
@@ -187,7 +204,23 @@ Rules: top_actions must be SPECIFIC — named prospect, named action. No generic
   lines.push(`📥 <b>OUTREACH QUEUE</b>`);
   lines.push(`• ${pendingCount} draft${pendingCount !== 1 ? 's' : ''} pending approval → WMS → Intelligence`);
   lines.push(`• Recent touches (7d): ${touches.length}`);
+  if (enrichedTargets.length > 0) {
+    lines.push(`• <b>${enrichedTargets.length} high-quality target${enrichedTargets.length !== 1 ? 's' : ''} auto-enriched — ready to email:</b>`);
+    enrichedTargets.forEach(t => {
+      const contact = t.decision_maker_name ? ` — ${esc(t.decision_maker_name)}${t.decision_maker_role ? ` (${esc(t.decision_maker_role)})` : ''}` : '';
+      lines.push(`  ↳ ${esc(t.company)}${contact} | ${esc(t.email)} | score ${t.quality_score}`);
+    });
+  }
   lines.push('');
+
+  // Auto-responder shadow stats
+  if (arClassified > 0 || arDrafted > 0) {
+    lines.push(`🤖 <b>AUTO-RESPONDER (shadow mode)</b>`);
+    lines.push(`• Last 24h: ${arClassified} classified, ${arDrafted} drafted`);
+    if (arAvgConf !== null) lines.push(`• Avg confidence: ${arAvgConf}%`);
+    if (arDrafted > 0) lines.push(`• Review drafts in WMS → Enquiries → Pending`);
+    lines.push('');
+  }
 
   // In-flight conversations
   if (sections?.inflight?.length) {
