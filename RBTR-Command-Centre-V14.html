@@ -607,6 +607,22 @@ label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;font-fam
     <div id="td-brief-err" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(255,69,0,0.08);border:1px solid rgba(255,69,0,0.3);border-radius:6px;font-size:12px;color:#ff8a50"></div>
   </div>
 
+  <div class="sdiv"><h3>✅ TASKS · OPEN</h3></div>
+  <div class="card" id="td-tasks-card" style="margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div class="ct">Open Tasks · <span id="td-tasks-count">—</span> remaining</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm pri" onclick="tdTasksLoad()">Refresh</button>
+        <button class="btn sm" onclick="tdTasksAdd()">+ Add task</button>
+      </div>
+    </div>
+    <div id="td-tasks-list" style="margin-top:6px">
+      <div class="sl">Loading tasks…</div>
+    </div>
+  </div>
+
   <div class="sdiv"><h3>🏡 HOUSE JOBS · PROGRESS</h3></div>
   <div class="card" style="margin-bottom:18px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -11094,6 +11110,102 @@ Rules:
       if (btn) { btn.disabled = false; btn.textContent = prev || 'Generate new'; }
     }
   };
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TASKS · open task list in Today hub
+  // ═══════════════════════════════════════════════════════════════════════
+  const TASK_PRIORITY_LABEL = { 1: 'P1', 2: 'P2', 3: 'P3', 4: 'P4', 5: 'P5' };
+  const TASK_PRIORITY_COLOR = { 1: '#ff4500', 2: '#ff8a50', 3: 'var(--amber)', 4: 'var(--muted)', 5: 'var(--muted)' };
+  const TASK_STATUS_LABEL   = { open: 'OPEN', in_progress: 'IN PROGRESS', blocked: 'BLOCKED' };
+
+  // Tasks auth: rely on psnm_session cookie (sent automatically by browser, same-origin)
+  const _taskAuthHeader = () => ({ 'Content-Type': 'application/json' });
+
+  async function tdTasksLoad() {
+    const list = document.getElementById('td-tasks-list');
+    const count = document.getElementById('td-tasks-count');
+    if (list) list.innerHTML = '<div class="sl">Loading…</div>';
+    try {
+      const r = await fetch('/api/tasks?status=open,in_progress,blocked', { headers: _taskAuthHeader() });
+      if (!r.ok) { if (list) list.innerHTML = '<div class="sl" style="color:var(--amber)">Auth required — log in first</div>'; return; }
+      const { tasks } = await r.json();
+      if (count) count.textContent = tasks.length;
+      if (!list) return;
+      if (tasks.length === 0) { list.innerHTML = '<div class="sl" style="color:var(--muted)">No open tasks — you\'re clear.</div>'; return; }
+      list.innerHTML = tasks.map(t => {
+        const pri = TASK_PRIORITY_LABEL[t.priority] || 'P?';
+        const priColor = TASK_PRIORITY_COLOR[t.priority] || 'var(--muted)';
+        const overdue = t.due_date && t.due_date < new Date().toISOString().slice(0,10);
+        const statusLabel = TASK_STATUS_LABEL[t.status] || t.status;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+          <span style="font-size:10px;font-family:var(--font-cond);letter-spacing:1px;color:${priColor};min-width:28px;padding-top:2px">${pri}</span>
+          <div style="flex:1">
+            <div style="font-size:14px;color:var(--off-white)">${t.description}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap">
+              ${t.project ? `<span>${t.project}</span>` : ''}
+              ${t.source ? `<span>${t.source}</span>` : ''}
+              ${t.due_date ? `<span style="color:${overdue?'#ff4500':'var(--muted)'}">due ${t.due_date}${overdue?' ⚠':''}</span>` : ''}
+              <span style="color:${t.status==='blocked'?'#ff4500':t.status==='in_progress'?'var(--amber)':'var(--muted)'}">${statusLabel}</span>
+            </div>
+            ${t.blocked_reason ? `<div style="font-size:11px;color:#ff8a50;margin-top:4px">Blocked: ${t.blocked_reason}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn sm" style="font-size:11px;padding:4px 8px" onclick="tdTaskDone('${t.id}',this)">Done</button>
+            <button class="btn sm" style="font-size:11px;padding:4px 8px;color:var(--muted)" onclick="tdTaskSkip('${t.id}',this)">Skip</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="sl" style="color:var(--amber)">Load failed: ${e.message}</div>`;
+    }
+  }
+
+  async function tdTaskDone(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      await fetch('/api/tasks', { method:'PUT', headers: _taskAuthHeader(), body: JSON.stringify({ id, status: 'complete' }) });
+      await tdTasksLoad();
+    } catch(e) { if (btn) { btn.disabled = false; btn.textContent = 'Done'; } }
+  }
+
+  async function tdTaskSkip(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      await fetch('/api/tasks', { method:'PUT', headers: _taskAuthHeader(), body: JSON.stringify({ id, status: 'skipped' }) });
+      await tdTasksLoad();
+    } catch(e) { if (btn) { btn.disabled = false; btn.textContent = 'Skip'; } }
+  }
+
+  function tdTasksAdd() {
+    const desc = prompt('Task description:');
+    if (!desc || !desc.trim()) return;
+    const priStr = prompt('Priority 1–5 (1=most urgent, 3=default):', '3');
+    const priority = Math.min(5, Math.max(1, parseInt(priStr || '3', 10) || 3));
+    const project = prompt('Project tag (optional, e.g. PSNM, RBTR, EK):') || '';
+    fetch('/api/tasks', {
+      method: 'POST',
+      headers: _taskAuthHeader(),
+      body: JSON.stringify({ description: desc.trim(), priority, source: 'manual', ...(project && { project }) }),
+    }).then(() => tdTasksLoad()).catch(e => alert('Add failed: ' + e.message));
+  }
+
+  // Load tasks on page boot
+  (function() {
+    const observer = new MutationObserver(() => {
+      if (document.getElementById('td-tasks-list')) {
+        observer.disconnect();
+        tdTasksLoad();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Also try immediately
+    setTimeout(() => {
+      if (document.getElementById('td-tasks-list') && !document.getElementById('td-tasks-list').dataset.loaded) {
+        document.getElementById('td-tasks-list').dataset.loaded = '1';
+        tdTasksLoad();
+      }
+    }, 1200);
+  })();
 
   // ═══════════════════════════════════════════════════════════════════════
   // ATLAS · PSNM survival engine (Day 1 · calls + cash logging)

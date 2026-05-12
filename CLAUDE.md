@@ -12,6 +12,24 @@ Everything else: handle it, document it, report it. Ben will read the report. He
 
 ---
 
+## BANKRUPTCY-AWARE RULE — locked 11 May 2026
+
+Ben is going through personal bankruptcy. Every agent runs these three gates before any action or recommendation.
+
+**(a) Asset separation gate.** Does this action create a paper trail or operational substance suggesting Ben is the de facto operator of an asset held in Sarah's name? If yes, route through Sarah's identity and accounts instead. Ben supports — Ben does not operate, own, or appear to control anything in Sarah's name.
+
+**(b) Bankruptcy positioning gate.** Does this action affect Ben's bankruptcy positioning — by adding to liabilities, transferring assets (which a trustee could reverse), or creating new financial commitments? If yes, stop. Surface to Ben explicitly before proceeding. No exceptions.
+
+**(c) Sarah's load gate.** Does this action add operational load to Sarah without single-click delivery? If yes, redesign. All complexity stays upstream. Sarah signs once, clicks once, pays once. That's the design standard.
+
+Standing instruction — Sarah's STR business (4 Woodhead Mews / forthcoming Ltd company) is Sarah's in every dimension: director, shareholder, bank signatory, platform account holder, insurance named party, operator. Ben's name does not appear on any of it. Ben advises and supports. Ben does not operate.
+
+PSNM and Eternal Kustoms are Ben's businesses and are in scope for the bankruptcy itself — dedicated conversation task in rbtr_tasks, due 15 May 2026. Until that conversation: no new debt, no major asset transfers, status quo on operations.
+
+**If this rule conflicts with anything else in this file: this rule wins.**
+
+---
+
 ## Owner & context
 Ben Greenwood. Solo operator. PSNM warehouse + RBTR truck build + Eternal Kustoms consulting + family. Time-poor, learning fast. Read PSNM_STATE.md for full operational state.
 
@@ -73,6 +91,22 @@ After hour 7+ of a session, suggest a stop point before complex steps. Don't pus
 
 ---
 
+## Task tracking — rbtr_tasks (9 May 2026)
+
+Persistent task system now live. Tasks survive sessions; they roll over until `complete` or `skipped`.
+
+**Tables:** `rbtr_tasks`, `rbtr_routine_log` (Supabase project `mpxgyobotiqcawmqlhbf`)
+
+**API:** `GET/POST/PUT /api/tasks` (dispatcher: `api/tasks.js` → `api/tasks/list|create|update.js`), `POST /api/tasks/bulk` (accepts Bearer CRON_SECRET)
+
+**Rules for agents:**
+- Before starting any multi-step session, `GET /api/tasks?status=open,in_progress,blocked` and read the list. Surface P1 tasks to Ben at top of session.
+- After completing a task on behalf of Ben, PUT status=complete with the task id.
+- When an agent adds tasks on behalf of Ben (e.g. from voice memos or system checks), use `/api/tasks/bulk` with source='agent' and appropriate project tag.
+- `rbtr_routine_log` is dormant — do not write to it until Ben explicitly says "switch training on".
+
+---
+
 ## Known deferred items (DO NOT auto-fix)
 
 - `psnm-wms` standalone has no Supabase wiring — spec at `state-snapshots/standalone-supabase-spec.md`
@@ -96,6 +130,23 @@ After hour 7+ of a session, suggest a stop point before complex steps. Don't pus
 Active worktrees for parallel work (see `git worktree list`):
 - `/Users/bengreenwood/Desktop/rbtr-command-supabase-build` → branch `feature/standalone-supabase-build`
 - `/Users/bengreenwood/Desktop/rbtr-command-intel-fix` → branch `feature/intel-enrichment-fix`
+
+---
+
+## Auto-diagnose pattern
+
+Every autonomous build must end by calling `POST /api/diagnose/post-build` before writing the status report.
+
+```bash
+curl -s -X POST https://rbtr-jarvis.vercel.app/api/diagnose/post-build \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"triggered_by":"[build-name]","build_summary":"[one-line]"}'
+```
+
+The endpoint verifies what shipped, auto-fixes reversible issues (unpushed branches, failed deploy retries), and surfaces Ben-needed items as rbtr_tasks. Ben hears the summary in the next Rocko morning brief — he never reads long diagnosis reports.
+
+If Vercel is 402 (billing suspended): note `log_id: null` in the status report, do not skip the call entirely (it will fail gracefully and return an error). Pattern locked 11 May 2026.
 
 ---
 

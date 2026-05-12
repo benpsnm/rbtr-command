@@ -4,6 +4,22 @@
 
 ---
 
+## 0. PRE-FLIGHT 0 — BANKRUPTCY-AWARE CHECK (run before any technical step)
+
+Before proceeding, verify all three:
+
+**(a)** Is this build creating assets, communications, or commitments in Ben's name when they should be in Sarah's? If yes, redesign before proceeding. Ben's name does not appear on Sarah's STR entity, accounts, platforms, or insurance.
+
+**(b)** Does this build affect Ben's bankruptcy positioning — by adding to liabilities, transferring assets, or creating new financial commitments? If yes, surface to Ben for explicit approval before any execution.
+
+**(c)** Does this build add operational load to Sarah? If yes, ensure the deliverable is single-click for her. All complexity handled upstream.
+
+Only after all three return clean: proceed to technical pre-flight below.
+
+*Bankruptcy-aware rule locked 11 May 2026. See CLAUDE.md.*
+
+---
+
 ## 1. CORE RULE (immutable — copy verbatim into every build prompt)
 
 Before asking Ben anything — check if you can do it yourself. Then check if there's another path. Only when both fail do you surface to Ben. Default = agent acts. Exception = Ben acts.
@@ -29,6 +45,7 @@ Run these before starting any build phase. If any check fails, stop and report t
 [ ] BRANCH CONFIRMED — on correct branch (not main unless intentional)
 [ ] NO SUSPENDED BILLING — Vercel billing active (check: curl rbtr-jarvis.vercel.app)
 [ ] PSNM_STATE.md READ — operational ground truth loaded for this session
+[ ] TASK QUEUE READ — GET /api/tasks?status=open,in_progress,blocked — surface P1 tasks to Ben; add build tasks via bulk endpoint with source='agent'
 ```
 
 ---
@@ -103,3 +120,19 @@ Report structure:
 ```
 
 Keep it short. Ben reads the report, not the play-by-play.
+
+---
+
+## 6. PHASE FINAL — Auto-diagnose (mandatory, every build)
+
+Before writing the status report, POST to `/api/diagnose/post-build` with `triggered_by` and `build_summary`. Reversible issues auto-fix. Genuine Ben items surface in next Rocko brief. The status report references the diagnosis ID returned.
+
+```bash
+curl -s -X POST https://rbtr-jarvis.vercel.app/api/diagnose/post-build \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"triggered_by":"[build-name]","build_summary":"[one-line summary]"}' \
+  | jq '{log_id,shipped_count,auto_fixed_count,ben_needed_count,top_ben_task}'
+```
+
+Include the returned `log_id` in the status report under "## Diagnosis". If Vercel is 402 (billing suspended), log the call as pending and note `log_id: null` — do not skip the phase entirely.
