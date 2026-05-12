@@ -97,15 +97,19 @@ async function gatherAllData() {
     cash,
     billsWk,
     weather,
-    enquiryDrafts,
-    sponsorDrafts,
-    atlasDraftsPending,
-    wmsPalletCount,
-    wmsEnqCount,
-    inboundUnread,
-    mortgageLastEntry,
-    openTasks,
+    outreachReplies,
+    workshopTasks,
+    customerTouchpoints,
+    rbtrBuildTasks,
+    sarahFamilyTasks,
+    airbnbTasks,
+    taskCompletedYesterday,
+    dealFlow,
+    contentDue,
+    blockedSystems,
     lastDiagnosis,
+    garminSleep,
+    mindsetYesterday,
   ] = await Promise.all([
     // Dynamic Built Dad: try start_date first, fall back to stored day_number
     sbSelect('jarvis_builtdad', 'id=eq.1&select=start_date').then(async r => {
@@ -192,18 +196,37 @@ async function gatherAllData() {
         };
       } catch { return null; }
     })(),
-    // ── New build outputs (9 May 2026) ─────────────────────────────────────
-    sbSelect('psnm_enquiry_drafts', "status=eq.pending_approval&select=id,draft_subject,created_at&order=created_at.desc").then(r => r ?? []),
-    sbSelect('psnm_sponsor_outreach', "status=eq.draft_pending_review&select=id,sponsor_name,sponsor_category&order=created_at.desc").then(r => r ?? []),
-    sbSelect('psnm_atlas_drafts', "status=in.(pending,unsent,approved)&select=id,company,status&order=created_at.desc&limit=20").then(r => r ?? []),
-    sbSelect('psnm_wms_pallets', "out=eq.false&select=id").then(r => Array.isArray(r) ? r.length : null),
-    sbSelect('psnm_wms_enquiries', "status=eq.enquiry&select=id,company,pallets").then(r => r ?? []),
-    sbSelect('psnm_inbound_replies', `created_at=gte.${new Date(Date.now()-86400000).toISOString()}&select=id,from_email,subject&order=created_at.desc`).then(r => r ?? []),
-    sbSelect('psnm_mortgage_log', "select=date,status,amount_owed,lender_contact&order=created_at.desc&limit=1").then(r => r?.[0] ?? null),
-    // Tasks: open + in_progress + blocked, ordered priority asc
-    sbSelect('rbtr_tasks', "status=in.(open,in_progress,blocked)&order=priority.asc,created_at.asc&select=id,description,priority,status,source,project,blocked_reason,due_date").then(r => r ?? []),
-    // Last auto-diagnosis run
+    // ── Outreach replies — unresponded interested/questions from check-outreach-replies.js
+    sbSelect('psnm_outreach_replies',
+      `received_at=gte.${new Date(Date.now()-48*3600000).toISOString()}&classification=in.(interested,questions)&ben_responded=eq.false&do_not_contact=eq.false&select=id,from_email,subject,classification,next_action,outreach_id&order=received_at.desc`
+    ).then(r => r ?? []),
+    // Workshop / hands-on tasks (top 5 open across build + consulting projects)
+    sbSelect('rbtr_tasks', `status=eq.open&project=in.(RBTR-Build,Eternal-Kustoms,PSNM,Coffee-Brothers)&order=priority.asc,due_date.asc&limit=5&select=description,priority,due_date,project`).then(r => r ?? null),
+    // Customer touchpoints: unresponded outreach replies + pending enquiries
+    Promise.all([
+      sbSelect('psnm_outreach_replies', 'ben_responded=eq.false&classification=in.(interested,questions)&select=company,classification,last_message&order=received_at.desc&limit=5').then(r => r ?? null).catch(() => null),
+      sbSelect('psnm_enquiries', `status=in.(pending_approval,awaiting_response)&created_at=gte.${new Date(Date.now()-86400000).toISOString()}&select=company,pallets,status&limit=5`).then(r => r ?? null),
+    ]).then(([replies, pending]) => ({ replies_needing_response: replies, enquiries_pending: pending, total: (replies?.length ?? 0) + (pending?.length ?? 0) })),
+    // RBTR build progress — top 3 open tasks
+    sbSelect('rbtr_tasks', 'project=in.(RBTR,RBTR-Build)&status=eq.open&order=priority.asc&limit=3&select=description,priority,due_date').then(r => r ?? null),
+    // Sarah / family tasks due in 3 days
+    sbSelect('rbtr_tasks', `project=in.(AirBnB-CriticalPath,Family,AirBnB-Sarah)&status=eq.open&due_date=lte.${new Date(Date.now()+3*86400000).toISOString().slice(0,10)}&order=due_date.asc,priority.asc&limit=5&select=description,priority,due_date,project`).then(r => r ?? null),
+    // AirBnB tasks due in 7 days
+    sbSelect('rbtr_tasks', `project=in.(AirBnB-CriticalPath,AirBnB-Sarah,AirBnB)&status=eq.open&due_date=lte.${new Date(Date.now()+7*86400000).toISOString().slice(0,10)}&order=due_date.asc,priority.asc&limit=5&select=description,priority,due_date`).then(r => r ?? null),
+    // Tasks completed yesterday
+    sbSelect('rbtr_tasks', `status=eq.complete&completed_at=gte.${yesterday()}T00:00:00&completed_at=lte.${yesterday()}T23:59:59&order=priority.asc&limit=5&select=description,priority,project`).then(r => r ?? null),
+    // Deal flow — active deals across consulting + sales projects
+    sbSelect('rbtr_tasks', "project=in.(Coffee-Brothers,T6.1-Sale,Eternal-Kustoms,Nate-Swap)&status=eq.open&priority=lte.2&order=priority.asc,due_date.asc&limit=5&select=description,priority,project,due_date").then(r => r ?? null),
+    // Content due in next 24h
+    sbSelect('psnm_content_drafts', `status=in.(approved,scheduled)&scheduled_at=gte.${new Date().toISOString()}&scheduled_at=lte.${new Date(Date.now()+86400000).toISOString()}&select=caption,platform,scheduled_at&order=scheduled_at.asc&limit=3`).then(r => r ?? null).catch(() => null),
+    // Blocked systems tasks
+    sbSelect('rbtr_tasks', 'status=eq.blocked&blocked_reason=not.is.null&order=priority.asc&limit=5&select=description,priority,project,blocked_reason').then(r => r ?? null),
+    // Auto-diagnose last run
     sbSelect('rbtr_auto_diagnosis_log', 'order=created_at.desc&limit=1').then(r => r?.[0] ?? null),
+    // Garmin sleep — placeholder until Connect API integration
+    Promise.resolve(null),
+    // Extended mindset from yesterday's evening reflection
+    sbSelect('evening_reflections', `reflection_date=eq.${yesterday()}&select=mood_score,one_line,one_line_reflection,tomorrow_priority,raw_thoughts,what_hit_me`).then(r => r?.[0] ?? null),
   ]);
 
   return {
@@ -247,32 +270,21 @@ async function gatherAllData() {
     cash_position: cash,
     bills_due_this_week: billsWk,
     weather_today: weather,
-    enquiry_drafts_pending: Array.isArray(enquiryDrafts) ? enquiryDrafts.length : 0,
-    enquiry_drafts_list: enquiryDrafts,
-    sponsor_drafts_pending: Array.isArray(sponsorDrafts) ? sponsorDrafts.length : 0,
-    sponsor_drafts_list: sponsorDrafts,
-    atlas_drafts_pending: Array.isArray(atlasDraftsPending) ? atlasDraftsPending.length : 0,
-    wms_live_pallets: wmsPalletCount,
-    wms_open_enquiries: wmsEnqCount,
-    inbound_replies_24h: Array.isArray(inboundUnread) ? inboundUnread.length : 0,
-    inbound_replies_list: inboundUnread,
-    mortgage_last_entry: mortgageLastEntry,
-    open_tasks: Array.isArray(openTasks) ? openTasks : [],
-    open_tasks_count: Array.isArray(openTasks) ? openTasks.length : 0,
-    tasks_priority_1: Array.isArray(openTasks) ? openTasks.filter(t => t.priority === 1) : [],
-    tasks_overdue: Array.isArray(openTasks) ? openTasks.filter(t => t.due_date && t.due_date < new Date().toISOString().slice(0, 10)) : [],
-    last_diagnosis: (() => {
-      if (!lastDiagnosis) return null;
-      const ageHours = (Date.now() - new Date(lastDiagnosis.created_at).getTime()) / 3600000;
-      if (ageHours >= 18) return null;
-      return {
-        shipped_count: lastDiagnosis.shipped_count,
-        auto_fixed_count: lastDiagnosis.auto_fixed_count,
-        ben_needed_count: lastDiagnosis.ben_needed_count,
-        top_ben_task: lastDiagnosis.top_ben_task,
-        triggered_by: lastDiagnosis.triggered_by,
-      };
-    })(),
+    outreach_replies_unresponded: Array.isArray(outreachReplies) ? outreachReplies : [],
+    garmin_sleep: garminSleep,
+    workshop_tasks: workshopTasks,
+    customer_touchpoints: customerTouchpoints,
+    rbtr_build_tasks: rbtrBuildTasks,
+    sarah_family_tasks: sarahFamilyTasks,
+    airbnb_tasks: airbnbTasks,
+    tasks_completed_yesterday: taskCompletedYesterday,
+    deal_flow: dealFlow,
+    content_due_24h: contentDue,
+    blocked_systems_tasks: blockedSystems,
+    last_diagnosis: lastDiagnosis && lastDiagnosis.created_at &&
+      (Date.now() - new Date(lastDiagnosis.created_at).getTime()) < 18 * 3600000
+      ? lastDiagnosis : null,
+    mindset_yesterday: mindsetYesterday,
   };
 }
 
@@ -292,17 +304,25 @@ You will receive a JSON object \`data\` containing all relevant figures. The key
 - data.date (YYYY-MM-DD), data.weekday, data.days_to_departure, data.built_dad_day, data.weather
 - data.overnight: { wins, flags, reflection_from_last_night, priority_set_yesterday, priority_completed }
 - data.psnm: { pallets_current, pallets_to_breakeven, warm_leads_due_today, hot_leads, hot_lead_count, new_enquiries_24h, urgent_enquiries, overdue_followups, outreach_batch_today }
+- data.outreach_replies_unresponded: array of { from_email, classification, next_action, outreach_id } — cold outreach replies needing Ben's attention (classification=interested or questions, not yet responded to)
 - data.sponsors: { hot_signals (array), replies_pending, touches_queued_today, approach_due_this_week }
 - data.build: { sections_in_progress (array), section_starting_this_week, photos_gap_days }
 - data.audience: { total, growth_24h, resurrection_day_number, resurrection_tasks_today }
 - data.personal: { mood_log_gap_days, nate_checkin_due, house_jobs_remaining }
 - data.legal: { apa_signed, debt_line_booked, axel_brothers_status, guy_sharron_stage, audience_to_threshold }
 - data.finance: { cash_position, bills_due_this_week }
-- data.action_queues: { enquiry_drafts_pending (count awaiting Ben approval), sponsor_drafts_pending (count awaiting Ben review), atlas_drafts_pending, inbound_replies_24h (count of inbound email replies in last 24h), inbound_replies_list (array with from_email and subject) }
-- data.wms: { wms_live_pallets (count from live WMS), wms_open_enquiries (array) }
-- data.sarah: { mortgage_last_entry (date + status of last mortgage log entry) }
-- data.tasks: { open_tasks_count (int), tasks_priority_1 (array — P1 tasks: description, status, due_date), tasks_overdue (array — tasks past due date), open_tasks (full list ordered priority asc) }
-- data.last_diagnosis: null OR { shipped_count, auto_fixed_count, ben_needed_count, top_ben_task, triggered_by } — present only if a diagnosis ran within the last 18 hours
+- data.garmin_sleep: null (Garmin API not yet connected — omit from brief)
+- data.workshop_tasks: array of { description, priority, due_date, project } — physical hands-on tasks across build + consulting
+- data.customer_touchpoints: { replies_needing_response, enquiries_pending, total } — customer actions requiring Ben's response today
+- data.rbtr_build_tasks: array of { description, priority, due_date } — RBTR truck build open tasks (top 3)
+- data.sarah_family_tasks: array of { description, priority, due_date, project } — tasks Sarah/family need to act on in next 3 days
+- data.airbnb_tasks: array of { description, priority, due_date } — AirBnB critical path tasks due in 7 days
+- data.tasks_completed_yesterday: array of { description, priority, project } — tasks marked complete yesterday (wins recap)
+- data.deal_flow: array of { description, priority, project, due_date } — active deals across Coffee Brothers, T6.1 sale, EK, Nate swap
+- data.content_due_24h: array of { caption, platform, scheduled_at } — social content due to post in next 24h
+- data.blocked_systems_tasks: array of { description, priority, project, blocked_reason } — tasks stuck waiting on something
+- data.last_diagnosis: last auto-diagnosis run result (null if >18h old or none) — if present, surface key finding only
+- data.mindset_yesterday: { mood_score, raw_thoughts, what_hit_me } — extended evening reflection from yesterday
 
 STRUCTURE (LOOSE, NOT RIGID)
 
@@ -312,25 +332,29 @@ Order of content (adapt naturally):
 
 1. Open. "Morning Ben. [Weekday] [date]. [N] days to departure."
 
-1a. Overnight diagnosis (ONLY if data.last_diagnosis is non-null). Speak one sentence: "Overnight diagnosis: [shipped_count] items shipped clean.[If auto_fixed_count > 0: ' [auto_fixed_count] auto-fixed.'][If ben_needed_count > 0: ' [ben_needed_count] need your hands — top one is [top_ben_task].']" Skip entirely if data.last_diagnosis is null.
+2. Yesterday's wins + mindset. If data.tasks_completed_yesterday has entries, name 1-2 of the most meaningful. If data.mindset_yesterday has raw_thoughts or what_hit_me, pull one honest line. Don't pad. If neither has content, skip entirely.
 
-1b. Tasks. If open_tasks_count > 0: immediately after the opening line, surface the top tasks. Read out P1 tasks (tasks_priority_1) by description — these are the non-negotiables today. If any are overdue (tasks_overdue), flag them: "Still carrying [task] from [due_date] — that one needs closing." If open_tasks_count is 0, skip this section entirely. Do NOT pad. Max 2–3 tasks named — if there are more, close with "and [N] others queued." Keep it tight: tasks are context, not a reading list.
+3. Warehouse. Pallets current vs break-even. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically.
 
-2. Overnight. If anything meaningful happened overnight (yesterday's mood, reflection, priority status, unread messages, new enquiries), surface it briefly. If nothing, skip this section entirely — don't pad with "nothing much".
+3b. Outreach replies. If data.outreach_replies_unresponded or data.customer_touchpoints.replies_needing_response has entries, name each company and their classification ("interested" or "has questions"). These are replies to cold outreach — they need a response. A suggested draft is waiting in Supabase. Say: "[Company] replied — [classification]. Draft's ready, needs your go-ahead." If none, skip this section entirely.
 
-3. Warehouse. Pallets current vs break-even. If wms_live_pallets differs from psnm_pallets_current, note the WMS count. Warm leads due for follow-up today (data.psnm_warm_leads_due_today) — name each company and their temperature. Hot leads (data.psnm_hot_leads) — name them. Today's inbound enquiries, flag urgent ones by company. Outreach batch status. Overdue follow-ups — name them specifically. If wms_open_enquiries is non-empty, mention count. If inbound_replies_24h > 0, name the senders — these are replies from live contacts that need a response.
+4. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week (data.rbtr_build_tasks — name the top task). Resurrection day number and what to post today. Audience movement in absolute numbers.
 
-4. Truck. Sponsor hot signals — NAME the sponsors ("Michelin opened your T1 four times yesterday afternoon"). Build work calling for attention this week. Resurrection day number and what to post today. Audience movement in absolute numbers.
+5. Workshop plan. If data.workshop_tasks has entries, name the top 1-2 physical tasks for today and which project they belong to. "In the workshop today: [task] on [project]." Skip if empty.
 
-5. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
+6. Deal flow. If data.deal_flow has entries, name active deals briefly. "Coffee Brothers quote still open. T6.1 sale — [next step]." Skip if empty.
 
-6. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. Silent otherwise.
+7. AirBnB + Sarah. If data.airbnb_tasks or data.sarah_family_tasks has anything due this week, surface the most time-critical item. "Sarah needs to [action] by [date] for the AirBnB launch." One sentence max. Skip if nothing due.
 
-3b. Approval queue. If enquiry_drafts_pending > 0, say "N inbound enquiry drafts are waiting for your go-ahead." If sponsor_drafts_pending > 0, say "N sponsor emails drafted and ready for your review." These are action items — surface them clearly but don't pad.
+8. Content + blocked. If data.content_due_24h has entries, name the platform and timing ("Instagram post goes out at 2pm — check it's approved"). If data.blocked_systems_tasks has entries, name the top blocker ("Vercel billing still blocking — unblocks deploy"). Skip each if empty.
 
-7. One last thing. Close with the single most important action today. "One last thing — call Michelin before 3pm. That's the move today."
+9. Personal. Built Dad day number. Mood log gaps. Nate check-in if due. House jobs if a threshold has been crossed.
 
-8. Sign off. "That's your day."
+10. Structural dependencies. APA signing, Debt Line consultation, Axel Brothers status, Guy & Sharron audience threshold — surface ONLY if action is due or a gate is approaching. If data.last_diagnosis is non-null, surface its single key finding in one sentence. Silent otherwise.
+
+11. One last thing. Close with the single most important action today. "One last thing — call Michelin before 3pm. That's the move today."
+
+12. Sign off. "That's your day."
 
 TONE RULES — STRICT
 
