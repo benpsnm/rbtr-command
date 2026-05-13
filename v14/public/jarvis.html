@@ -366,6 +366,15 @@
       background: var(--copper);
     }
 
+    /* ── RESPONSIVE HELPERS ────────────────────────────────────────────────── */
+    .jarvis-mobile-only {
+      display: none;
+    }
+
+    .jarvis-desktop-only {
+      display: flex;
+    }
+
     /* ── MOBILE ────────────────────────────────────────────────────────────── */
     @media (max-width: 768px) {
       .jarvis-layout {
@@ -383,6 +392,14 @@
 
       .jarvis-rightrail {
         display: none;
+      }
+
+      .jarvis-mobile-only {
+        display: flex;
+      }
+
+      .jarvis-desktop-only {
+        display: none !important;
       }
 
       .jarvis-bottombar {
@@ -685,19 +702,42 @@
 
     <!-- BOTTOM BAR -->
     <div class="jarvis-bottombar">
-      <div class="jarvis-status-indicator">
+      <!-- Desktop status indicators -->
+      <div class="jarvis-status-indicator jarvis-desktop-only">
         <div class="jarvis-status-dot"></div>
         <span>Crons: 7 active</span>
       </div>
-      <div class="jarvis-status-indicator">
+      <div class="jarvis-status-indicator jarvis-desktop-only">
         <span>API Quota: 92%</span>
       </div>
-      <div class="jarvis-status-indicator">
+      <div class="jarvis-status-indicator jarvis-desktop-only">
         <span>Vercel: Production</span>
       </div>
-      <div class="jarvis-status-indicator">
+      <div class="jarvis-status-indicator jarvis-desktop-only">
         <span id="gitStatus">Git: clean</span>
       </div>
+
+      <!-- Mobile nav buttons (hidden on desktop) -->
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only jarvis-mobile-nav-btn--active" onclick="loadModule('cockpit')">
+        <span style="font-size: 18px;">🧭</span>
+        <span>Cockpit</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('psnm')">
+        <span style="font-size: 18px;">🏭</span>
+        <span>PSNM</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('forge')">
+        <span style="font-size: 18px;">🏡</span>
+        <span>Forge</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('rbtr')">
+        <span style="font-size: 18px;">🚛</span>
+        <span>RBTR</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('personal')">
+        <span style="font-size: 18px;">👤</span>
+        <span>Personal</span>
+      </button>
     </div>
   </div>
 
