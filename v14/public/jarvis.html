@@ -263,6 +263,34 @@
       box-shadow: 0 0 20px var(--copper);
     }
 
+    .rocko-text-toggle-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: transparent;
+      border: 2px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      flex-shrink: 0;
+    }
+
+    .rocko-text-toggle-btn:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+      background: var(--copper-faint);
+    }
+
+    .rocko-text-toggle-btn--active {
+      border-color: var(--copper);
+      color: var(--copper);
+      background: var(--copper-faint);
+    }
+
     .rocko-state-text {
       flex: 1;
       font-family: var(--font-mono);
@@ -665,6 +693,9 @@
           <button class="rocko-mic-btn" id="rockoMicBtn" title="Click or hold spacebar to talk">
             🎤
           </button>
+          <button class="rocko-text-toggle-btn" id="rockoTextToggleBtn" title="Toggle text input">
+            ⌨️
+          </button>
           <div class="rocko-state-text" id="rockoStateText">
             Rocko ready. Click mic or press spacebar to talk.
           </div>
@@ -880,6 +911,9 @@
       <div class="jarvis-status-indicator jarvis-desktop-only">
         <span id="gitStatus">Git: clean</span>
       </div>
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <span>Rocko: Sonnet 4.5</span>
+      </div>
 
       <!-- Mobile nav buttons (hidden on desktop) -->
       <button class="jarvis-mobile-nav-btn jarvis-mobile-only jarvis-mobile-nav-btn--active" onclick="loadModule('cockpit')">
@@ -956,18 +990,25 @@
         }
       });
 
+      // Text toggle button click handler
+      const textToggleBtn = document.getElementById('rockoTextToggleBtn');
+      const textContainer = document.getElementById('rockoTextInputContainer');
+      textToggleBtn.addEventListener('click', () => {
+        const isVisible = textContainer.style.display !== 'none';
+        textContainer.style.display = isVisible ? 'none' : 'flex';
+        textToggleBtn.classList.toggle('rocko-text-toggle-btn--active', !isVisible);
+        if (!isVisible) {
+          // Focus input when showing
+          document.getElementById('rockoTextInput').focus();
+        }
+      });
+
       // Text input handler
       const textInput = document.getElementById('rockoTextInput');
       textInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           sendRockoTextMessage();
         }
-      });
-
-      // Show text input toggle (if voice fails)
-      micBtn.addEventListener('dblclick', () => {
-        const textContainer = document.getElementById('rockoTextInputContainer');
-        textContainer.style.display = textContainer.style.display === 'none' ? 'flex' : 'none';
       });
     }
 
