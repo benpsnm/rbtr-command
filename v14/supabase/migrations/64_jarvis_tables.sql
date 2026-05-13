@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS rocko_conversations (
 );
 
 CREATE INDEX idx_rocko_conversations_session ON rocko_conversations(session_id, timestamp DESC);
-CREATE INDEX idx_rocko_conversations_user_date ON rocko_conversations(user_id, DATE(timestamp));
+CREATE INDEX idx_rocko_conversations_user_date ON rocko_conversations(user_id, timestamp DESC);
 
 -- ── General Notes ──────────────────────────────────────────────────────────
 -- Quick notes from cockpit + Note button
