@@ -284,6 +284,9 @@ const FORGE_MODULES = {
           <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="FORGE_MODULES.newB2BProspect()">
             + New Prospect
           </button>
+          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="FORGE_MODULES.runB2BEnrichment()">
+            🔍 Enrich All
+          </button>
         </div>
       </div>
 
@@ -293,7 +296,7 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">Active Prospects</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">12</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="atlas-active-count">—</div>
             <p class="text-small text-tertiary">In outreach pipeline</p>
           </div>
         </div>
@@ -303,7 +306,7 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">Converted</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">3</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="atlas-booked-count">—</div>
             <p class="text-small text-tertiary">Booked retreats</p>
           </div>
         </div>
@@ -313,45 +316,28 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">In Negotiation</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">5</div>
-            <p class="text-small text-tertiary">Awaiting quotes</p>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="atlas-negotiation-count">—</div>
+            <p class="text-small text-tertiary">Call booked / replied</p>
           </div>
         </div>
 
         <div class="jarvis-card">
           <div class="jarvis-card__header">
-            <h3 class="font-display text-h2">Potential Value</h3>
+            <h3 class="font-display text-h2">Avg. Quality Score</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">£18k</div>
-            <p class="text-small text-tertiary">Pipeline value</p>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="atlas-avg-score">—</div>
+            <p class="text-small text-tertiary">Pipeline quality</p>
           </div>
         </div>
       </div>
 
-      <div class="jarvis-card">
+      <div class="jarvis-card" style="margin-bottom: 24px;">
         <div class="jarvis-card__header">
           <h3 class="font-display text-h2">B2B Categories</h3>
         </div>
-        <div class="jarvis-card__body">
-          <div style="display: grid; gap: 12px;">
-            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
-              <span class="text-small">Wellness Retreats</span>
-              <span class="font-mono text-small" style="color: var(--copper);">4 prospects</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
-              <span class="text-small">Sports Teams</span>
-              <span class="font-mono text-small" style="color: var(--copper);">3 prospects</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
-              <span class="text-small">Content Creators</span>
-              <span class="font-mono text-small" style="color: var(--copper);">2 prospects</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
-              <span class="text-small">Corporate Wellness</span>
-              <span class="font-mono text-small" style="color: var(--copper);">3 prospects</span>
-            </div>
-          </div>
+        <div class="jarvis-card__body" id="atlas-categories">
+          Loading categories...
         </div>
       </div>
 
@@ -359,18 +345,136 @@ const FORGE_MODULES = {
         <div class="jarvis-card__header">
           <h3 class="font-display text-h2">Prospect List</h3>
         </div>
-        <div class="jarvis-card__body">
-          <p class="text-small text-secondary">B2B outreach for wellness retreats, sports teams, influencer agencies, corporate off-sites. Wire to str_b2b_prospects table.</p>
-          <p class="text-tiny text-tertiary" style="margin-top: 8px;">
-            Target: 3-7 night block bookings, £200-350/night premium pricing, direct contracts (no platform fees).
-          </p>
+        <div class="jarvis-card__body" id="atlas-prospect-list">
+          Loading prospects...
         </div>
       </div>
     `;
+
+    this.loadAtlasData();
+  },
+
+  async loadAtlasData() {
+    try {
+      const prospects = await API.supabaseQuery('str_b2b_prospects', 'select=*&order=quality_score.desc');
+
+      if (!prospects || prospects.length === 0) {
+        document.getElementById('atlas-active-count').textContent = '0';
+        document.getElementById('atlas-booked-count').textContent = '0';
+        document.getElementById('atlas-negotiation-count').textContent = '0';
+        document.getElementById('atlas-avg-score').textContent = '—';
+        document.getElementById('atlas-categories').innerHTML = '<p class="text-small text-tertiary">No prospects yet. Click "+ New Prospect" to add one.</p>';
+        document.getElementById('atlas-prospect-list').innerHTML = '<p class="text-small text-tertiary">No prospects yet.</p>';
+        return;
+      }
+
+      // Calculate stats
+      const activeCount = prospects.filter(p => ['not_contacted', 'drafted', 'sent'].includes(p.status)).length;
+      const bookedCount = prospects.filter(p => p.status === 'booked').length;
+      const negotiationCount = prospects.filter(p => ['replied', 'call_booked'].includes(p.status)).length;
+      const avgScore = Math.round(prospects.reduce((sum, p) => sum + (p.quality_score || 0), 0) / prospects.length);
+
+      document.getElementById('atlas-active-count').textContent = activeCount;
+      document.getElementById('atlas-booked-count').textContent = bookedCount;
+      document.getElementById('atlas-negotiation-count').textContent = negotiationCount;
+      document.getElementById('atlas-avg-score').textContent = avgScore;
+
+      // Categories breakdown
+      const categories = {};
+      prospects.forEach(p => {
+        const cat = p.category || 'uncategorized';
+        categories[cat] = (categories[cat] || 0) + 1;
+      });
+
+      document.getElementById('atlas-categories').innerHTML = Object.entries(categories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, count]) => `
+          <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px; margin-bottom: 8px;">
+            <span class="text-small">${cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+            <span class="font-mono text-small" style="color: var(--copper);">${count} prospect${count !== 1 ? 's' : ''}</span>
+          </div>
+        `).join('');
+
+      // Prospect list
+      document.getElementById('atlas-prospect-list').innerHTML = prospects.slice(0, 20).map(p => {
+        const statusColor = p.status === 'booked' ? '#4CAF50' :
+                            p.status === 'call_booked' ? 'var(--copper)' :
+                            p.status === 'replied' ? '#2196F3' :
+                            p.status === 'sent' ? '#FFA726' : '#999';
+
+        return `
+          <div class="jarvis-card" style="background: var(--surface-deep); margin-bottom: 12px; cursor: pointer;"
+               onclick="FORGE_MODULES.viewB2BProspectDetail('${p.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <h4 class="text-small" style="margin-bottom: 4px;">${p.company}</h4>
+                <p class="text-tiny text-tertiary">${p.category ? p.category.replace(/_/g, ' ') : '—'}</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="font-mono text-tiny" style="color: var(--copper);">Score: ${p.quality_score || 0}</span>
+                <span class="jarvis-pill text-pill" style="background: ${statusColor}; color: #fff;">
+                  ${p.status.replace(/_/g, ' ')}
+                </span>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+              <div>
+                <p class="text-tiny text-tertiary">Contact</p>
+                <p class="text-small">${p.decision_maker_name || '—'}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Approach</p>
+                <p class="text-small">${p.approach ? p.approach.replace(/_/g, ' ') : '—'}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('[FORGE] Load Atlas data failed:', error);
+      document.getElementById('atlas-active-count').textContent = 'ERR';
+      document.getElementById('atlas-prospect-list').innerHTML = '<p class="text-small text-tertiary">Failed to load prospects.</p>';
+    }
   },
 
   newB2BProspect() {
-    JARVIS.Toast({ message: 'B2B prospect form coming soon — wire to str_b2b_prospects table', duration: 2000 });
+    JARVIS_ACTIONS.showFormModal('+ New B2B Prospect', [
+      { name: 'company', label: 'Company Name', type: 'text', required: true },
+      {
+        name: 'category',
+        label: 'Category',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'wellness_retreat', label: 'Wellness Retreat' },
+          { value: 'sports_team', label: 'Sports Team' },
+          { value: 'influencer_agency', label: 'Influencer Agency' },
+          { value: 'corporate_wellness', label: 'Corporate Wellness' },
+          { value: 'yoga_retreat', label: 'Yoga Retreat' },
+          { value: 'breathwork', label: 'Breathwork' },
+          { value: 'pt_group', label: 'PT Group' },
+          { value: 'content_creator', label: 'Content Creator' },
+          { value: 'wedding_planner', label: 'Wedding Planner' }
+        ]
+      },
+      { name: 'website', label: 'Website', type: 'url', required: false },
+      { name: 'instagram_handle', label: 'Instagram Handle', type: 'text', required: false },
+      { name: 'decision_maker_name', label: 'Decision Maker Name', type: 'text', required: false },
+      { name: 'email', label: 'Email', type: 'email', required: false },
+      { name: 'phone', label: 'Phone', type: 'tel', required: false },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, required: false }
+    ], async (data) => {
+      const prospectData = {
+        ...data,
+        status: 'not_contacted',
+        quality_score: 50
+      };
+
+      const result = await JARVIS_ACTIONS.createRecord('str_b2b_prospects', prospectData, 'Prospect added');
+      if (result) {
+        this.renderAtlasProspects();
+      }
+    });
   },
 
   async renderGuestComms() {
@@ -1167,6 +1271,200 @@ const FORGE_MODULES = {
         }
       }
     );
+  },
+
+  // ── B2B ATLAS ACTIONS ──────────────────────────────────────────────────────
+
+  async viewB2BProspectDetail(prospectId) {
+    try {
+      const prospect = await API.supabaseQuery('str_b2b_prospects', `id=eq.${prospectId}&select=*`);
+      if (!prospect || prospect.length === 0) {
+        JARVIS.Toast({ message: 'Prospect not found', duration: 2000 });
+        return;
+      }
+
+      const p = prospect[0];
+      const statusColor = p.status === 'booked' ? '#4CAF50' :
+                          p.status === 'call_booked' ? 'var(--copper)' :
+                          p.status === 'replied' ? '#2196F3' :
+                          p.status === 'sent' ? '#FFA726' : '#999';
+
+      JARVIS_ACTIONS.showDetailView(`${p.company}`, [
+        {
+          id: 'overview',
+          label: 'Overview',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Category</p>
+                  <p class="text-small">${p.category ? p.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Status</p>
+                  <span class="jarvis-pill" style="background: ${statusColor}; color: #fff;">${p.status.replace(/_/g, ' ')}</span>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Quality Score</p>
+                  <p class="font-mono text-small" style="color: var(--copper);">${p.quality_score || 0}/100</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">City</p>
+                  <p class="text-small">${p.city || '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Website</p>
+                  <p class="text-small">${p.website ? `<a href="${p.website}" target="_blank">${p.website}</a>` : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Instagram</p>
+                  <p class="text-small">${p.instagram_handle || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">LinkedIn</p>
+                  <p class="text-small">${p.linkedin_url ? `<a href="${p.linkedin_url}" target="_blank">View</a>` : '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Decision Maker</p>
+                  <p class="text-small">${p.decision_maker_name || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Role</p>
+                  <p class="text-small">${p.decision_maker_role || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Email</p>
+                  <p class="text-small">${p.email || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Phone</p>
+                  <p class="text-small">${p.phone || '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Approach</p>
+                  <p class="text-small">${p.approach ? p.approach.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Outreach Date</p>
+                  <p class="text-small">${p.outreach_date ? new Date(p.outreach_date).toLocaleDateString('en-GB') : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Follow-Up Date</p>
+                  <p class="text-small">${p.follow_up_date ? new Date(p.follow_up_date).toLocaleDateString('en-GB') : '—'}</p>
+                </div>
+              </div>
+
+              ${p.notes ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Notes</p>
+                  <p class="text-small">${p.notes}</p>
+                </div>
+              ` : ''}
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                        onclick="FORGE_MODULES.sendB2BOutreach('${p.id}')">
+                  📧 Send Outreach
+                </button>
+                ${p.status === 'not_contacted' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markB2BStatus('${p.id}', 'drafted')">
+                    ✏️ Mark Drafted
+                  </button>
+                ` : ''}
+                ${p.status === 'drafted' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markB2BStatus('${p.id}', 'sent')">
+                    ✓ Mark Sent
+                  </button>
+                ` : ''}
+                ${p.status === 'sent' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markB2BStatus('${p.id}', 'replied')">
+                    💬 Mark Replied
+                  </button>
+                ` : ''}
+                ${['replied', 'sent'].includes(p.status) ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markB2BStatus('${p.id}', 'call_booked')">
+                    📞 Call Booked
+                  </button>
+                ` : ''}
+                ${p.status === 'call_booked' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markB2BStatus('${p.id}', 'booked')">
+                    🎉 Mark Booked
+                  </button>
+                ` : ''}
+                <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm"
+                        onclick="FORGE_MODULES.deleteB2BProspect('${p.id}')">
+                  Decline
+                </button>
+              </div>
+            </div>
+          `
+        }
+      ]);
+    } catch (error) {
+      console.error('[FORGE] View B2B prospect failed:', error);
+      JARVIS.Toast({ message: 'Failed to load prospect', duration: 2000 });
+    }
+  },
+
+  sendB2BOutreach(prospectId) {
+    JARVIS_ACTIONS.showFormModal('Send B2B Outreach', [
+      { name: 'subject', label: 'Subject', type: 'text', required: true },
+      { name: 'message', label: 'Message', type: 'textarea', rows: 10, required: true }
+    ], async (data) => {
+      // This would call /api/forge/send-b2b-outreach endpoint (Phase 4 TODO)
+      JARVIS.Toast({ message: 'B2B outreach sending (endpoint TBD)', duration: 2000 });
+      // Once endpoint exists, mark as sent
+      await JARVIS_ACTIONS.updateRecord('str_b2b_prospects', prospectId, {
+        status: 'sent',
+        outreach_date: new Date().toISOString().split('T')[0]
+      });
+      this.viewB2BProspectDetail(prospectId);
+      return true;
+    });
+  },
+
+  async markB2BStatus(prospectId, newStatus) {
+    const updates = { status: newStatus };
+    if (newStatus === 'sent' && !updates.outreach_date) {
+      updates.outreach_date = new Date().toISOString().split('T')[0];
+    }
+    const result = await JARVIS_ACTIONS.updateRecord('str_b2b_prospects', prospectId, updates, `Status: ${newStatus.replace(/_/g, ' ')}`);
+    if (result) {
+      this.viewB2BProspectDetail(prospectId);
+    }
+  },
+
+  async deleteB2BProspect(prospectId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Mark as Declined',
+      'Are you sure? This will set the status to declined.',
+      async () => {
+        const result = await JARVIS_ACTIONS.updateRecord('str_b2b_prospects', prospectId, { status: 'declined' }, 'Marked as declined');
+        if (result) {
+          history.back();
+        }
+      }
+    );
+  },
+
+  async runB2BEnrichment() {
+    JARVIS.Toast({ message: 'B2B enrichment pipeline (endpoint TBD)', duration: 2000 });
+    // Phase 4 TODO: POST /api/forge/enrich-b2b-prospects
+    // Similar to PSNM Intel pipeline, enrich decision maker details, company info, etc
   }
 };
 
