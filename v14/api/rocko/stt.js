@@ -2,7 +2,6 @@
 // Rocko STT Proxy
 // POST /api/rocko/stt
 // Proxies speech-to-text requests to OpenAI Whisper API server-side
-// Keeps OPENAI_API_KEY secure (never exposed to client)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import formidable from 'formidable';

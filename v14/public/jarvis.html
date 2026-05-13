@@ -728,7 +728,9 @@
               <h3 class="font-display text-h2">Yesterday Banked</h3>
             </div>
             <div class="jarvis-card__body" id="yesterdayBanked">
-              <p class="text-small text-tertiary">Loading...</p>
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 80%;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 60%;"></div>
             </div>
           </div>
 
@@ -737,7 +739,9 @@
               <h3 class="font-display text-h2">Today's Plan</h3>
             </div>
             <div class="jarvis-card__body" id="todaysPlan">
-              <p class="text-small text-tertiary">Loading...</p>
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 70%;"></div>
             </div>
           </div>
 
@@ -746,7 +750,8 @@
               <h3 class="font-display text-h2">Week Goals</h3>
             </div>
             <div class="jarvis-card__body" id="weekGoals">
-              <p class="text-small text-tertiary">Loading...</p>
+              <div class="jarvis-skeleton jarvis-skeleton--block" style="height: 60px; margin-bottom: 12px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--block" style="height: 60px;"></div>
             </div>
           </div>
         </div>
@@ -801,7 +806,9 @@
               <h3 class="font-display text-h2">PSNM</h3>
             </div>
             <div class="jarvis-card__body cockpit-ops-section" id="psnmOps">
-              <p class="text-small text-tertiary">Loading...</p>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
             </div>
           </div>
 
@@ -810,7 +817,9 @@
               <h3 class="font-display text-h2">Forge</h3>
             </div>
             <div class="jarvis-card__body cockpit-ops-section" id="forgeOps">
-              <p class="text-small text-tertiary">Loading...</p>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
             </div>
           </div>
 
@@ -968,6 +977,8 @@
       initDateTime();
       initCommandPalette();
       initRocko();
+      initRightRailCollapse();
+      initClickableBottomBar();
       await checkAuthAndLoad();
       startLiveUpdates();
     });
@@ -1057,9 +1068,20 @@
     // ── COMMAND PALETTE ──────────────────────────────────────────────────────
     function initCommandPalette() {
       document.addEventListener('keydown', (e) => {
+        // Cmd+K for command palette
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
           e.preventDefault();
           openCommandPalette();
+        }
+
+        // Cmd+1-7 for left rail navigation
+        if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '7') {
+          e.preventDefault();
+          const modules = ['cockpit', 'psnm', 'forge', 'rbtr', 'personal', 'sarah', 'system'];
+          const index = parseInt(e.key) - 1;
+          if (modules[index]) {
+            loadModule(modules[index]);
+          }
         }
       });
     }
@@ -1103,8 +1125,11 @@
           document.getElementById('yesterdayBanked').innerHTML = events;
         } else {
           document.getElementById('yesterdayBanked').innerHTML = `
-            <p class="text-small text-tertiary">No events logged for yesterday</p>
-            <p class="text-tiny text-tertiary">Use rbtr_daily_log to track wins</p>
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">🎯</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">Log your first win</p>
+              <p class="jarvis-empty-state__description">Track daily progress to build momentum. Takes 30 seconds.</p>
+            </div>
           `;
         }
 
@@ -1121,7 +1146,11 @@
           document.getElementById('todaysPlan').innerHTML = tasks;
         } else {
           document.getElementById('todaysPlan').innerHTML = `
-            <p class="text-small text-tertiary">No tasks due today</p>
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">✅</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">All clear for today</p>
+              <p class="jarvis-empty-state__description">Add your first task via Quick Fire or Cmd+K.</p>
+            </div>
           `;
         }
 
@@ -1143,8 +1172,11 @@
           document.getElementById('weekGoals').innerHTML = goals;
         } else {
           document.getElementById('weekGoals').innerHTML = `
-            <p class="text-small text-tertiary">No week goals set</p>
-            <p class="text-tiny text-tertiary">Add goals to rbtr_week_goals</p>
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">🎲</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">Set this week's goals</p>
+              <p class="jarvis-empty-state__description">3-5 measurable outcomes. Review Sunday night.</p>
+            </div>
           `;
         }
 
@@ -1770,6 +1802,63 @@
       setInterval(() => {
         // TODO: Check for new alerts, tasks, etc
       }, 30000);
+    }
+
+    // ── RIGHT RAIL COLLAPSE ──────────────────────────────────────────────────
+    function initRightRailCollapse() {
+      let isCollapsed = false;
+      const layout = document.querySelector('.jarvis-layout');
+      const rightrail = document.querySelector('.jarvis-rightrail');
+
+      // Add collapse button to top of right rail
+      const collapseBtn = document.createElement('button');
+      collapseBtn.innerHTML = '→';
+      collapseBtn.className = 'jarvis-btn jarvis-btn--ghost jarvis-btn--sm';
+      collapseBtn.style.cssText = 'position: absolute; top: 12px; right: 12px; z-index: 100; width: 32px; height: 32px; padding: 0;';
+      collapseBtn.title = 'Collapse right rail';
+
+      rightrail.style.position = 'relative';
+      rightrail.insertBefore(collapseBtn, rightrail.firstChild);
+
+      collapseBtn.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+          layout.style.gridTemplateColumns = 'var(--left-rail-collapsed) 1fr 0';
+          rightrail.style.display = 'none';
+          collapseBtn.innerHTML = '←';
+          collapseBtn.title = 'Expand right rail';
+          collapseBtn.style.right = '-48px';
+        } else {
+          layout.style.gridTemplateColumns = 'var(--left-rail-collapsed) 1fr var(--right-rail-width)';
+          rightrail.style.display = 'flex';
+          collapseBtn.innerHTML = '→';
+          collapseBtn.title = 'Collapse right rail';
+          collapseBtn.style.right = '12px';
+        }
+      });
+    }
+
+    // ── CLICKABLE BOTTOM BAR ──────────────────────────────────────────────────
+    function initClickableBottomBar() {
+      // Make status indicators clickable
+      const statusIndicators = document.querySelectorAll('.jarvis-status-indicator');
+      statusIndicators.forEach((indicator, index) => {
+        indicator.style.cursor = 'pointer';
+        indicator.addEventListener('click', () => {
+          const labels = ['crons', 'api-quota', 'vercel', 'git', 'rocko'];
+          if (labels[index] === 'crons') {
+            loadModule('system', 'crons');
+          } else if (labels[index] === 'api-quota') {
+            loadModule('system', 'api');
+          } else if (labels[index] === 'vercel') {
+            loadModule('system', 'deployments');
+          } else if (labels[index] === 'git') {
+            loadModule('system', 'git');
+          } else if (labels[index] === 'rocko') {
+            loadModule('system', 'rocko');
+          }
+        });
+      });
     }
 
     // ── ALERTS & USER MENU ───────────────────────────────────────────────────

@@ -2,8 +2,6 @@
 // Rocko TTS Proxy
 // POST /api/rocko/tts
 // Proxies text-to-speech requests to ElevenLabs API server-side
-// Keeps ELEVENLABS_API_KEY secure (never exposed to client)
-// Streams audio back to client
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default async function handler(req, res) {
