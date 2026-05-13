@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           text,
-          model_id: 'eleven_monolingual_v1',
+          model_id: 'eleven_turbo_v2_5',
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.75,
@@ -57,12 +57,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Stream audio back to client
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
+    // Convert stream to buffer (Vercel serverless doesn't support .pipe())
+    const audioBuffer = await response.arrayBuffer();
 
-    // Pipe ElevenLabs stream to response
-    response.body.pipe(res);
+    // Send audio back to client
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.send(Buffer.from(audioBuffer));
 
   } catch (error) {
     console.error('[Rocko TTS] Error:', error);
