@@ -279,22 +279,25 @@ class RockoVoice {
     const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
 
     try {
-      // Convert to format suitable for Whisper (needs to be sent as FormData)
+      // Send to server-side STT proxy (keeps API key secure)
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.webm');
-      formData.append('model', 'whisper-1');
 
-      // Check if OpenAI key exists, fallback to text input if not
-      const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const whisperResponse = await fetch('/api/rocko/stt', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${window.OPENAI_API_KEY || ''}`,
-        },
         body: formData,
       });
 
       if (!whisperResponse.ok) {
-        throw new Error(`Whisper API failed: ${whisperResponse.status}`);
+        const errorData = await whisperResponse.json();
+        if (errorData.fallback === 'text_input') {
+          console.warn('[Rocko] STT unavailable, falling back to text input');
+          this.updateStateText('Speech recognition unavailable. Use text input below (double-click mic).');
+          this.handleError('stt_unavailable', new Error(errorData.message));
+          this.resetToIdle();
+          return;
+        }
+        throw new Error(`STT failed: ${whisperResponse.status}`);
       }
 
       const { text } = await whisperResponse.json();
@@ -371,36 +374,23 @@ class RockoVoice {
       cancelAnimationFrame(this.animationId);
       this.drawSpeakingWaveform();
 
-      // ElevenLabs streaming TTS
-      const voiceId = window.ELEVENLABS_VOICE_ID || 'M7ya1YbaeFaPXljg9BpK';
-      const apiKey = window.ELEVENLABS_API_KEY || '';
-
-      if (!apiKey) {
-        // Fallback: show text only, no audio
-        console.warn('[Rocko] ElevenLabs API key not configured, text-only mode');
-        await this.displayTextOnly(text);
-        return;
-      }
-
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
+      // Call server-side TTS proxy (keeps API key secure)
+      const response = await fetch('/api/rocko/tts', {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': apiKey,
         },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-          },
-        }),
+        body: JSON.stringify({ text }),
       });
 
       if (!response.ok) {
-        throw new Error(`ElevenLabs TTS failed: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.fallback === 'text_only') {
+          console.warn('[Rocko] TTS unavailable, falling back to text-only');
+          await this.displayTextOnly(text);
+          return;
+        }
+        throw new Error(`TTS failed: ${response.status}`);
       }
 
       // Get audio blob and play

@@ -916,12 +916,12 @@
   <script src="/js/jarvis-modules-personal.js"></script>
   <script src="/js/jarvis-modules-system.js"></script>
   <script>
-    // ── API KEYS CONFIGURATION ───────────────────────────────────────────────
-    // These should be loaded from a secure endpoint in production
-    // For now, set them here (will be moved to env-based config endpoint)
-    window.OPENAI_API_KEY = ''; // TODO: Add via config endpoint
-    window.ELEVENLABS_API_KEY = ''; // TODO: Add via config endpoint
-    window.ELEVENLABS_VOICE_ID = 'M7ya1YbaeFaPXljg9BpK'; // Rocko voice
+    // ── API KEYS (REMOVED) ────────────────────────────────────────────────────
+    // API keys now handled server-side via proxy endpoints for security:
+    // - POST /api/rocko/stt (Whisper STT)
+    // - POST /api/rocko/tts (ElevenLabs TTS)
+    // - POST /api/rocko/chat (Anthropic + tools)
+    // Client never sees OPENAI_API_KEY, ELEVENLABS_API_KEY, or ANTHROPIC_API_KEY
   </script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
