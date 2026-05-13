@@ -1300,11 +1300,542 @@ const SARAH_MODULES = {
     `;
   },
 
-  renderSarahsPlan() { this._stubModule('Sarah\'s Plan', 'Full module with 15-month plan. Port from V12.'); },
-  renderHabits() { this._stubModule('Habit Tracker (Sarah)', 'Sarah\'s daily habit checklist. Port from V12.'); },
-  renderMoodEnergy() { this._stubModule('Mood / Energy Log', 'Sarah\'s daily tracking. Port from V12.'); },
-  renderVoiceCloning() { this._stubModule('Voice Cloning', 'ElevenLabs voice cloning session (STUB — setup required). Port from V12.'); },
-  renderResources() { this._stubModule('Resources', 'Sarah\'s docs, links, references. Port from V12.'); },
+  // ── SARAH'S PLAN ───────────────────────────────────────────────────────────
+  renderSarahsPlan() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Sarah's 15-Month Plan</h1>
+        <div class="jarvis-module-actions">
+          <span class="text-small text-secondary">May 2026 → Jul 2027</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Pilates</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">40%</div>
+            <p class="text-small text-tertiary">Instructor cert progress</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">AirBnB</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">Live</div>
+            <p class="text-small text-tertiary">4 Woodhead Mews (co-host)</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Fitness</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">On Track</div>
+            <p class="text-small text-tertiary">Personal journey</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Booking Proof</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">Q3 2026</div>
+            <p class="text-small text-tertiary">SaaS launch target</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">15-Month Timeline</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">May-Jun 2026: Pilates Cert Foundation</h4>
+                <span class="jarvis-pill jarvis-pill--live font-mono text-pill">In Progress</span>
+              </div>
+              <p class="text-tiny text-tertiary">Complete online modules, attend in-person weekend workshop (Sheffield), practice teaching 2x/week</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">Jul-Sep 2026: AirBnB Co-Host Role</h4>
+                <span class="jarvis-pill jarvis-pill--live font-mono text-pill">Active</span>
+              </div>
+              <p class="text-tiny text-tertiary">Manage bookings, guest comms, cleaner coordination (with Ben). Revenue target: £4k/mo gross</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">Jul-Sep 2026: Booking Proof MVP</h4>
+                <span class="jarvis-pill font-mono text-pill">Pending</span>
+              </div>
+              <p class="text-tiny text-tertiary">Launch beta with 5 founding hosts, test AI damage detection, iterate on cleaner app UX</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">Oct-Dec 2026: Fitness Focus</h4>
+                <span class="jarvis-pill font-mono text-pill">Planned</span>
+              </div>
+              <p class="text-tiny text-tertiary">3x gym sessions/week, nutrition plan, visible progress for on-camera RBTR content</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">Jan-Mar 2027: Pilates Cert Final</h4>
+                <span class="jarvis-pill font-mono text-pill">Planned</span>
+              </div>
+              <p class="text-tiny text-tertiary">Complete assessment, receive instructor certification, teach 1-2 classes/week</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <h4 class="text-small font-weight-600">Apr-Jul 2027: RBTR Pre-Departure Sprint</h4>
+                <span class="jarvis-pill font-mono text-pill">Planned</span>
+              </div>
+              <p class="text-tiny text-tertiary">Handover Booking Proof ops to virtual assistant, finalize homeschool curriculum for road, pack truck</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Sarah's Business Ownership</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 12px;">
+            All STR + SaaS assets in Sarah's name (bankruptcy protection). Ben advises, Sarah operates + owns.
+          </p>
+          <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 8px;">
+            <li class="text-small">✓ Forge STR (4 Woodhead Mews) — Sarah sole director when Ltd formed</li>
+            <li class="text-small">✓ Booking Proof SaaS — Sarah founder, sole shareholder</li>
+            <li class="text-small">✓ Bank accounts — Sarah sole signatory</li>
+            <li class="text-small">✓ Platform accounts (AirBnB, VRBO) — Sarah's name</li>
+            <li class="text-small">✓ Insurance — Sarah named party</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── SARAH'S HABIT TRACKER ──────────────────────────────────────────────────
+  renderHabits() {
+    const today = new Date().toLocaleDateString('en-GB');
+
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Sarah's Habit Tracker</h1>
+        <div class="jarvis-module-actions">
+          <span class="text-small text-secondary">${today}</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Streak</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Days completed</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Completion Rate (30d)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0%</div>
+            <p class="text-small text-tertiary">Avg. daily completion</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Longest Streak</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Personal best</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Status</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0/7</div>
+            <p class="text-small text-tertiary">Habits complete</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Daily Habits</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Pilates Practice</h4>
+                <p class="text-tiny text-tertiary">30 min session or teaching practice</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Gym / Fitness</h4>
+                <p class="text-tiny text-tertiary">3x weekly minimum</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Homeschooling (Hudson + Benson)</h4>
+                <p class="text-tiny text-tertiary">2h structured learning daily</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">AirBnB Check</h4>
+                <p class="text-tiny text-tertiary">Guest messages, booking confirmations, cleaner coordination</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Booking Proof Admin</h4>
+                <p class="text-tiny text-tertiary">Check customer messages, monitor claims queue</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Family Time</h4>
+                <p class="text-tiny text-tertiary">1h quality time with Hudson, Benson, Peanut</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Personal Time</h4>
+                <p class="text-tiny text-tertiary">30 min reading, journaling, or self-care</p>
+              </div>
+            </label>
+          </div>
+
+          <p class="text-tiny text-tertiary" style="margin-top: 16px; color: var(--copper);">
+            Wire to rbtr_habits table (sarah_habits). Track daily completion, streak logic, 30-day rolling average.
+          </p>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── SARAH'S MOOD / ENERGY LOG ──────────────────────────────────────────────
+  renderMoodEnergy() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Sarah's Mood / Energy Log</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="SARAH_MODULES.logMoodToday()">
+            Log Today
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Mood</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—/10</div>
+            <p class="text-small text-tertiary">Not yet logged</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Energy</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—/10</div>
+            <p class="text-small text-tertiary">Not yet logged</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Avg. Mood (7d)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—</div>
+            <p class="text-small text-tertiary">Last week avg.</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Avg. Energy (7d)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—</div>
+            <p class="text-small text-tertiary">Last week avg.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">30-Day Trend</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary">Track daily mood + energy levels (1-10 scale). Identify patterns, correlate with stress/sleep/workload.</p>
+          <p class="text-tiny text-tertiary" style="margin-top: 8px; color: var(--copper);">
+            Wire to rbtr_wellness_daily table (sarah_mood, sarah_energy columns). Display line graph showing 30-day trend.
+          </p>
+
+          <div style="background: var(--surface-deep); height: 200px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-top: 16px;">
+            <p class="text-small text-tertiary">Line graph coming soon — mood (blue line) + energy (copper line) over 30 days</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Mood / Energy Factors</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Sleep Quality</h4>
+              <p class="text-tiny text-tertiary">Track correlation between sleep hours + mood/energy next day</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Stress Levels</h4>
+              <p class="text-tiny text-tertiary">AirBnB guest issues, Booking Proof support tickets, homeschool challenges</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Exercise</h4>
+              <p class="text-tiny text-tertiary">Gym days correlate with higher energy scores</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Family Time</h4>
+              <p class="text-tiny text-tertiary">Quality time with Ben, Hudson, Benson boosts mood</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  logMoodToday() {
+    JARVIS.Toast({ message: 'Mood/energy log form coming soon — wire to rbtr_wellness_daily', duration: 2000 });
+  },
+
+  // ── VOICE CLONING ──────────────────────────────────────────────────────────
+  renderVoiceCloning() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Voice Cloning (ElevenLabs)</h1>
+      </div>
+
+      <div class="jarvis-card" style="border: 2px solid var(--copper); margin-bottom: 32px;">
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary">
+            <strong style="color: var(--copper);">SETUP REQUIRED</strong> — Ben needs to configure ElevenLabs API integration before Sarah can create voice clone. See ~/Documents/RBTR-Brain/00-Inbox/ for setup instructions.
+          </p>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">ElevenLabs Voice Cloning</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">
+            Clone Sarah's voice for automated voiceovers in RBTR content (e.g., Sarah reading blog post intros, narrating family updates).
+          </p>
+
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Step 1: Record Voice Sample</h4>
+              <p class="text-tiny text-tertiary">Sarah reads 3-5 min script in quiet room, clear enunciation, natural tone</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Step 2: Upload to ElevenLabs</h4>
+              <p class="text-tiny text-tertiary">Create voice clone via ElevenLabs dashboard, train model (~10 min processing)</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Step 3: Test & Refine</h4>
+              <p class="text-tiny text-tertiary">Generate test audio clips, adjust pitch/speed/clarity settings</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Step 4: Integrate with RBTR Workflow</h4>
+              <p class="text-tiny text-tertiary">Use Sarah's voice clone for blog narration, family updates, Patreon intros</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Use Cases</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 8px;">
+            <li class="text-small">✓ Blog post narration (Forge SEO content)</li>
+            <li class="text-small">✓ Patreon monthly update intros</li>
+            <li class="text-small">✓ Family vlog voice-overs when Sarah off-camera</li>
+            <li class="text-small">✓ Booking Proof marketing videos</li>
+            <li class="text-small">✓ Automated guest comms (AirBnB welcome messages)</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── SARAH'S RESOURCES ──────────────────────────────────────────────────────
+  renderResources() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Sarah's Resources</h1>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Quick Links</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('https://www.airbnb.com/hosting', '_blank')" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="text-small">AirBnB Host Dashboard</span>
+              <span class="text-tiny text-tertiary">4 Woodhead Mews</span>
+            </button>
+
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('https://www.vrbo.com/owner', '_blank')" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="text-small">VRBO Owner Dashboard</span>
+              <span class="text-tiny text-tertiary">Booking sync</span>
+            </button>
+
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="BOOKING_PROOF.render()" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="text-small">Booking Proof Admin</span>
+              <span class="text-tiny text-tertiary">Founder dashboard</span>
+            </button>
+
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('https://www.pilates-studio-example.com', '_blank')" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="text-small">Pilates Certification Portal</span>
+              <span class="text-tiny text-tertiary">Online learning</span>
+            </button>
+
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('https://calendar.google.com', '_blank')" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="text-small">Family Calendar</span>
+              <span class="text-tiny text-tertiary">Ben + Sarah + kids</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Documents</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Sarah's 15-Month Plan</h4>
+              <p class="text-tiny text-tertiary">Pilates cert timeline, AirBnB co-host ramp, Booking Proof launch, fitness goals</p>
+              <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="SARAH_MODULES.renderSarahsPlan()" style="margin-top: 8px;">
+                View Plan →
+              </button>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Homeschool Curriculum</h4>
+              <p class="text-tiny text-tertiary">Hudson + Benson lesson plans, resources, progress tracking</p>
+              <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Homeschool/', '_blank')" style="margin-top: 8px;">
+                Open Folder →
+              </button>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Forge STR Business Docs</h4>
+              <p class="text-tiny text-tertiary">Insurance certificates, safety compliance, guest house manual</p>
+              <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Forge-STR/', '_blank')" style="margin-top: 8px;">
+                Open Folder →
+              </button>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Booking Proof Product Docs</h4>
+              <p class="text-tiny text-tertiary">Founder pitch deck, pricing strategy, AI detection spec, cleaner app wireframes</p>
+              <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Booking-Proof/', '_blank')" style="margin-top: 8px;">
+                Open Folder →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Support Resources</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">AirBnB Host Community</h4>
+              <p class="text-tiny text-tertiary">Local host meetups (Sheffield/Rotherham), online forums, best practice guides</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Pilates Teacher Network</h4>
+              <p class="text-tiny text-tertiary">Instructor community, teaching resources, CPD courses</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">SaaS Founder Resources</h4>
+              <p class="text-tiny text-tertiary">Indie Hackers, Product Hunt, pricing calculators, launch checklists</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Homeschool Support Groups</h4>
+              <p class="text-tiny text-tertiary">Local homeschool groups (Yorkshire), online curriculum forums, activity ideas</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
 
   _stubModule(title, description) {
     document.getElementById('mainStage').innerHTML = `
