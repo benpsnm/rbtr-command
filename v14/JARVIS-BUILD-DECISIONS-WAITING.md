@@ -35,6 +35,34 @@ The new API keys Ben pasted to `.env.local` weren't loading because:
 
 ---
 
+## PHASE 2 — SEO Content Pipeline
+
+### MIGRATION 066 NEEDS MANUAL APPLICATION
+**File:** `migrations/066_psnm_seo_content.sql`
+
+Creates 2 tables:
+- `psnm_seo_content` — 52 pre-written SEO articles with full metadata
+- `psnm_seo_publish_log` — Audit trail for WordPress publishing
+
+**BEN ACTION NEEDED:**
+1. Log into Supabase dashboard → SQL Editor
+2. Paste contents of `migrations/066_psnm_seo_content.sql`
+3. Run migration
+4. Then run: `SUPABASE_URL=xxx SUPABASE_SERVICE_ROLE=xxx node scripts/seo-bulk-import.js`
+
+**Infrastructure Built (ready once table exists):**
+- ✅ Bulk import script (`scripts/seo-bulk-import.js`) - parses 52 markdown files from ~/Documents/RBTR-Brain/00-Inbox/psnm-content/
+- ⏳ WordPress publish endpoint (building next)
+- ⏳ Hourly publish cron (building next)
+- ⏳ JARVIS UI for content management (building next)
+
+**WordPress Credentials Needed:**
+- WP_API_URL (e.g. https://palletstoragenearme.co.uk/wp-json/wp/v2/pages)
+- WP_USERNAME
+- WP_APP_PASSWORD (generate in WordPress admin → Users → Application Passwords)
+
+---
+
 ## Files Changed (Phase 0)
 - `v14/.env.production` → Added new ELEVENLABS_API_KEY + OPENAI_API_KEY
 - `v14/.env.development.local` → Created (copy of .env.local)
