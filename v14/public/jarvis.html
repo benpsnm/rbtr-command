@@ -707,6 +707,7 @@
   <script src="/js/jarvis-modules-psnm.js"></script>
   <script src="/js/jarvis-modules-forge.js"></script>
   <script src="/js/jarvis-modules-booking-proof.js"></script>
+  <script src="/js/jarvis-modules-rbtr.js"></script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
@@ -1058,6 +1059,13 @@
           FORGE_MODULES.renderLanding();
         } else {
           FORGE_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'rbtr') {
+        // RBTR modules
+        if (!submodule) {
+          RBTR_MODULES.renderLanding();
+        } else {
+          RBTR_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
         }
       } else {
         // Other modules (coming in STAGE 4+)
