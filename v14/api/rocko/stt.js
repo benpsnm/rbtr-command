@@ -6,8 +6,6 @@
 
 import formidable from 'formidable';
 import fs from 'fs';
-import FormData from 'form-data';
-import fetch from 'node-fetch';
 
 export const config = {
   api: {
@@ -46,19 +44,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    // Forward to OpenAI Whisper API
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(audioFile[0].filepath), {
-      filename: audioFile[0].originalFilename || 'audio.webm',
-      contentType: audioFile[0].mimetype || 'audio/webm',
+    // Read file as buffer for native FormData
+    const audioBuffer = fs.readFileSync(audioFile[0].filepath);
+    const audioBlob = new Blob([audioBuffer], {
+      type: audioFile[0].mimetype || 'audio/webm',
     });
+
+    // Forward to OpenAI Whisper API using native FormData
+    const formData = new FormData();
+    formData.append('file', audioBlob, audioFile[0].originalFilename || 'audio.webm');
     formData.append('model', 'whisper-1');
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        ...formData.getHeaders(),
       },
       body: formData,
     });
