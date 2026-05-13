@@ -25,6 +25,64 @@
       grid-template-rows: var(--top-bar-height) 1fr var(--bottom-bar-height);
       height: 100vh;
       overflow: hidden;
+      position: relative;
+    }
+
+    /* ── SCANLINE OVERLAY (2% opacity, reduced-motion aware) ──────────────── */
+    @media (prefers-reduced-motion: no-preference) {
+      .jarvis-layout::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.02) 1px,
+          transparent 1px,
+          transparent 2px
+        );
+        pointer-events: none;
+        z-index: 9999;
+      }
+    }
+
+    /* ── WESTERN CORNER ACCENTS (8x8px L-shapes copper on focused cards) ───── */
+    .jarvis-card:focus-within::before,
+    .jarvis-card:focus-within::after,
+    .jarvis-card:hover::before,
+    .jarvis-card:hover::after {
+      content: '';
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-color: var(--copper);
+      border-style: solid;
+      opacity: 0.6;
+      transition: opacity var(--duration-fast) var(--ease-out);
+    }
+    .jarvis-card:focus-within::before,
+    .jarvis-card:hover::before {
+      top: -1px;
+      left: -1px;
+      border-width: 2px 0 0 2px;
+    }
+    .jarvis-card:focus-within::after,
+    .jarvis-card:hover::after {
+      bottom: -1px;
+      right: -1px;
+      border-width: 0 2px 2px 0;
+    }
+
+    /* ── NUMBER ANIMATION (0→value 600ms ease-out) ────────────────────────── */
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-number {
+      animation: countUp var(--duration-slow) var(--ease-out);
     }
 
     /* ── TOP BAR ───────────────────────────────────────────────────────────── */
@@ -1041,6 +1099,37 @@
         console.warn('Not authenticated — some data may not load');
       }
       await loadCockpitData();
+    }
+
+    // ── ANIMATE NUMBERS (0→value over 600ms) ─────────────────────────────────
+    function animateNumber(element, target, duration = 600) {
+      const start = 0;
+      const startTime = performance.now();
+
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = Math.floor(start + (target - start) * progress);
+
+        element.textContent = current.toLocaleString();
+        element.classList.add('animate-number');
+
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    // Automatically animate all elements with data-animate attribute
+    function animateAllNumbers() {
+      document.querySelectorAll('[data-animate]').forEach(el => {
+        const target = parseInt(el.textContent.replace(/[^0-9]/g, '')) || 0;
+        if (target > 0) {
+          animateNumber(el, target);
+        }
+      });
     }
 
     // ── DATE/TIME ────────────────────────────────────────────────────────────
