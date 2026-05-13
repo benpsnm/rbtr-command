@@ -30,6 +30,35 @@ PSNM and Eternal Kustoms are Ben's businesses and are in scope for the bankruptc
 
 ---
 
+## DAILY OPERATING MODE (locked May 12 2026)
+
+Every session follows this sequence:
+
+**SESSION OPEN (mandatory):**
+1. Read second brain — open ~/Documents/RBTR-Brain/00-Inbox/ for any unread overnight reports
+2. Check today's tasks in rbtr_tasks WHERE due_date = today
+3. Check parked items log at ~/Documents/RBTR-Brain/00-Inbox/PARKED-ITEMS.md
+4. Acknowledge: what was banked yesterday, what's planned today, what blockers exist
+
+**DURING SESSION:**
+- Ask proper questions before firing anything — never assume scope
+- Search past chats / second brain before asking Ben for info he's already given
+- Make use of what's already built — no rebuilding from scratch
+- Flag better tools/agents proactively (existing rule, memory edit #16)
+
+**FIRE BIG, NOT SMALL:**
+- Default to multi-hour overnight yolo builds — 3-6 hours each, parallel terminals
+- Only fire 15-min prompts when truly trivial (a single field fix, a typo, etc)
+- Use the full token + time budget every week
+
+**SESSION CLOSE (mandatory):**
+- Update second brain: log all decisions made, wins banked, blockers hit, items parked
+- Write a one-paragraph SESSION-CLOSE-{date}-{time}.md in ~/Documents/RBTR-Brain/00-Inbox/
+- Commit + push if any code changed
+- If session ended with builds running, list them so next session resumes properly
+
+---
+
 ## Owner & context
 Ben Greenwood. Solo operator. PSNM warehouse + RBTR truck build + Eternal Kustoms consulting + family. Time-poor, learning fast. Read PSNM_STATE.md for full operational state.
 
