@@ -64,6 +64,22 @@ class RockoVoice {
 
   // ── WAVEFORM RENDERING ───────────────────────────────────────────────────
   startAmbientAnimation() {
+    // Check for prefers-reduced-motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+      // Static waveform for accessibility
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      const centerY = this.canvas.height / 2;
+      this.ctx.strokeStyle = 'rgba(184, 115, 51, 0.6)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, centerY);
+      this.ctx.lineTo(this.canvas.width, centerY);
+      this.ctx.stroke();
+      return;
+    }
+
     const draw = () => {
       if (this.state !== 'idle') {
         this.animationId = requestAnimationFrame(draw);
@@ -296,7 +312,7 @@ class RockoVoice {
   }
 
   // ── ROCKO CHAT ───────────────────────────────────────────────────────────
-  async sendToRocko(message) {
+  async sendToRocko(message, retryCount = 0) {
     try {
       const response = await fetch('/api/rocko/chat', {
         method: 'POST',
@@ -306,6 +322,14 @@ class RockoVoice {
           session_id: this.sessionId,
         }),
       });
+
+      // Handle rate limiting with exponential backoff
+      if (response.status === 429 && retryCount < 3) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '5');
+        this.updateStateText(`Rate limited. Retrying in ${retryAfter}s...`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        return this.sendToRocko(message, retryCount + 1);
+      }
 
       if (!response.ok) {
         throw new Error(`Rocko API failed: ${response.status}`);
