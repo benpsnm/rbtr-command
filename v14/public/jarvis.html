@@ -198,11 +198,149 @@
       box-shadow: 0 0 8px var(--copper);
     }
 
+    /* ── ROCKO PRESENCE ZONE ───────────────────────────────────────────────── */
+    .rocko-presence {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100px;
+      background: var(--surface-deep);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 80;
+      padding: var(--space-4) var(--space-6);
+      gap: var(--space-2);
+    }
+
+    .rocko-waveform-container {
+      width: 100%;
+      height: 50px;
+      position: relative;
+    }
+
+    #rockoWaveform {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .rocko-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .rocko-mic-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: transparent;
+      border: 2px solid var(--copper);
+      color: var(--copper);
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      flex-shrink: 0;
+    }
+
+    .rocko-mic-btn:hover {
+      background: var(--copper-faint);
+      transform: scale(1.05);
+    }
+
+    .rocko-mic-btn--active {
+      background: var(--copper);
+      color: var(--bg);
+      box-shadow: 0 0 20px var(--copper);
+    }
+
+    .rocko-state-text {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: left;
+      line-height: 1.5;
+    }
+
+    .rocko-text-active {
+      color: var(--copper);
+      font-weight: 600;
+    }
+
+    .rocko-text-input-container {
+      flex: 1;
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .rocko-text-input {
+      flex: 1;
+      padding: var(--space-3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .rocko-text-input:focus {
+      outline: none;
+      border-color: var(--copper);
+    }
+
+    .rocko-send-btn {
+      padding: var(--space-3) var(--space-4);
+      background: var(--copper);
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .rocko-send-btn:hover {
+      background: var(--copper-bright);
+    }
+
+    .rocko-clear-btn {
+      padding: var(--space-2) var(--space-3);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .rocko-clear-btn:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
     /* ── CENTER STAGE ──────────────────────────────────────────────────────── */
     .jarvis-main {
       grid-area: main;
       background: var(--bg);
       overflow-y: auto;
+      padding: 0;
+    }
+
+    .jarvis-main-content {
       padding: var(--page-padding);
     }
 
@@ -518,8 +656,33 @@
 
     <!-- CENTER STAGE -->
     <div class="jarvis-main" id="mainStage">
-      <!-- COCKPIT VIEW (default) -->
-      <div id="cockpit-view">
+      <!-- ROCKO PRESENCE ZONE (always visible) -->
+      <div class="rocko-presence">
+        <div class="rocko-waveform-container">
+          <canvas id="rockoWaveform" width="1200" height="50"></canvas>
+        </div>
+        <div class="rocko-controls">
+          <button class="rocko-mic-btn" id="rockoMicBtn" title="Click or hold spacebar to talk">
+            🎤
+          </button>
+          <div class="rocko-state-text" id="rockoStateText">
+            Rocko ready. Click mic or press spacebar to talk.
+          </div>
+          <button class="rocko-clear-btn" onclick="Rocko.clearConversation()" title="Clear conversation">
+            Clear
+          </button>
+        </div>
+        <!-- Text input fallback -->
+        <div class="rocko-text-input-container" style="display: none;" id="rockoTextInputContainer">
+          <input type="text" class="rocko-text-input" id="rockoTextInput" placeholder="Type your message here..." />
+          <button class="rocko-send-btn" onclick="sendRockoTextMessage()">Send</button>
+        </div>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div class="jarvis-main-content">
+        <!-- COCKPIT VIEW (default) -->
+        <div id="cockpit-view">
         <div class="jarvis-module-header">
           <h1 class="jarvis-module-title">Cockpit</h1>
           <div class="jarvis-module-actions">
@@ -660,6 +823,7 @@
           </div>
         </div>
       </div>
+      </div> <!-- end jarvis-main-content -->
     </div>
 
     <!-- RIGHT RAIL -->
@@ -744,12 +908,21 @@
   <!-- SCRIPTS -->
   <script src="/js/jarvis-components.js"></script>
   <script src="/js/jarvis-api.js"></script>
+  <script src="/js/jarvis-rocko-voice.js"></script>
   <script src="/js/jarvis-modules-psnm.js"></script>
   <script src="/js/jarvis-modules-forge.js"></script>
   <script src="/js/jarvis-modules-booking-proof.js"></script>
   <script src="/js/jarvis-modules-rbtr.js"></script>
   <script src="/js/jarvis-modules-personal.js"></script>
   <script src="/js/jarvis-modules-system.js"></script>
+  <script>
+    // ── API KEYS CONFIGURATION ───────────────────────────────────────────────
+    // These should be loaded from a secure endpoint in production
+    // For now, set them here (will be moved to env-based config endpoint)
+    window.OPENAI_API_KEY = ''; // TODO: Add via config endpoint
+    window.ELEVENLABS_API_KEY = ''; // TODO: Add via config endpoint
+    window.ELEVENLABS_VOICE_ID = 'M7ya1YbaeFaPXljg9BpK'; // Rocko voice
+  </script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
@@ -759,9 +932,52 @@
     document.addEventListener('DOMContentLoaded', async () => {
       initDateTime();
       initCommandPalette();
+      initRocko();
       await checkAuthAndLoad();
       startLiveUpdates();
     });
+
+    // ── ROCKO INITIALIZATION ─────────────────────────────────────────────────
+    async function initRocko() {
+      const initialized = await Rocko.init('rockoWaveform');
+      if (!initialized) {
+        console.error('[JARVIS] Failed to initialize Rocko');
+        return;
+      }
+
+      // Mic button click handler
+      const micBtn = document.getElementById('rockoMicBtn');
+      micBtn.addEventListener('click', () => {
+        if (Rocko.state === 'idle') {
+          Rocko.startListening();
+        } else if (Rocko.state === 'listening') {
+          Rocko.stopListening();
+        }
+      });
+
+      // Text input handler
+      const textInput = document.getElementById('rockoTextInput');
+      textInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          sendRockoTextMessage();
+        }
+      });
+
+      // Show text input toggle (if voice fails)
+      micBtn.addEventListener('dblclick', () => {
+        const textContainer = document.getElementById('rockoTextInputContainer');
+        textContainer.style.display = textContainer.style.display === 'none' ? 'flex' : 'none';
+      });
+    }
+
+    function sendRockoTextMessage() {
+      const input = document.getElementById('rockoTextInput');
+      const message = input.value.trim();
+      if (message) {
+        Rocko.sendTextMessage(message);
+        input.value = '';
+      }
+    }
 
     // ── AUTH CHECK ───────────────────────────────────────────────────────────
     async function checkAuthAndLoad() {
