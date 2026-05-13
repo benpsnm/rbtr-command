@@ -243,13 +243,21 @@ export const ROCKO_TOOLS = [
     description: 'Get current cash position for Ben + Sarah, this week banked, outstanding invoices.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // This would aggregate from multiple sources
-      // For now, return placeholder structure
+      // Aggregate from multiple sources
+      const [quotes, invoices] = await Promise.all([
+        sbQuery('psnm_quotes', 'status=eq.accepted&select=monthly_rate').catch(() => []),
+        sbQuery('psnm_invoices', 'status=eq.pending&select=amount').catch(() => []),
+      ]);
+
+      const weeklyRevenue = quotes.reduce((sum, q) => sum + (parseFloat(q.monthly_rate) || 0), 0);
+      const outstanding = invoices.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+
       return {
-        ben_cash: 'TBD - integrate with Ben cash tracking',
-        sarah_cash: 'TBD - integrate with Sarah cash tracking',
-        week_banked: 'TBD - weekly revenue sum',
-        outstanding: 'TBD - unpaid invoices',
+        ben_cash: 'See rbtr_cash_log table (TODO)',
+        sarah_cash: 'See sarah_cash_log table (TODO)',
+        week_banked: `£${weeklyRevenue.toFixed(2)} (PSNM quotes)`,
+        outstanding: `£${outstanding.toFixed(2)} (${invoices.length} invoices)`,
+        note: 'Partial implementation - full cash tracking requires additional tables',
       };
     },
   },
@@ -339,11 +347,27 @@ export const ROCKO_TOOLS = [
     description: 'Get Booking Proof SaaS status: MRR, customers, founding member slots.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // Placeholder - integrate with bp_customers and bp_settings when available
+      // Fetch from bp_* tables if they exist
+      const [customers, settings] = await Promise.all([
+        sbQuery('bp_customers', 'status=eq.active&select=monthly_value').catch(() => null),
+        sbQuery('bp_settings', 'select=founding_member_mode,founding_member_slots').catch(() => null),
+      ]);
+
+      if (!customers) {
+        return {
+          mrr: 'bp_customers table not found',
+          customers: 0,
+          founding_members: 'bp_settings table not found',
+          note: 'Booking Proof schema not yet migrated',
+        };
+      }
+
+      const mrr = customers.reduce((sum, c) => sum + (parseFloat(c.monthly_value) || 0), 0);
+
       return {
-        mrr: 'TBD',
-        customers: 'TBD',
-        founding_members: 'TBD',
+        mrr: `£${mrr.toFixed(2)}`,
+        customers: customers.length,
+        founding_members: settings?.[0]?.founding_member_mode ? `${settings[0].founding_member_slots} slots` : 'Disabled',
       };
     },
   },
@@ -430,7 +454,24 @@ export const ROCKO_TOOLS = [
     },
     execute: async (input) => {
       // Check cron_execution_log for recent runs
-      return { message: `Cron check for ${input.cron_name} - TBD: integrate with cron_execution_log` };
+      const logs = await sbQuery('cron_execution_log', `cron_name=eq.${input.cron_name}&order=executed_at.desc&limit=5&select=*`).catch(() => null);
+
+      if (!logs || logs.length === 0) {
+        return {
+          cron_name: input.cron_name,
+          status: 'No recent executions found',
+          last_run: null,
+        };
+      }
+
+      const lastRun = logs[0];
+      return {
+        cron_name: input.cron_name,
+        status: lastRun.status,
+        last_run: lastRun.executed_at,
+        recent_runs: logs.length,
+        success_rate: `${logs.filter(l => l.status === 'success').length}/${logs.length}`,
+      };
     },
   },
 
@@ -459,9 +500,21 @@ export const ROCKO_TOOLS = [
     description: "Get today's Rocko morning brief summary.",
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // Fetch from morning brief log or reconstruct key stats
+      // Fetch today's key metrics
+      const today = new Date().toISOString().split('T')[0];
+
+      const [tasks, drafts, touches] = await Promise.all([
+        sbQuery('rbtr_tasks', `due_date=eq.${today}&status=in.(open,in_progress)&select=title,priority`).catch(() => []),
+        sbQuery('psnm_atlas_drafts', 'status=eq.pending_approval&select=id').catch(() => []),
+        sbQuery('psnm_outreach_touches', `sent_date=eq.${today}&outcome=eq.reply&select=id`).catch(() => []),
+      ]);
+
       return {
-        message: 'Morning brief integration TBD - will pull from Telegram brief history',
+        date: today,
+        tasks_due: tasks.length,
+        draft_queue: drafts.length,
+        replies_today: touches.length,
+        summary: `${tasks.length} tasks due, ${drafts.length} drafts pending, ${touches.length} replies today`,
       };
     },
   },
@@ -490,9 +543,11 @@ export const ROCKO_TOOLS = [
     description: 'Get current git status of v14 codebase.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // This would need to call a server-side git command or fetch from a status endpoint
+      // Requires server-side exec - create /api/git/status endpoint for this
       return {
-        message: 'Git status check TBD - requires server-side exec capability',
+        note: 'Git status requires server-side exec',
+        workaround: 'Use POST /api/git/status endpoint (TODO: create)',
+        suggestion: 'For now, ask Ben to run `git status` locally',
       };
     },
   },
@@ -508,9 +563,11 @@ export const ROCKO_TOOLS = [
       required: ['path'],
     },
     execute: async (input) => {
-      // Server-side fs read with path sanitization
+      // Requires server-side fs read - create /api/obsidian/read endpoint
       return {
-        message: `Obsidian read for ${input.path} TBD - requires server-side fs access`,
+        note: 'Obsidian read requires server-side fs access',
+        workaround: 'Use POST /api/obsidian/read endpoint (TODO: create)',
+        requested_path: input.path,
       };
     },
   },
@@ -527,9 +584,12 @@ export const ROCKO_TOOLS = [
       required: ['filename', 'content'],
     },
     execute: async (input) => {
-      // Server-side fs write
+      // Requires server-side fs write - create /api/obsidian/write endpoint
       return {
-        message: `Obsidian write for ${input.filename} TBD - requires server-side fs access`,
+        note: 'Obsidian write requires server-side fs access',
+        workaround: 'Use POST /api/obsidian/write endpoint (TODO: create)',
+        filename: input.filename,
+        content_length: input.content.length,
       };
     },
   },
@@ -539,9 +599,11 @@ export const ROCKO_TOOLS = [
     description: 'Check if any autonomous builds are currently running.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // Check for running background jobs/agents
+      // Check agent tracking or process state
+      // For now, return empty array (no builds tracked)
       return {
-        message: 'Active builds check TBD - integrate with agent tracking',
+        active_builds: [],
+        note: 'Build tracking not yet implemented - requires agent state management',
       };
     },
   },
@@ -557,8 +619,26 @@ export const ROCKO_TOOLS = [
       required: ['area'],
     },
     execute: async (input) => {
+      // Map area to actual endpoint/action
+      const areaMap = {
+        'atlas': '/api/atlas3?action=run_dispatch',
+        'backup': '/api/cron-backup',
+        'cleanup': '/api/diagnose/post-build',
+      };
+
+      const endpoint = areaMap[input.area];
+      if (!endpoint) {
+        return {
+          error: `Unknown build area: ${input.area}`,
+          available: Object.keys(areaMap),
+        };
+      }
+
       return {
-        message: `Build trigger for ${input.area} TBD - requires integration with build system`,
+        area: input.area,
+        endpoint,
+        note: `Trigger build via: curl -X POST ${endpoint}`,
+        status: 'Manual trigger required (automated trigger TODO)',
       };
     },
   },

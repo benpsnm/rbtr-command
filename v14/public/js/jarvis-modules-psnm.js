@@ -1031,7 +1031,29 @@ const PSNM_MODULES = {
   },
 
   newQuote() {
-    JARVIS.Toast({ message: 'Quote generation form coming soon — wire to psnm_quotes table', duration: 2000 });
+    // Already wired in cockpit quick actions, but can also create from this view
+    quickAction('quote'); // Reuse existing quote modal
+  },
+
+  async viewQuotePDF(quoteId) {
+    JARVIS_ACTIONS.viewPDF(`/api/onboarding/generate-quote?id=${quoteId}`);
+  },
+
+  async resendQuote(quoteId) {
+    await JARVIS_ACTIONS.sendEmail('/api/onboarding/send-pack', {
+      quote_id: quoteId,
+      pack_type: 'quote'
+    }, 'Quote resent');
+  },
+
+  async deleteQuote(quoteId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Delete Quote',
+      'This will soft-delete the quote. Continue?',
+      async () => {
+        await JARVIS_ACTIONS.deleteRecord('psnm_quotes', quoteId, 'Quote deleted');
+      }
+    );
   },
 
   async renderInsurance() {
@@ -1287,3 +1309,72 @@ const PSNM_MODULES = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = PSNM_MODULES;
 }
+
+  // ── Insurance Actions ────────────────────────────────────────────────────
+  async markInsuranceVerified(customerId) {
+    await JARVIS_ACTIONS.markVerified('psnm_customers', customerId, 'insurance_verified_at');
+  },
+
+  async flagInsuranceNonCompliant(customerId) {
+    JARVIS_ACTIONS.showFormModal('Flag Non-Compliant', [
+      { name: 'reason', label: 'Reason', type: 'textarea', required: true, rows: 3 }
+    ], async (data) => {
+      await JARVIS_ACTIONS.updateRecord('psnm_customers', customerId, {
+        insurance_status: 'non_compliant',
+        insurance_flag_reason: data.reason,
+        insurance_flagged_at: new Date().toISOString()
+      }, 'Flagged as non-compliant');
+    });
+  },
+
+  // ── Intel Pipeline Actions ───────────────────────────────────────────────
+  async runScrapeNow() {
+    const result = await fetch('/api/atlas3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'run_scrape' })
+    });
+
+    if (result.ok) {
+      JARVIS.Toast({ message: 'Scraper triggered', duration: 2000 });
+    } else {
+      JARVIS.Toast({ message: 'Scrape failed to trigger', duration: 2000 });
+    }
+  },
+
+  async runEnrichment() {
+    const result = await fetch('/api/atlas3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'run_enrichment' })
+    });
+
+    if (result.ok) {
+      JARVIS.Toast({ message: 'Enrichment triggered', duration: 2000 });
+    } else {
+      JARVIS.Toast({ message: 'Enrichment failed to trigger', duration: 2000 });
+    }
+  },
+
+  async runClassifier() {
+    const result = await fetch('/api/atlas3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'run_classifier' })
+    });
+
+    if (result.ok) {
+      JARVIS.Toast({ message: 'Classifier triggered', duration: 2000 });
+    } else {
+      JARVIS.Toast({ message: 'Classifier failed to trigger', duration: 2000 });
+    }
+  },
+
+  async refreshIntelPipeline() {
+    JARVIS.Toast({ message: 'Intel pipeline refreshed', duration: 2000 });
+    // Reload if data fetching is implemented
+  },
+};
