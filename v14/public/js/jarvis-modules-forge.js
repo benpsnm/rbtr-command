@@ -927,7 +927,39 @@ const FORGE_MODULES = {
   },
 
   newContentPiece() {
-    JARVIS.Toast({ message: 'Content creation form coming soon', duration: 2000 });
+    JARVIS_ACTIONS.showFormModal('+ New Content Piece', [
+      { name: 'title', label: 'Title', type: 'text', required: true },
+      {
+        name: 'type',
+        label: 'Type',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'blog_post', label: 'Blog Post (SEO)' },
+          { value: 'social_post', label: 'Social Media Post' },
+          { value: 'email', label: 'Email Campaign' },
+          { value: 'landing_page', label: 'Landing Page' }
+        ]
+      },
+      {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'idea', label: 'Idea' },
+          { value: 'draft', label: 'Draft' },
+          { value: 'published', label: 'Published' }
+        ]
+      },
+      { name: 'target_keywords', label: 'Target Keywords', type: 'text', required: false },
+      { name: 'notes', label: 'Notes / Content', type: 'textarea', rows: 8, required: false }
+    ], async () => {
+      JARVIS.Toast({ message: 'Content tracking (Phase 4: add forge_content table)', duration: 3000 });
+      // Phase 4 TODO: Create forge_content table in migration, wire to Supabase
+      // For now, this demonstrates the wiring pattern
+      return true;
+    });
   },
 
   async renderDirectBooking() {
