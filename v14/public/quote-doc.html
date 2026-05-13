@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Storage Quote — Pallet Storage Near Me</title>
+<style>
+  :root{--fg:#111;--muted:#555;--border:#ddd;--accent:#1a1a1a;--green:#16a34a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px;color:var(--fg);background:#fff}
+  body{padding:40px 24px 80px}
+  .doc{max-width:720px;margin:0 auto}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid var(--fg)}
+  .logo-block .logo{font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .logo-block h1{font-size:22px;font-weight:800}
+  .quote-meta{text-align:right;font-size:13px;color:var(--muted);line-height:1.7}
+  .quote-meta strong{display:block;font-size:18px;color:var(--fg);font-weight:800}
+  .from-to{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+  .party-block h3{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .party-block p{font-size:14px;line-height:1.6}
+  table{width:100%;border-collapse:collapse;margin:20px 0}
+  th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600}
+  td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+  td.num{text-align:right;font-family:ui-monospace,"Cascadia Code",monospace}
+  .subtotal td{font-weight:700;border-top:2px solid var(--fg);border-bottom:none}
+  .total-row td{font-size:16px;font-weight:800;border-top:2px solid var(--fg);border-bottom:none;padding:14px 12px}
+  .tier-badge{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;background:var(--fg);color:#fff;padding:2px 8px;border-radius:4px;margin-left:8px}
+  .section{margin:28px 0}
+  .section-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+  .validity{background:#fffbeb;border:1px solid #f5a623;border-radius:6px;padding:12px 16px;font-size:13px;color:#78350f;margin:20px 0}
+  .tc-summary{background:#f5f5f5;border-radius:6px;padding:16px 20px;font-size:13px;color:var(--muted);line-height:1.7}
+  .tc-summary li{margin-bottom:4px}
+  .sig-block{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;padding-top:24px;border-top:1px solid var(--border)}
+  .sig-line{border-bottom:1px solid var(--fg);height:40px;margin-bottom:4px}
+  .sig-label{font-size:11px;color:var(--muted)}
+  .accept-btn{display:inline-block;margin:24px 0;padding:14px 28px;background:var(--fg);color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:15px}
+  .print-hide{display:block}
+  @media print{
+    body{padding:0;font-size:12pt}
+    .print-hide{display:none}
+    .doc{max-width:100%}
+  }
+  .error{color:#dc2626;padding:40px;text-align:center}
+  .loading{color:var(--muted);padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<div class="doc" id="doc">
+  <div class="loading">Loading quote…</div>
+</div>
+
+<script>
+async function loadQuote() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  if (!id) { renderError('No quote ID in URL.'); return; }
+
+  try {
+    const r = await fetch(`/api/onboarding/customers?action=quote_doc&quote_id=${id}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!r.ok) { renderError('Quote not found.'); return; }
+    const data = await r.json();
+    renderQuote(data.quote, data.customer);
+  } catch(e) {
+    renderError('Failed to load quote. Please contact us.');
+  }
+}
+
+function fmt(n) { return n != null ? '£' + Number(n).toFixed(2) : '—'; }
+
+function renderQuote(q, c) {
+  const psnmAddr = `Unit 3C, Hellaby Industrial Estate<br>Denaby Way, Rotherham<br>South Yorkshire S66 8HR<br>07506 255033<br>sales@palletstoragenearme.co.uk`;
+  const custAddr = [c?.business_name, c?.contact_name, c?.billing_address].filter(Boolean).join('<br>') || '—';
+
+  const tierLabel = q.rate_tier === 'bulk' ? 'Bulk (150+ pallets)' : q.rate_tier === 'mid' ? 'Mid (50–149 pallets)' : 'Small (1–49 pallets)';
+
+  document.getElementById('doc').innerHTML = `
+    <div class="print-hide" style="margin-bottom:20px">
+      <button onclick="window.print()" style="padding:8px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:13px">🖨 Print / Save as PDF</button>
+    </div>
+
+    <div class="header">
+      <div class="logo-block">
+        <div class="logo">Pallet Storage Near Me</div>
+        <h1>Storage Quote</h1>
+      </div>
+      <div class="quote-meta">
+        <strong>${q.quote_number}</strong>
+        Quote date: ${q.quote_date}<br>
+        Valid until: <strong>${q.valid_until}</strong>
+      </div>
+    </div>
+
+    <div class="from-to">
+      <div class="party-block">
+        <h3>From</h3>
+        <p><strong>Pallet Storage Near Me</strong><br>${psnmAddr}</p>
+      </div>
+      <div class="party-block">
+        <h3>Prepared for</h3>
+        <p>${custAddr}</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Storage service</div>
+      <table>
+        <thead><tr><th>Description</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Ambient pallet storage <span class="tier-badge">${tierLabel}</span><br>
+              <small style="color:#666">${q.pallet_count} pallets × ${fmt(q.storage_rate_pw)}/pallet/week × ${q.duration_weeks} weeks</small></td>
+            <td class="num">${fmt(q.storage_rate_pw)}/pw</td>
+            <td class="num">${fmt(q.storage_total)}</td>
+          </tr>
+          <tr>
+            <td>Goods-in handling<br><small style="color:#666">${q.pallet_count} pallet movements × ${fmt(q.receipt_rate)}</small></td>
+            <td class="num">${fmt(q.receipt_rate)}/mv</td>
+            <td class="num">${fmt(q.receipt_total)}</td>
+          </tr>
+          <tr>
+            <td>Goods-out handling<br><small style="color:#666">${q.pallet_count} pallet movements × ${fmt(q.despatch_rate)}</small></td>
+            <td class="num">${fmt(q.despatch_rate)}/mv</td>
+            <td class="num">${fmt(q.despatch_total)}</td>
+          </tr>
+          ${q.onboarding_fee > 0 ? `<tr><td>Onboarding administration fee (one-time)</td><td class="num">—</td><td class="num">${fmt(q.onboarding_fee)}</td></tr>` :
+            `<tr><td>Onboarding fee <span style="color:#16a34a">✓ Waived</span></td><td class="num">—</td><td class="num" style="color:#16a34a">£0.00</td></tr>`}
+        </tbody>
+        <tfoot>
+          <tr class="subtotal"><td colspan="2">Subtotal (ex-VAT)</td><td class="num">${fmt(q.subtotal)}</td></tr>
+          <tr><td colspan="2" style="color:#666;font-size:13px">VAT @ 20%</td><td class="num" style="color:#666;font-size:13px">${fmt(q.vat_amount)}</td></tr>
+          <tr class="total-row"><td colspan="2">Total (inc-VAT) for ${q.duration_weeks}-week period</td><td class="num">${fmt(q.total_inc_vat)}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:24px 0">
+      <div style="background:#f5f5f5;border-radius:6px;padding:14px 16px">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Weekly storage</div>
+        <div style="font-size:20px;font-weight:800">${fmt(q.weekly_storage_cost)}</div>
+      </div>
+      <div style="background:#f5f5f5;border-radius:6px;padding:14px 16px">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Monthly estimate</div>
+        <div style="font-size:20px;font-weight:800">${fmt(q.monthly_storage_cost)}</div>
+      </div>
+      <div style="background:#f5f5f5;border-radius:6px;padding:14px 16px">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Deposit required</div>
+        <div style="font-size:20px;font-weight:800">${fmt(q.deposit_required)}</div>
+      </div>
+    </div>
+
+    <div class="validity">
+      ⏰ <strong>This quote is valid until ${q.valid_until}.</strong> Rates are locked at the quote date. To proceed, sign and return the enclosed storage agreement before this date.
+    </div>
+
+    ${q.special_conditions ? `<div class="section"><div class="section-title">Special conditions</div><p style="font-size:14px;line-height:1.6">${q.special_conditions}</p></div>` : ''}
+
+    <div class="section">
+      <div class="section-title">Key terms summary</div>
+      <div class="tc-summary">
+        <ul style="padding-left:16px">
+          <li>Minimum storage: 5 pallets / 4-week minimum term</li>
+          <li>Rolling monthly contract after minimum term — 30 days' written notice to vacate</li>
+          <li>Customer is responsible for insuring their own goods (certificate required before first inbound)</li>
+          <li>Invoices issued monthly in advance. Payment due within 7 days of invoice date</li>
+          <li>Goods accepted: ambient dry goods only. No food, pharma, hazmat, or temperature-controlled goods</li>
+          <li>Full T&Cs at <a href="/terms.html" style="color:#555">palletstoragenearme.co.uk/terms</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="print-hide">
+      <div class="section">
+        <div class="section-title">To accept this quote</div>
+        <p style="font-size:14px;color:#555;margin-bottom:16px">Sign and return the storage agreement (sent separately), then email your insurance certificate to <strong>sales@palletstoragenearme.co.uk</strong>. We'll confirm your start date within 2 hours.</p>
+        <a href="tel:+447506255033" class="accept-btn">📞 Call Ben to confirm</a>
+      </div>
+    </div>
+
+    <div class="sig-block print-hide" style="display:none"></div>
+    <div class="sig-block" style="margin-top:48px;padding-top:24px;border-top:1px solid #ddd">
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Pallet Storage Near Me — Ben Greenwood</div>
+      </div>
+      <div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Customer signature + date</div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#999;margin-top:32px">Pallet Storage Near Me · Unit 3C Hellaby Industrial Estate · Rotherham S66 8HR · Reg. Sole trader · VAT registration pending · All prices ex-VAT unless stated</p>
+  `;
+}
+
+function renderError(msg) {
+  document.getElementById('doc').innerHTML = `<div class="error">${msg}</div>`;
+}
+
+loadQuote();
+</script>
+</body>
+</html>
