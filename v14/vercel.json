@@ -9,7 +9,8 @@
     { "path": "/api/cron-backup",                          "schedule": "0 3 * * *"  },
     { "path": "/api/atlas?action=intel_harvest_daily",              "schedule": "0 6 * * *"  },
     { "path": "/api/atlas?action=intel_harvest_insolvency_daily",  "schedule": "15 6 * * *" },
-    { "path": "/api/atlas?action=intel_harvest_defence_weekly",    "schedule": "30 6 * * 0" }
+    { "path": "/api/atlas?action=intel_harvest_defence_weekly",    "schedule": "30 6 * * 0" },
+    { "path": "/api/cron-atlas3",                                  "schedule": "*/15 * * * *" }
   ],
   "headers": [
     {

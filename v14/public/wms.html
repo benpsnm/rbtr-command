@@ -472,6 +472,7 @@ body.cbm .aJ .cell.occupied { background:#E69F00!important; filter:brightness(0.
       <button class="tab" onclick="showPane('suppliers',this)">🚛 Suppliers</button>
   <button class="tab" onclick="showPane('intelligence',this)">🧠 Intelligence</button>
   <button class="tab" onclick="showPane('strategy',this)">📋 Strategy</button>
+  <button class="tab" onclick="showPane('atlas3',this)">🚀 Atlas v3</button>
 </div>
 
 <!-- ═══ MAP ═══ -->
@@ -2093,6 +2094,7 @@ function showPane(id,btn){
   if(id==='customers')renderCustomers();
   if(id==='intelligence')loadIntelligence();
   if(id==='strategy')loadStrategy();
+  if(id==='atlas3')loadAtlasV3();
 }
 
 // ═══ MULTI-SELECT ═══
@@ -3988,7 +3990,61 @@ Pallet Storage Near Me
   </div>
 </div>
 
+<!-- ══════════ ATLAS v3 PANE ══════════ -->
+<div id="pane-atlas3" class="pane">
+  <!-- Header -->
+  <div class="flex" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="st">Atlas v3</div>
+      <div class="ss">Unified outreach · funnel · hot prospects · reply intent</div>
+    </div>
+    <div class="flex mla" style="gap:6px;flex-wrap:wrap;align-items:center">
+      <span id="av3-ts" style="font-family:var(--mono);font-size:9px;color:var(--muted)"></span>
+      <button class="btn sm bghost" onclick="loadAtlasV3()">↻ Refresh</button>
+      <button class="btn sm bg" onclick="av3RunCycle()">⚡ Run Cycle</button>
+    </div>
+  </div>
 
+  <!-- Funnel KPI strip -->
+  <div class="kpig" id="av3-funnel" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr))">
+    <div class="kpi"><div class="kn" style="color:var(--muted)">…</div><div class="kl">Loading</div></div>
+  </div>
+
+  <!-- Hot Prospects -->
+  <div class="card">
+    <div class="ct">
+      🔥 Hot Prospects
+      <span id="av3-hot-count" class="bdg bgr" style="display:none"></span>
+    </div>
+    <div id="av3-hot-list"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+
+  <!-- Drafts Pending Approval -->
+  <div class="card">
+    <div class="ct">
+      📝 Drafts Pending Approval
+      <span id="av3-drafts-count" class="bdg bg2" style="display:none"></span>
+      <div class="flex mla" style="gap:6px;flex-wrap:wrap">
+        <button class="btn sm bghost" onclick="av3Backfill('legacy')" title="Ingest from psnm_outreach_targets">↻ Backfill Legacy</button>
+        <button class="btn sm bghost" onclick="av3Backfill('ww')" title="Ingest from psnm_ww_leads">↻ Backfill WW</button>
+        <button class="btn sm bgreen" onclick="av3RunDispatch()">▶ Dispatch Approved</button>
+      </div>
+    </div>
+    <div id="av3-drafts-list"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+
+  <!-- Recent Replies -->
+  <div class="card">
+    <div class="ct">💬 Recent Replies</div>
+    <div id="av3-replies-list"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+
+  <!-- Orchestrator Run Log -->
+  <div class="card">
+    <div class="ct">🕐 Orchestrator Log</div>
+    <div id="av3-run-log"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+  </div>
+</div>
 
 <!-- BULK ASSIGN PANEL -->
 <div class="bulk-panel" id="bulkPanel">
@@ -5258,6 +5314,213 @@ async function declineWWLead(id, reason) {
   const d = await r.json();
   if (d.ok) { toast('Declined — marked as lost'); closeWWPanel(); loadWWLeads(); }
   else toast('Error: ' + d.error, true);
+}
+
+// ═══ ATLAS v3 FRONTEND ════════════════════════════════════════════════════════
+
+const AV3 = '/api/atlas3';
+
+const STAGE_ORDER = ['raw','enriched','classified','drafted','dispatched','replied','hot','customer','dead'];
+const STAGE_LABELS = {raw:'Raw',enriched:'Enriched',classified:'Classified',drafted:'Drafted',dispatched:'Dispatched',replied:'Replied',hot:'Hot 🔥',customer:'Customer ✅',dead:'Dead ☠'};
+const STAGE_COLORS = {raw:'var(--muted)',enriched:'var(--blue)',classified:'var(--gold)',drafted:'var(--gold)',dispatched:'var(--green)',replied:'var(--green)',hot:'#f59e0b',customer:'var(--green)',dead:'var(--red)'};
+const INTENT_BADGE = {interested:'bgr',asking_question:'bbl',not_now:'bgy',unsubscribe:'brd',complaint:'brd',wrong_contact:'bgy',auto_reply:'bgy',unknown:'bgy'};
+
+async function loadAtlasV3() {
+  document.getElementById('av3-ts').textContent = '';
+  try {
+    const [funnel, hot, drafts, replies, runLog] = await Promise.all([
+      fetch(`${AV3}?action=get_funnel`).then(r=>r.json()).catch(()=>null),
+      fetch(`${AV3}?action=get_hot&limit=8`).then(r=>r.json()).catch(()=>null),
+      fetch(`${AV3}?action=get_drafts&status=pending_approval&limit=15`).then(r=>r.json()).catch(()=>null),
+      fetch(`${AV3}?action=get_replies&limit=10`).then(r=>r.json()).catch(()=>null),
+      fetch(`${AV3}?action=get_run_log&limit=6`).then(r=>r.json()).catch(()=>null),
+    ]);
+    av3RenderFunnel(funnel);
+    av3RenderHot(hot);
+    av3RenderDrafts(drafts);
+    av3RenderReplies(replies);
+    av3RenderRunLog(runLog);
+    document.getElementById('av3-ts').textContent = new Date().toLocaleTimeString('en-GB');
+  } catch(e) {
+    toast('Atlas v3 load error: ' + e.message, true);
+  }
+}
+
+function av3RenderFunnel(data) {
+  const el = document.getElementById('av3-funnel');
+  if (!data || !data.stages) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No funnel data</span>'; return; }
+  const stageMap = {};
+  (data.stages || []).forEach(s => stageMap[s.stage] = s.count);
+  el.innerHTML = STAGE_ORDER.map(s => {
+    const n = stageMap[s] || 0;
+    return `<div class="kpi" title="${STAGE_LABELS[s]}"><div class="kn" style="color:${STAGE_COLORS[s]};font-size:20px">${n}</div><div class="kl">${STAGE_LABELS[s]}</div></div>`;
+  }).join('') +
+  (data.approved_drafts_ready > 0
+    ? `<div class="kpi" style="border-color:rgba(245,166,35,0.4)"><div class="kn" style="color:var(--gold);font-size:20px">${data.approved_drafts_ready}</div><div class="kl">Approved</div></div>`
+    : '');
+}
+
+function av3RenderHot(data) {
+  const el = document.getElementById('av3-hot-list');
+  const cnt = document.getElementById('av3-hot-count');
+  const rows = Array.isArray(data) ? data : (data?.prospects || []);
+  if (!rows.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No hot prospects right now</span>'; cnt.style.display='none'; return; }
+  cnt.textContent = rows.length; cnt.style.display='';
+  el.innerHTML = `<div style="overflow-x:auto"><table class="dt"><thead><tr>
+    <th>Company</th><th>City</th><th>Fit</th><th>Intent</th><th>Opens</th><th>Hot Since</th><th>Action</th>
+  </tr></thead><tbody>${rows.map(p => {
+    const intent = p.last_reply_intent || '—';
+    const bc = INTENT_BADGE[intent] || 'bgy';
+    const since = p.hot_since ? new Date(p.hot_since).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '—';
+    return `<tr>
+      <td><strong>${esc(p.company)}</strong>${p.decision_maker_name?'<br><span style="color:var(--muted);font-size:10px">'+esc(p.decision_maker_name)+'</span>':''}</td>
+      <td style="color:var(--muted);font-size:11px">${esc(p.city||'')}</td>
+      <td><span class="bdg bg2">${p.fit_score||'?'}</span></td>
+      <td><span class="bdg ${bc}">${intent}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${p.touch_count||0}</td>
+      <td style="font-family:var(--mono);font-size:11px">${since}</td>
+      <td><button class="btn sm bghost" style="font-size:10px" onclick="av3ViewDraft('${p.id}')">Drafts</button></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+function av3RenderDrafts(data) {
+  const el = document.getElementById('av3-drafts-list');
+  const cnt = document.getElementById('av3-drafts-count');
+  const drafts = data?.drafts || [];
+  if (!drafts.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No drafts pending approval</span>'; cnt.style.display='none'; return; }
+  cnt.textContent = drafts.length; cnt.style.display='';
+  el.innerHTML = drafts.map(d => {
+    const company = d.prospect?.company || d.prospect_id?.slice(0,8) || '?';
+    const conf = d.confidence_score ? `<span class="bdg bgy" style="margin-left:4px">${d.confidence_score}% conf</span>` : '';
+    const bodyPreview = (d.body||'').split('\n').slice(0,4).join('\n');
+    return `<div class="card" style="margin-bottom:8px;padding:10px">
+      <div class="flex" style="gap:8px;align-items:flex-start;margin-bottom:6px">
+        <div style="flex:1">
+          <strong style="font-size:13px">${esc(company)}</strong>
+          ${d.prospect?.city ? `<span style="color:var(--muted);font-size:11px;margin-left:6px">${esc(d.prospect.city)}</span>` : ''}
+          <span class="bdg bgy" style="margin-left:4px">Touch ${d.touch_number||1}</span>
+          ${conf}
+          ${d.claim_verdict==='pass'?'<span class="bdg bgr" style="margin-left:4px">✓ Claims</span>':''}
+        </div>
+        <div class="flex" style="gap:4px">
+          <button class="btn sm bgreen" style="font-size:10px" onclick="av3ApproveDraft('${d.id}')">✓ Approve</button>
+          <button class="btn sm bred" style="font-size:10px" onclick="av3RejectDraft('${d.id}')">✗ Reject</button>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--gold);margin-bottom:4px">${esc(d.subject||'')}</div>
+      <div style="font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:80px;overflow:hidden">${esc(bodyPreview)}</div>
+    </div>`;
+  }).join('');
+}
+
+function av3RenderReplies(data) {
+  const el = document.getElementById('av3-replies-list');
+  const replies = data?.replies || [];
+  if (!replies.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No recent replies</span>'; return; }
+  el.innerHTML = `<div style="overflow-x:auto"><table class="dt"><thead><tr>
+    <th>From</th><th>Intent</th><th>Confidence</th><th>Next Action</th><th>Received</th>
+  </tr></thead><tbody>${replies.map(r => {
+    const intent = r.intent || 'unclassified';
+    const bc = INTENT_BADGE[intent] || 'bg2';
+    const recvd = r.received_at ? new Date(r.received_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    return `<tr>
+      <td><strong style="font-size:12px">${esc(r.from_name||r.from_email||'?')}</strong>${r.subject?'<br><span style="color:var(--muted);font-size:10px">'+esc(r.subject.slice(0,50))+'</span>':''}</td>
+      <td><span class="bdg ${bc}">${intent}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${r.intent_confidence!=null?r.intent_confidence+'%':'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${r.next_action||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--muted)">${recvd}</td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+function av3RenderRunLog(data) {
+  const el = document.getElementById('av3-run-log');
+  const runs = data?.run_log || [];
+  if (!runs.length) { el.innerHTML = '<span style="color:var(--muted);font-size:12px">No orchestrator runs yet</span>'; return; }
+  el.innerHTML = `<div style="overflow-x:auto"><table class="dt"><thead><tr>
+    <th>Started</th><th>Stages</th><th>Moved</th><th>Sent</th><th>Summary</th>
+  </tr></thead><tbody>${runs.map(r => {
+    const started = r.started_at ? new Date(r.started_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const stages = Array.isArray(r.stages_run) ? r.stages_run.join(', ') : (r.stages_run||'—');
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:10px">${started}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(stages)}</td>
+      <td style="font-family:var(--mono);font-size:11px">${r.prospects_moved||0}</td>
+      <td style="font-family:var(--mono);font-size:11px">${r.emails_sent||0}</td>
+      <td style="font-size:10px;color:var(--muted);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.summary||'')}">${esc((r.summary||'').slice(0,80))}</td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function av3RunCycle() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const r = await fetch('/api/cron-atlas3', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer ' + (window._cronSecret || '') },
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Cycle complete: ' + (d.summary||'done')); loadAtlasV3(); }
+    else toast('Cycle error: ' + (d.error||'unknown'), true);
+  } catch(e) { toast('Error: ' + e.message, true); }
+  finally { btn.disabled = false; btn.textContent = '⚡ Run Cycle'; }
+}
+
+async function av3ApproveDraft(draftId) {
+  const r = await fetch(`${AV3}?action=approve_draft`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ draft_id: draftId }),
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Draft approved ✓'); loadAtlasV3(); }
+  else toast('Error: ' + d.error, true);
+}
+
+async function av3RejectDraft(draftId) {
+  const reason = prompt('Rejection reason (optional):') || 'Rejected by user';
+  const r = await fetch(`${AV3}?action=reject_draft`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ draft_id: draftId, reason }),
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Draft rejected'); loadAtlasV3(); }
+  else toast('Error: ' + d.error, true);
+}
+
+async function av3RunDispatch() {
+  const r = await fetch(`${AV3}?action=run_dispatch`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ limit: 10 }),
+  });
+  const d = await r.json();
+  if (d.ok) { toast(`Dispatched ${d.sent||0} emails`); loadAtlasV3(); }
+  else toast('Dispatch error: ' + d.error, true);
+}
+
+async function av3Backfill(type) {
+  const action = type === 'legacy' ? 'backfill_legacy' : 'backfill_ww';
+  const label = type === 'legacy' ? 'legacy targets' : 'WW leads';
+  const r = await fetch(`${AV3}?action=${action}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ limit: 50 }),
+  });
+  const d = await r.json();
+  if (d.ok) { toast(`Backfill ${label}: ${d.ingested||d.processed||0} ingested`); loadAtlasV3(); }
+  else toast('Backfill error: ' + d.error, true);
+}
+
+async function av3ViewDraft(prospectId) {
+  // Show drafts for this prospect in a quick alert for now
+  const r = await fetch(`${AV3}?action=get_drafts&status=pending_approval&limit=5`);
+  const d = await r.json();
+  const match = (d.drafts||[]).filter(dr => dr.prospect_id === prospectId);
+  if (!match.length) { toast('No pending drafts for this prospect'); return; }
+  // Switch to drafts view — scroll to it
+  document.getElementById('av3-drafts-list').scrollIntoView({behavior:'smooth'});
 }
 </script>
 </body>
