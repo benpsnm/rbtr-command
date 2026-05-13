@@ -1444,8 +1444,282 @@
     }
 
     // ── QUICK ACTIONS ────────────────────────────────────────────────────────
-    function quickAction(type) {
-      JARVIS.Toast({ message: `Quick action: ${type} — coming soon`, duration: 2000 });
+    async function quickAction(type) {
+      switch (type) {
+        case 'task':
+          await showTaskModal();
+          break;
+        case 'quote':
+          await showQuoteModal();
+          break;
+        case 'note':
+          await showNoteModal();
+          break;
+        case 'buildlog':
+          await showBuildLogModal();
+          break;
+        default:
+          JARVIS.Toast({ message: `Quick action: ${type} — not implemented`, duration: 2000 });
+      }
+    }
+
+    // ── TASK MODAL ───────────────────────────────────────────────────────────
+    async function showTaskModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Task',
+        content: `
+          <form id="taskForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Title</label>
+              <input type="text" id="taskTitle" class="jarvis-input" placeholder="Task description" required autofocus />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Priority</label>
+                <select id="taskPriority" class="jarvis-input">
+                  <option value="1">P1 - High</option>
+                  <option value="2" selected>P2 - Medium</option>
+                  <option value="3">P3 - Low</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Category</label>
+                <select id="taskCategory" class="jarvis-input">
+                  <option value="psnm">PSNM</option>
+                  <option value="forge">Forge</option>
+                  <option value="rbtr">RBTR</option>
+                  <option value="personal">Personal</option>
+                  <option value="general" selected>General</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Due Date</label>
+              <input type="date" id="taskDueDate" class="jarvis-input" value="${new Date().toISOString().split('T')[0]}" />
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Create Task',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const title = document.getElementById('taskTitle').value.trim();
+              if (!title) {
+                JARVIS.Toast({ message: 'Title is required', duration: 2000 });
+                return;
+              }
+
+              const taskData = {
+                title,
+                description: title, // Same as title for now
+                priority: parseInt(document.getElementById('taskPriority').value),
+                category: document.getElementById('taskCategory').value,
+                due_date: document.getElementById('taskDueDate').value,
+                status: 'open',
+                source: 'jarvis-cockpit'
+              };
+
+              const result = await API.createTask(taskData);
+              if (result) {
+                JARVIS.Toast({ message: `Task created: ${title}`, duration: 3000 });
+                closeModal();
+                // Refresh cockpit if visible
+                if (currentModule === 'cockpit') {
+                  loadCockpitData();
+                }
+              } else {
+                JARVIS.Toast({ message: 'Failed to create task', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── QUOTE MODAL ──────────────────────────────────────────────────────────
+    async function showQuoteModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Quote',
+        content: `
+          <form id="quoteForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Company Name</label>
+              <input type="text" id="quoteCompany" class="jarvis-input" placeholder="Customer company name" required autofocus />
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Contact Email</label>
+              <input type="email" id="quoteEmail" class="jarvis-input" placeholder="contact@company.com" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Pallet Count</label>
+                <input type="number" id="quotePallets" class="jarvis-input" placeholder="0" min="1" required />
+              </div>
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Monthly Rate (£)</label>
+                <input type="number" id="quoteRate" class="jarvis-input" placeholder="0.00" step="0.01" min="0" required />
+              </div>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Notes</label>
+              <textarea id="quoteNotes" class="jarvis-input" rows="3" placeholder="Additional notes..."></textarea>
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Create Quote',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const company = document.getElementById('quoteCompany').value.trim();
+              const email = document.getElementById('quoteEmail').value.trim();
+              const pallets = parseInt(document.getElementById('quotePallets').value);
+              const rate = parseFloat(document.getElementById('quoteRate').value);
+
+              if (!company || !email || !pallets || !rate) {
+                JARVIS.Toast({ message: 'All fields required', duration: 2000 });
+                return;
+              }
+
+              const quoteData = {
+                company_name: company,
+                contact_email: email,
+                pallet_count: pallets,
+                monthly_rate: rate,
+                notes: document.getElementById('quoteNotes').value.trim(),
+                status: 'draft',
+                created_by: 'ben'
+              };
+
+              const result = await API.createQuote(quoteData);
+              if (result) {
+                JARVIS.Toast({ message: `Quote created for ${company}`, duration: 3000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to create quote', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── NOTE MODAL ───────────────────────────────────────────────────────────
+    async function showNoteModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Note',
+        content: `
+          <form id="noteForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Category</label>
+              <select id="noteCategory" class="jarvis-input">
+                <option value="general" selected>General</option>
+                <option value="psnm">PSNM</option>
+                <option value="forge">Forge</option>
+                <option value="rbtr">RBTR</option>
+                <option value="personal">Personal</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Note</label>
+              <textarea id="noteContent" class="jarvis-input" rows="6" placeholder="Write your note here..." required autofocus></textarea>
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Save Note',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const content = document.getElementById('noteContent').value.trim();
+              if (!content) {
+                JARVIS.Toast({ message: 'Note content is required', duration: 2000 });
+                return;
+              }
+
+              const noteData = {
+                content,
+                category: document.getElementById('noteCategory').value,
+                created_by: 'ben'
+              };
+
+              const result = await API.createNote(noteData);
+              if (result) {
+                JARVIS.Toast({ message: 'Note saved', duration: 2000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to save note', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── BUILD LOG MODAL ──────────────────────────────────────────────────────
+    async function showBuildLogModal() {
+      const modal = JARVIS.Modal({
+        title: '+ Build Log Entry',
+        content: `
+          <form id="buildLogForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Build Log Entry</label>
+              <textarea id="buildLogContent" class="jarvis-input" rows="8" placeholder="What progress was made on the truck build today?" required autofocus></textarea>
+            </div>
+            <p class="text-tiny text-tertiary">Build logs are saved with category 'build_log' and automatically tagged for RBTR tracking.</p>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Save Log',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const content = document.getElementById('buildLogContent').value.trim();
+              if (!content) {
+                JARVIS.Toast({ message: 'Log content is required', duration: 2000 });
+                return;
+              }
+
+              const result = await API.createBuildLog(content);
+              if (result) {
+                JARVIS.Toast({ message: 'Build log saved', duration: 2000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to save build log', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
     }
 
     // ── LIVE UPDATES ─────────────────────────────────────────────────────────

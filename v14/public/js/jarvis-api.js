@@ -87,6 +87,112 @@ const API = {
     }
   },
 
+  // ── NOTES API ──────────────────────────────────────────────────────────────
+  async createNote(noteData) {
+    return this.supabaseInsert('notes', noteData);
+  },
+
+  // ── BUILD LOGS API ─────────────────────────────────────────────────────────
+  async createBuildLog(content) {
+    return this.supabaseInsert('notes', {
+      content,
+      category: 'build_log',
+      created_by: 'ben'
+    });
+  },
+
+  // ── QUOTES API ─────────────────────────────────────────────────────────────
+  async createQuote(quoteData) {
+    return this.supabaseInsert('psnm_quotes', quoteData);
+  },
+
+  async getQuotes(filters = {}) {
+    let qs = 'order=created_at.desc&select=*';
+    if (filters.status) qs = `status=eq.${filters.status}&${qs}`;
+    if (filters.limit) qs += `&limit=${filters.limit}`;
+    return this.supabaseQuery('psnm_quotes', qs);
+  },
+
+  // ── GENERIC SUPABASE HELPERS ───────────────────────────────────────────────
+  async supabaseQuery(table, queryString = '') {
+    try {
+      const SUPA_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+      const SUPA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQ5MTIxNzAsImV4cCI6MjAzMDQ4ODE3MH0.F_jZ3sE6vY9YPz7r5UNz9Zy5cX9GZxJ3m8NKqg2iSjM';
+
+      const response = await fetch(`${SUPA_URL}/rest/v1/${table}${queryString ? '?' + queryString : ''}`, {
+        headers: {
+          'apikey': SUPA_ANON_KEY,
+          'Authorization': `Bearer ${SUPA_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Supabase query failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.error(`Supabase query failed for ${table}:`, err);
+      return null;
+    }
+  },
+
+  async supabaseInsert(table, data) {
+    try {
+      const SUPA_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+      const SUPA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQ5MTIxNzAsImV4cCI6MjAzMDQ4ODE3MH0.F_jZ3sE6vY9YPz7r5UNz9Zy5cX9GZxJ3m8NKqg2iSjM';
+
+      const response = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPA_ANON_KEY,
+          'Authorization': `Bearer ${SUPA_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Supabase insert failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result[0] || result;
+    } catch (err) {
+      console.error(`Supabase insert failed for ${table}:`, err);
+      return null;
+    }
+  },
+
+  async supabaseUpdate(table, id, data) {
+    try {
+      const SUPA_URL = 'https://mpxgyobotiqcawmqlhbf.supabase.co';
+      const SUPA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1weGd5b2JvdGlxY2F3bXFsaGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTQ5MTIxNzAsImV4cCI6MjAzMDQ4ODE3MH0.F_jZ3sE6vY9YPz7r5UNz9Zy5cX9GZxJ3m8NKqg2iSjM';
+
+      const response = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPA_ANON_KEY,
+          'Authorization': `Bearer ${SUPA_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Supabase update failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.error(`Supabase update failed for ${table}:`, err);
+      return null;
+    }
+  },
+
   // ── SYSTEM STATUS ──────────────────────────────────────────────────────────
   async getSystemStatus() {
     try {
