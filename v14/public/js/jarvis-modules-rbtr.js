@@ -267,13 +267,16 @@ const RBTR_MODULES = {
   },
 
   // ── SPONSOR SYSTEM (FULL IMPLEMENTATION) ───────────────────────────────────
-  renderSponsorSystem() {
+  async renderSponsorSystem() {
     document.getElementById('mainStage').innerHTML = `
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Sponsor System</h1>
         <div class="jarvis-module-actions">
-          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="RBTR_MODULES.newSponsorEmail()">
-            ✉️ New Email
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="RBTR_MODULES.newSponsor()">
+            + New Sponsor
+          </button>
+          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="RBTR_MODULES.newSponsorEmail()">
+            ✉️ Bulk Email
           </button>
         </div>
       </div>
@@ -281,10 +284,10 @@ const RBTR_MODULES = {
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
         <div class="jarvis-card">
           <div class="jarvis-card__header">
-            <h3 class="font-display text-h2">Target</h3>
+            <h3 class="font-display text-h2">Signed</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">0/53</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="sponsors-signed-count">—</div>
             <p class="text-small text-tertiary">Confirmed sponsors</p>
           </div>
         </div>
@@ -294,8 +297,8 @@ const RBTR_MODULES = {
             <h3 class="font-display text-h2">In Progress</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
-            <p class="text-small text-tertiary">Outreach sent, awaiting reply</p>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="sponsors-in-progress-count">—</div>
+            <p class="text-small text-tertiary">Negotiating / replied</p>
           </div>
         </div>
 
@@ -304,80 +307,108 @@ const RBTR_MODULES = {
             <h3 class="font-display text-h2">Not Contacted</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">53</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="sponsors-target-count">—</div>
             <p class="text-small text-tertiary">Ready for outreach</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Total Value</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);" id="sponsors-total-value">—</div>
+            <p class="text-small text-tertiary">Estimated package value</p>
           </div>
         </div>
       </div>
 
       <div class="jarvis-card">
         <div class="jarvis-card__header">
-          <h3 class="font-display text-h2">53 Sponsor Targets</h3>
-          <div style="display: flex; gap: 12px; align-items: center; margin-top: 12px;">
-            <input type="text" class="jarvis-input" placeholder="Search sponsors..." style="width: 240px;" />
-            <select class="jarvis-input" style="width: 160px;">
-              <option value="">All categories</option>
-              <option value="outdoor">Outdoor Gear</option>
-              <option value="tech">Tech</option>
-              <option value="automotive">Automotive</option>
-              <option value="media">Media</option>
-            </select>
-          </div>
+          <h3 class="font-display text-h2">Sponsor Pipeline</h3>
         </div>
-        <div class="jarvis-card__body">
-          <p class="text-small text-tertiary">Sponsor target list + email templates coming soon — wire to sponsor_targets table</p>
-          <p class="text-tiny text-tertiary" style="margin-top: 8px;">
-            Categories: Outdoor gear (Arc'teryx, Patagonia, North Face), Tech (GoPro, DJI, Garmin), Automotive (BFGoodrich, Rhino-Rack), Media (Red Bull, National Geographic)
-          </p>
+        <div class="jarvis-card__body" id="sponsors-list">
+          Loading sponsors...
         </div>
       </div>
     `;
+
+    this.loadSponsors();
+  },
+
+  async loadSponsors() {
+    try {
+      const sponsors = await API.supabaseQuery('rbtr_sponsors', 'select=*&order=value_estimate_gbp.desc.nullslast');
+
+      if (!sponsors || sponsors.length === 0) {
+        document.getElementById('sponsors-signed-count').textContent = '0';
+        document.getElementById('sponsors-in-progress-count').textContent = '0';
+        document.getElementById('sponsors-target-count').textContent = '0';
+        document.getElementById('sponsors-total-value').textContent = '£0';
+        document.getElementById('sponsors-list').innerHTML = '<p class="text-small text-tertiary">No sponsors yet. Click "+ New Sponsor" to add one.</p>';
+        return;
+      }
+
+      // Stats
+      const signedCount = sponsors.filter(s => s.status === 'signed').length;
+      const inProgressCount = sponsors.filter(s => ['replied', 'negotiating', 'contacted'].includes(s.status)).length;
+      const targetCount = sponsors.filter(s => s.status === 'target').length;
+      const totalValue = sponsors.reduce((sum, s) => sum + (parseFloat(s.value_estimate_gbp) || 0), 0);
+
+      document.getElementById('sponsors-signed-count').textContent = signedCount;
+      document.getElementById('sponsors-in-progress-count').textContent = inProgressCount;
+      document.getElementById('sponsors-target-count').textContent = targetCount;
+      document.getElementById('sponsors-total-value').textContent = `£${totalValue.toFixed(0)}k`;
+
+      // Sponsor list
+      document.getElementById('sponsors-list').innerHTML = sponsors.map(s => {
+        const statusColor = s.status === 'signed' ? '#4CAF50' :
+                            s.status === 'negotiating' ? 'var(--copper)' :
+                            s.status === 'replied' ? '#2196F3' :
+                            s.status === 'contacted' ? '#FFA726' : '#999';
+
+        const typeIcon = s.sponsor_type === 'product' ? '📦' :
+                        s.sponsor_type === 'cash' ? '💰' : '🔧';
+
+        return `
+          <div class="jarvis-card" style="background: var(--surface-deep); margin-bottom: 12px; cursor: pointer;"
+               onclick="RBTR_MODULES.viewSponsorDetail('${s.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <h4 class="text-small" style="margin-bottom: 4px;">${typeIcon} ${s.company_name}</h4>
+                <p class="text-tiny text-tertiary">${s.sponsor_type.replace(/_/g, ' ')} • ${s.contact_name || 'No contact'}</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${s.value_estimate_gbp ? `<span class="font-mono text-tiny">£${parseFloat(s.value_estimate_gbp).toFixed(0)}k</span>` : ''}
+                <span class="jarvis-pill text-pill" style="background: ${statusColor}; color: #fff;">
+                  ${s.status.replace(/_/g, ' ')}
+                </span>
+              </div>
+            </div>
+            ${s.package_details ? `<p class="text-tiny text-tertiary">${s.package_details}</p>` : ''}
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('[RBTR] Load sponsors failed:', error);
+      document.getElementById('sponsors-signed-count').textContent = 'ERR';
+    }
   },
 
   newSponsorEmail() {
-    JARVIS.Toast({ message: 'Email template selector coming soon', duration: 2000 });
+    JARVIS.Toast({ message: 'Bulk email template (Phase 4 TODO)', duration: 2000 });
   },
 
   // ── BUILD TRACKER (FULL IMPLEMENTATION) ────────────────────────────────────
-  renderBuildTracker() {
-    // 10-stage build: Acquisition, Strip, Fabrication, Electrical, Plumbing, Interior, Exterior, Systems, Shakedown, Complete
-    const stages = [
-      { name: 'Acquisition', progress: 100 },
-      { name: 'Strip', progress: 0 },
-      { name: 'Fabrication', progress: 0 },
-      { name: 'Electrical', progress: 0 },
-      { name: 'Plumbing', progress: 0 },
-      { name: 'Interior', progress: 0 },
-      { name: 'Exterior', progress: 0 },
-      { name: 'Systems', progress: 0 },
-      { name: 'Shakedown', progress: 0 },
-      { name: 'Complete', progress: 0 }
-    ];
-
-    const overallProgress = stages.reduce((sum, s) => sum + s.progress, 0) / stages.length;
-
-    const stageCards = stages.map((stage, i) => {
-      const ring = JARVIS.ProgressRing({ percent: stage.progress, size: 72, label: `${stage.progress}%` });
-      return `
-        <div class="jarvis-card" style="background: var(--surface-deep);">
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <div>${ring.outerHTML}</div>
-            <div style="flex: 1;">
-              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 4px;">
-                ${i + 1}. ${stage.name}
-              </h4>
-              <p class="text-small text-tertiary">${stage.progress === 100 ? '✓ Complete' : stage.progress > 0 ? 'In progress' : 'Not started'}</p>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
+  async renderBuildTracker() {
     document.getElementById('mainStage').innerHTML = `
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Build Tracker</h1>
         <div class="jarvis-module-actions">
-          <span class="font-mono text-h2" style="color: var(--copper);">${Math.round(overallProgress)}%</span>
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="RBTR_MODULES.newBuildStage()">
+            + New Stage
+          </button>
+          <span class="font-mono text-h2" style="color: var(--copper);" id="build-overall-progress">—</span>
           <span class="text-small text-tertiary">complete</span>
         </div>
       </div>
@@ -389,13 +420,13 @@ const RBTR_MODULES = {
         <div class="jarvis-card__body">
           <p class="text-small text-secondary">60-week build plan | Start: May 2026 | Complete: Jun 2027</p>
           <div style="background: var(--surface-deep); height: 12px; border-radius: 6px; overflow: hidden; margin-top: 16px;">
-            <div style="background: var(--copper); height: 100%; width: ${overallProgress}%; transition: width 0.6s;"></div>
+            <div id="build-progress-bar" style="background: var(--copper); height: 100%; width: 0%; transition: width 0.6s;"></div>
           </div>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-        ${stageCards}
+      <div id="build-stages-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+        Loading build stages...
       </div>
 
       <div class="jarvis-card" style="margin-top: 32px;">
@@ -403,10 +434,76 @@ const RBTR_MODULES = {
           <h3 class="font-display text-h2">Build Bible Links</h3>
         </div>
         <div class="jarvis-card__body">
-          <p class="text-small text-tertiary">PDF links to detailed build specs coming soon — wire to build_bible table</p>
+          <p class="text-small text-tertiary">PDF links to detailed build specs (Phase 4 TODO: build_bible table)</p>
         </div>
       </div>
     `;
+
+    this.loadBuildStages();
+  },
+
+  async loadBuildStages() {
+    try {
+      const stages = await API.supabaseQuery('cc_build_progress', 'select=*&order=stage_number.asc');
+
+      // Default 10-stage structure if no data
+      const defaultStages = [
+        'Acquisition', 'Strip', 'Fabrication', 'Electrical', 'Plumbing',
+        'Interior', 'Exterior', 'Systems', 'Shakedown', 'Complete'
+      ];
+
+      let stagesData = stages && stages.length > 0 ? stages : defaultStages.map((name, i) => ({
+        id: null,
+        stage_name: name,
+        stage_number: i + 1,
+        status: 'not_started',
+        target_week: null,
+        actual_week: null
+      }));
+
+      // Calculate progress
+      const completedCount = stagesData.filter(s => s.status === 'complete').length;
+      const overallProgress = (completedCount / stagesData.length) * 100;
+
+      document.getElementById('build-overall-progress').textContent = `${Math.round(overallProgress)}%`;
+      document.getElementById('build-progress-bar').style.width = `${overallProgress}%`;
+
+      // Render stage cards
+      const stageCards = stagesData.map((stage, i) => {
+        const progress = stage.status === 'complete' ? 100 :
+                         stage.status === 'in_progress' ? 50 : 0;
+        const ring = JARVIS.ProgressRing({ percent: progress, size: 72, label: `${progress}%` });
+
+        const statusColor = stage.status === 'complete' ? '#4CAF50' :
+                            stage.status === 'in_progress' ? 'var(--copper)' :
+                            stage.status === 'blocked' ? '#f44336' : '#999';
+
+        return `
+          <div class="jarvis-card" style="background: var(--surface-deep); cursor: pointer;"
+               onclick="RBTR_MODULES.viewBuildStageDetail('${stage.id}', ${i + 1})">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div>${ring.outerHTML}</div>
+              <div style="flex: 1;">
+                <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 4px;">
+                  ${i + 1}. ${stage.stage_name}
+                </h4>
+                <p class="text-small" style="color: ${statusColor};">
+                  ${stage.status === 'complete' ? '✓ Complete' :
+                    stage.status === 'in_progress' ? 'In progress' :
+                    stage.status === 'blocked' ? '⚠️ Blocked' : 'Not started'}
+                </p>
+                ${stage.target_week ? `<p class="text-tiny text-tertiary">Target: Week ${stage.target_week}</p>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('build-stages-container').innerHTML = stageCards;
+    } catch (error) {
+      console.error('[RBTR] Load build stages failed:', error);
+      document.getElementById('build-stages-container').innerHTML = '<p class="text-small text-tertiary">Failed to load build stages.</p>';
+    }
   },
 
   // ── ROUTE MAP ──────────────────────────────────────────────────────────────
@@ -1872,6 +1969,337 @@ const RBTR_MODULES = {
         </div>
       </div>
     `;
+  },
+
+  // ── BUILD TRACKER ACTIONS ──────────────────────────────────────────────────
+
+  newBuildStage() {
+    JARVIS_ACTIONS.showFormModal('+ New Build Stage', [
+      { name: 'stage_name', label: 'Stage Name', type: 'text', required: true },
+      { name: 'stage_number', label: 'Stage Number', type: 'number', required: true },
+      { name: 'target_week', label: 'Target Week (1-60)', type: 'number', required: false },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, required: false }
+    ], async (data) => {
+      const stageData = {
+        ...data,
+        stage_number: parseInt(data.stage_number),
+        target_week: data.target_week ? parseInt(data.target_week) : null,
+        status: 'not_started'
+      };
+
+      const result = await JARVIS_ACTIONS.createRecord('cc_build_progress', stageData, 'Build stage created');
+      if (result) {
+        this.renderBuildTracker();
+      }
+    });
+  },
+
+  async viewBuildStageDetail(stageId, stageNumber) {
+    if (!stageId) {
+      JARVIS.Toast({ message: 'Stage not yet created in database', duration: 2000 });
+      return;
+    }
+
+    try {
+      const stage = await API.supabaseQuery('cc_build_progress', `id=eq.${stageId}&select=*`);
+      if (!stage || stage.length === 0) {
+        JARVIS.Toast({ message: 'Stage not found', duration: 2000 });
+        return;
+      }
+
+      const s = stage[0];
+      const statusColor = s.status === 'complete' ? '#4CAF50' :
+                          s.status === 'in_progress' ? 'var(--copper)' :
+                          s.status === 'blocked' ? '#f44336' : '#999';
+
+      JARVIS_ACTIONS.showDetailView(`Stage ${s.stage_number}: ${s.stage_name}`, [
+        {
+          id: 'overview',
+          label: 'Details',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Stage Number</p>
+                  <p class="text-small">${s.stage_number}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Status</p>
+                  <span class="jarvis-pill" style="background: ${statusColor}; color: #fff;">${s.status.replace(/_/g, ' ')}</span>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Target Week</p>
+                  <p class="text-small">${s.target_week ? `Week ${s.target_week}` : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Actual Week</p>
+                  <p class="text-small">${s.actual_week ? `Week ${s.actual_week}` : '—'}</p>
+                </div>
+              </div>
+
+              ${s.notes ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Notes</p>
+                  <p class="text-small">${s.notes}</p>
+                </div>
+              ` : ''}
+
+              ${s.completed_at ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Completed At</p>
+                  <p class="text-small">${new Date(s.completed_at).toLocaleDateString('en-GB')}</p>
+                </div>
+              ` : ''}
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                ${s.status === 'not_started' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markBuildStageStatus('${s.id}', 'in_progress')">
+                    ▶️ Start Stage
+                  </button>
+                ` : ''}
+                ${s.status === 'in_progress' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markBuildStageComplete('${s.id}')">
+                    ✓ Mark Complete
+                  </button>
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markBuildStageStatus('${s.id}', 'blocked')">
+                    ⚠️ Mark Blocked
+                  </button>
+                ` : ''}
+                ${s.status === 'blocked' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markBuildStageStatus('${s.id}', 'in_progress')">
+                    ↩️ Unblock
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `
+        }
+      ]);
+    } catch (error) {
+      console.error('[RBTR] View build stage failed:', error);
+      JARVIS.Toast({ message: 'Failed to load stage', duration: 2000 });
+    }
+  },
+
+  async markBuildStageStatus(stageId, newStatus) {
+    const result = await JARVIS_ACTIONS.updateRecord('cc_build_progress', stageId, { status: newStatus }, `Status: ${newStatus.replace(/_/g, ' ')}`);
+    if (result) {
+      this.viewBuildStageDetail(stageId);
+    }
+  },
+
+  async markBuildStageComplete(stageId) {
+    JARVIS_ACTIONS.showFormModal('Mark Stage Complete', [
+      { name: 'actual_week', label: 'Actual Week Completed', type: 'number', required: false }
+    ], async (data) => {
+      const updates = {
+        status: 'complete',
+        completed_at: new Date().toISOString(),
+        actual_week: data.actual_week ? parseInt(data.actual_week) : null
+      };
+
+      const result = await JARVIS_ACTIONS.updateRecord('cc_build_progress', stageId, updates, 'Stage marked complete');
+      if (result) {
+        this.viewBuildStageDetail(stageId);
+      }
+    });
+  },
+
+  // ── SPONSOR ACTIONS ────────────────────────────────────────────────────────
+
+  newSponsor() {
+    JARVIS_ACTIONS.showFormModal('+ New Sponsor', [
+      { name: 'company_name', label: 'Company Name', type: 'text', required: true },
+      { name: 'contact_name', label: 'Contact Name', type: 'text', required: false },
+      { name: 'contact_email', label: 'Contact Email', type: 'email', required: false },
+      {
+        name: 'sponsor_type',
+        label: 'Sponsor Type',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'product', label: 'Product Sponsorship' },
+          { value: 'cash', label: 'Cash Sponsorship' },
+          { value: 'service', label: 'Service Sponsorship' }
+        ]
+      },
+      { name: 'value_estimate_gbp', label: 'Estimated Value (£k)', type: 'number', required: false },
+      { name: 'package_details', label: 'Package Details', type: 'textarea', rows: 3, required: false }
+    ], async (data) => {
+      const sponsorData = {
+        ...data,
+        value_estimate_gbp: data.value_estimate_gbp ? parseFloat(data.value_estimate_gbp) : null,
+        status: 'target'
+      };
+
+      const result = await JARVIS_ACTIONS.createRecord('rbtr_sponsors', sponsorData, 'Sponsor added');
+      if (result) {
+        this.renderSponsorSystem();
+      }
+    });
+  },
+
+  async viewSponsorDetail(sponsorId) {
+    try {
+      const sponsor = await API.supabaseQuery('rbtr_sponsors', `id=eq.${sponsorId}&select=*`);
+      if (!sponsor || sponsor.length === 0) {
+        JARVIS.Toast({ message: 'Sponsor not found', duration: 2000 });
+        return;
+      }
+
+      const s = sponsor[0];
+      const statusColor = s.status === 'signed' ? '#4CAF50' :
+                          s.status === 'negotiating' ? 'var(--copper)' :
+                          s.status === 'replied' ? '#2196F3' :
+                          s.status === 'contacted' ? '#FFA726' : '#999';
+
+      JARVIS_ACTIONS.showDetailView(`${s.company_name}`, [
+        {
+          id: 'overview',
+          label: 'Details',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Status</p>
+                  <span class="jarvis-pill" style="background: ${statusColor}; color: #fff;">${s.status.replace(/_/g, ' ')}</span>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Sponsor Type</p>
+                  <p class="text-small">${s.sponsor_type.replace(/_/g, ' ')}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Estimated Value</p>
+                  <p class="font-mono text-small">${s.value_estimate_gbp ? `£${parseFloat(s.value_estimate_gbp).toFixed(0)}k` : '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Contact Name</p>
+                  <p class="text-small">${s.contact_name || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Contact Email</p>
+                  <p class="text-small">${s.contact_email || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Contact Phone</p>
+                  <p class="text-small">${s.contact_phone || '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Pitch Sent</p>
+                  <p class="text-small">${s.pitch_sent_date ? new Date(s.pitch_sent_date).toLocaleDateString('en-GB') : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Reply Date</p>
+                  <p class="text-small">${s.reply_date ? new Date(s.reply_date).toLocaleDateString('en-GB') : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Signed Date</p>
+                  <p class="text-small">${s.signed_date ? new Date(s.signed_date).toLocaleDateString('en-GB') : '—'}</p>
+                </div>
+              </div>
+
+              ${s.package_details ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Package Details</p>
+                  <p class="text-small">${s.package_details}</p>
+                </div>
+              ` : ''}
+
+              ${s.notes ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Notes</p>
+                  <p class="text-small">${s.notes}</p>
+                </div>
+              ` : ''}
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                ${s.status === 'target' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markSponsorStatus('${s.id}', 'contacted')">
+                    📧 Mark Contacted
+                  </button>
+                ` : ''}
+                ${s.status === 'contacted' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markSponsorStatus('${s.id}', 'replied')">
+                    💬 Mark Replied
+                  </button>
+                ` : ''}
+                ${['replied', 'contacted'].includes(s.status) ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markSponsorStatus('${s.id}', 'negotiating')">
+                    🤝 Mark Negotiating
+                  </button>
+                ` : ''}
+                ${s.status === 'negotiating' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="RBTR_MODULES.markSponsorSigned('${s.id}')">
+                    ✓ Mark Signed
+                  </button>
+                ` : ''}
+                <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm"
+                        onclick="RBTR_MODULES.deleteSponsor('${s.id}')">
+                  Decline
+                </button>
+              </div>
+            </div>
+          `
+        }
+      ]);
+    } catch (error) {
+      console.error('[RBTR] View sponsor failed:', error);
+      JARVIS.Toast({ message: 'Failed to load sponsor', duration: 2000 });
+    }
+  },
+
+  async markSponsorStatus(sponsorId, newStatus) {
+    const updates = { status: newStatus };
+    if (newStatus === 'contacted' && !updates.pitch_sent_date) {
+      updates.pitch_sent_date = new Date().toISOString().split('T')[0];
+    }
+    if (newStatus === 'replied' && !updates.reply_date) {
+      updates.reply_date = new Date().toISOString().split('T')[0];
+    }
+
+    const result = await JARVIS_ACTIONS.updateRecord('rbtr_sponsors', sponsorId, updates, `Status: ${newStatus.replace(/_/g, ' ')}`);
+    if (result) {
+      this.viewSponsorDetail(sponsorId);
+    }
+  },
+
+  async markSponsorSigned(sponsorId) {
+    const updates = {
+      status: 'signed',
+      signed_date: new Date().toISOString().split('T')[0]
+    };
+
+    const result = await JARVIS_ACTIONS.updateRecord('rbtr_sponsors', sponsorId, updates, 'Sponsor signed!');
+    if (result) {
+      this.viewSponsorDetail(sponsorId);
+    }
+  },
+
+  async deleteSponsor(sponsorId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Mark as Declined',
+      'Are you sure? This will set the status to declined.',
+      async () => {
+        const result = await JARVIS_ACTIONS.updateRecord('rbtr_sponsors', sponsorId, { status: 'declined' }, 'Marked as declined');
+        if (result) {
+          history.back();
+        }
+      }
+    );
   },
 
   _stubModule(title, description) {
