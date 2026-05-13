@@ -703,18 +703,30 @@
 
   <!-- SCRIPTS -->
   <script src="/js/jarvis-components.js"></script>
+  <script src="/js/jarvis-api.js"></script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
     let cockpitData = null;
 
     // ── INIT ─────────────────────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       initDateTime();
       initCommandPalette();
-      loadCockpitData();
+      await checkAuthAndLoad();
       startLiveUpdates();
     });
+
+    // ── AUTH CHECK ───────────────────────────────────────────────────────────
+    async function checkAuthAndLoad() {
+      const isAuthed = await API.checkAuth();
+      if (!isAuthed) {
+        // Redirect to login if not authenticated
+        // For now, continue with loading (will show empty data if Supabase calls fail)
+        console.warn('Not authenticated — some data may not load');
+      }
+      await loadCockpitData();
+    }
 
     // ── DATE/TIME ────────────────────────────────────────────────────────────
     function initDateTime() {
@@ -771,70 +783,137 @@
     // ── LOAD COCKPIT DATA ────────────────────────────────────────────────────
     async function loadCockpitData() {
       try {
-        // TODO: Wire to real Supabase endpoints
-        // For now, show placeholder structure
+        // Fetch all cockpit data from Supabase
+        const data = await API.getCockpitData();
+        cockpitData = data;
 
+        // ── ROW 1: NARRATIVE ─────────────────────────────────────────────────
         // Yesterday Banked
-        document.getElementById('yesterdayBanked').innerHTML = `
-          <p class="text-small">No events logged for yesterday</p>
-          <p class="text-tiny text-tertiary">Use /api/tasks or rbtr_daily_log to log wins</p>
-        `;
+        if (data.dailyLog && data.dailyLog.length > 0) {
+          const events = data.dailyLog.map(e => `
+            <div style="margin-bottom: 8px;">
+              <span class="jarvis-pill jarvis-pill--${e.event_type === 'win' ? 'live' : 'default'} font-mono text-pill">${e.event_type}</span>
+              <p class="text-small" style="margin-top: 4px;">${e.description}</p>
+            </div>
+          `).join('');
+          document.getElementById('yesterdayBanked').innerHTML = events;
+        } else {
+          document.getElementById('yesterdayBanked').innerHTML = `
+            <p class="text-small text-tertiary">No events logged for yesterday</p>
+            <p class="text-tiny text-tertiary">Use rbtr_daily_log to track wins</p>
+          `;
+        }
 
         // Today's Plan
-        document.getElementById('todaysPlan').innerHTML = `
-          <p class="text-small">Loading tasks for today...</p>
-        `;
+        if (data.todayTasks && data.todayTasks.length > 0) {
+          const tasks = data.todayTasks.slice(0, 5).map(t => `
+            <div class="jarvis-task-item">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-small">${t.description}</span>
+                <span class="jarvis-pill jarvis-pill--${t.status === 'in_progress' ? 'live' : 'default'} font-mono text-pill">${t.status}</span>
+              </div>
+            </div>
+          `).join('');
+          document.getElementById('todaysPlan').innerHTML = tasks;
+        } else {
+          document.getElementById('todaysPlan').innerHTML = `
+            <p class="text-small text-tertiary">No tasks due today</p>
+          `;
+        }
 
         // Week Goals
-        document.getElementById('weekGoals').innerHTML = `
-          <p class="text-small">No week goals set</p>
-        `;
+        if (data.weekGoals && data.weekGoals.length > 0) {
+          const goals = data.weekGoals.map(g => {
+            const ring = JARVIS.ProgressRing({ percent: g.progress_pct || 0, size: 48, label: `${g.progress_pct || 0}%` });
+            const goalEl = document.createElement('div');
+            goalEl.style.cssText = 'display: flex; gap: 12px; align-items: center; margin-bottom: 12px;';
+            goalEl.innerHTML = `
+              <div>${ring.outerHTML}</div>
+              <div style="flex: 1;">
+                <p class="text-small font-weight-500">${g.goal}</p>
+                <p class="text-tiny text-tertiary">${g.status}</p>
+              </div>
+            `;
+            return goalEl.outerHTML;
+          }).join('');
+          document.getElementById('weekGoals').innerHTML = goals;
+        } else {
+          document.getElementById('weekGoals').innerHTML = `
+            <p class="text-small text-tertiary">No week goals set</p>
+            <p class="text-tiny text-tertiary">Add goals to rbtr_week_goals</p>
+          `;
+        }
 
-        // Money Flow
+        // ── ROW 2: MONEY FLOW ────────────────────────────────────────────────
+        // Cash Position (placeholder — wire to real cash tracking later)
         document.getElementById('cashPosition').textContent = '—';
+
+        // Week Banked (placeholder — wire to revenue aggregation later)
         document.getElementById('weekBanked').textContent = '—';
+        document.getElementById('weekSparkline').innerHTML = '';
+
+        // Outstanding Invoices (placeholder)
         document.getElementById('outstandingInvoices').textContent = '—';
+        document.getElementById('invoiceCount').textContent = '—';
+
+        // Upcoming Costs (placeholder)
         document.getElementById('upcomingCosts').textContent = '—';
 
-        // Operations
-        document.getElementById('psnmOps').innerHTML = `
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Active customers</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Today's bookings</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Hot prospects</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-        `;
+        // ── ROW 3: OPERATIONS ────────────────────────────────────────────────
+        // PSNM
+        if (data.psnm) {
+          document.getElementById('psnmOps').innerHTML = `
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Active customers</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.live || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Quotes sent</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.quotes || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Hot prospects</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.leads || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Total pipeline</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.total || 0}</span>
+            </div>
+          `;
+        }
 
-        document.getElementById('forgeOps').innerHTML = `
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">This week bookings</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Occupancy</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-          <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Booking Proof MRR</span>
-            <span class="cockpit-ops-stat-value">—</span>
-          </div>
-        `;
+        // Forge / STR
+        if (data.str) {
+          const occupancy = data.str.totalBookings > 0 ? Math.round((data.str.thisWeekBookings / 7) * 100) : 0;
+          document.getElementById('forgeOps').innerHTML = `
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">This week bookings</span>
+              <span class="cockpit-ops-stat-value">${data.str.thisWeekBookings || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Occupancy</span>
+              <span class="cockpit-ops-stat-value">${occupancy}%</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Revenue (all time)</span>
+              <span class="cockpit-ops-stat-value">£${Math.round(data.str.revenue || 0)}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Booking Proof MRR</span>
+              <span class="cockpit-ops-stat-value">—</span>
+            </div>
+          `;
+        }
 
+        // RBTR (placeholder — wire to build progress / sponsor tracking later)
         document.getElementById('rbtrOps').innerHTML = `
           <div class="cockpit-ops-stat">
             <span class="cockpit-ops-stat-label">Truck build %</span>
             <span class="cockpit-ops-stat-value">—</span>
           </div>
           <div class="cockpit-ops-stat">
-            <span class="cockpit-ops-stat-label">Sponsors target</span>
-            <span class="cockpit-ops-stat-value">—</span>
+            <span class="cockpit-ops-stat-label">Sponsors (confirmed/target)</span>
+            <span class="cockpit-ops-stat-value">—/53</span>
           </div>
           <div class="cockpit-ops-stat">
             <span class="cockpit-ops-stat-label">Content this week</span>
@@ -842,10 +921,66 @@
           </div>
         `;
 
-        // Personal
-        document.getElementById('habits').innerHTML = `<p class="text-small">Habit trackers loading...</p>`;
-        document.getElementById('wellness').innerHTML = `<p class="text-small">Wellness data loading...</p>`;
-        document.getElementById('family').innerHTML = `<p class="text-small">Family calendar loading...</p>`;
+        // ── ROW 4: PERSONAL + SARAH ──────────────────────────────────────────
+        // Habits (placeholder — wire to habit tracking later)
+        document.getElementById('habits').innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <p class="text-small font-weight-600" style="margin-bottom: 8px;">Ben</p>
+              <p class="text-tiny text-tertiary">Habit tracker coming in STAGE 6</p>
+            </div>
+            <div>
+              <p class="text-small font-weight-600" style="margin-bottom: 8px;">Sarah</p>
+              <p class="text-tiny text-tertiary">Habit tracker coming in STAGE 6</p>
+            </div>
+          </div>
+        `;
+
+        // Wellness
+        if (data.wellness) {
+          const moodRing = JARVIS.ProgressRing({ percent: (data.wellness.mood / 10) * 100, size: 56, label: data.wellness.mood });
+          const energyRing = JARVIS.ProgressRing({ percent: (data.wellness.energy / 10) * 100, size: 56, label: data.wellness.energy });
+          document.getElementById('wellness').innerHTML = `
+            <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 12px;">
+              <div>${moodRing.outerHTML}</div>
+              <div>
+                <p class="text-small">Mood</p>
+                <p class="text-tiny text-tertiary">${data.wellness.mood}/10</p>
+              </div>
+              <div>${energyRing.outerHTML}</div>
+              <div>
+                <p class="text-small">Energy</p>
+                <p class="text-tiny text-tertiary">${data.wellness.energy}/10</p>
+              </div>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Sleep</span>
+              <span class="cockpit-ops-stat-value">${data.wellness.sleep_hours || '—'}h</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Weight</span>
+              <span class="cockpit-ops-stat-value">${data.wellness.weight_kg || '—'}kg</span>
+            </div>
+          `;
+        } else {
+          document.getElementById('wellness').innerHTML = `<p class="text-small text-tertiary">No wellness data for today</p>`;
+        }
+
+        // Family (placeholder)
+        document.getElementById('family').innerHTML = `
+          <p class="text-small text-tertiary">Family calendar coming in STAGE 6</p>
+        `;
+
+        // ── RIGHT RAIL: TODAY TASKS ──────────────────────────────────────────
+        if (data.todayTasks && data.todayTasks.length > 0) {
+          const topTasks = data.todayTasks.slice(0, 3).map(t => `
+            <div class="jarvis-task-item">
+              <p class="text-tiny">${t.description}</p>
+              <span class="jarvis-pill font-mono text-pill" style="margin-top: 4px;">${t.status}</span>
+            </div>
+          `).join('');
+          document.getElementById('todayTasks').innerHTML = topTasks;
+        }
 
         document.getElementById('lastUpdate').textContent = `Updated ${new Date().toLocaleTimeString('en-GB')}`;
 
