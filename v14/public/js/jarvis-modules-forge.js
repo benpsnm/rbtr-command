@@ -577,6 +577,11 @@ const FORGE_MODULES = {
     document.getElementById('mainStage').innerHTML = `
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Cleaner / Ops</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="FORGE_MODULES.newCleanerJob()">
+            + New Clean Job
+          </button>
+        </div>
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
@@ -585,7 +590,7 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">Turnovers (30d)</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">18</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="cleaner-completed-count">—</div>
             <p class="text-small text-tertiary">Completed cleans</p>
           </div>
         </div>
@@ -595,7 +600,7 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">Avg. Turnover Time</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">2.8h</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="cleaner-avg-time">—</div>
             <p class="text-small text-tertiary">Clean + restock</p>
           </div>
         </div>
@@ -605,19 +610,28 @@ const FORGE_MODULES = {
             <h3 class="font-display text-h2">Issues Flagged</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">2</div>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="cleaner-issues-count">—</div>
             <p class="text-small text-tertiary">Needs attention</p>
           </div>
         </div>
 
         <div class="jarvis-card">
           <div class="jarvis-card__header">
-            <h3 class="font-display text-h2">Quality Score</h3>
+            <h3 class="font-display text-h2">Total Cost (30d)</h3>
           </div>
           <div class="jarvis-card__body">
-            <div class="cockpit-money-value" style="color: var(--copper);">98%</div>
-            <p class="text-small text-tertiary">Checklist completion</p>
+            <div class="cockpit-money-value" style="color: var(--copper);" id="cleaner-total-cost">—</div>
+            <p class="text-small text-tertiary">Cleaning expenses</p>
           </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card" style="margin-bottom: 24px;">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Upcoming Cleans</h3>
+        </div>
+        <div class="jarvis-card__body" id="cleaner-upcoming-list">
+          Loading upcoming cleans...
         </div>
       </div>
 
@@ -668,6 +682,68 @@ const FORGE_MODULES = {
         </div>
       </div>
     `;
+
+    this.loadCleanerData();
+  },
+
+  async loadCleanerData() {
+    try {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
+
+      const [allJobs, upcomingJobs] = await Promise.all([
+        API.supabaseQuery('cleaner_jobs', `scheduled_date=gte.${thirtyDaysAgo}&select=*&order=scheduled_date.desc`),
+        API.supabaseQuery('cleaner_jobs', `scheduled_date=gte.${today}&status=neq.complete&select=*&order=scheduled_date.asc&limit=10`)
+      ]);
+
+      // Stats
+      const completedCount = allJobs ? allJobs.filter(j => j.status === 'complete').length : 0;
+      const issuesCount = allJobs ? allJobs.filter(j => j.status === 'issue').length : 0;
+      const totalCost = allJobs ? allJobs.reduce((sum, j) => sum + (parseFloat(j.cost_gbp) || 0), 0) : 0;
+      const avgTime = allJobs && allJobs.filter(j => j.duration_mins).length > 0
+        ? Math.round(allJobs.filter(j => j.duration_mins).reduce((sum, j) => sum + j.duration_mins, 0) / allJobs.filter(j => j.duration_mins).length / 60 * 10) / 10
+        : 0;
+
+      document.getElementById('cleaner-completed-count').textContent = completedCount;
+      document.getElementById('cleaner-avg-time').textContent = avgTime > 0 ? `${avgTime}h` : '—';
+      document.getElementById('cleaner-issues-count').textContent = issuesCount;
+      document.getElementById('cleaner-total-cost').textContent = `£${totalCost.toFixed(0)}`;
+
+      // Upcoming list
+      const upcomingEl = document.getElementById('cleaner-upcoming-list');
+      if (!upcomingEl) return;
+
+      if (!upcomingJobs || upcomingJobs.length === 0) {
+        upcomingEl.innerHTML = '<p class="text-small text-tertiary">No upcoming cleans scheduled.</p>';
+        return;
+      }
+
+      upcomingEl.innerHTML = upcomingJobs.map(j => {
+        const statusColor = j.status === 'complete' ? '#4CAF50' :
+                            j.status === 'in_progress' ? 'var(--copper)' :
+                            j.status === 'issue' ? '#f44336' : '#999';
+
+        const date = new Date(j.scheduled_date);
+        return `
+          <div class="jarvis-card" style="background: var(--surface-deep); margin-bottom: 12px; cursor: pointer;"
+               onclick="FORGE_MODULES.viewCleanerJobDetail('${j.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <h4 class="text-small" style="margin-bottom: 4px;">${date.toLocaleDateString('en-GB')} — ${j.cleaner_name || 'Unassigned'}</h4>
+                <p class="text-tiny text-tertiary">${j.deep_clean ? 'Deep Clean' : 'Standard Turnover'}</p>
+              </div>
+              <span class="jarvis-pill text-pill" style="background: ${statusColor}; color: #fff;">
+                ${j.status.replace(/_/g, ' ')}
+              </span>
+            </div>
+            ${j.notes ? `<p class="text-tiny text-tertiary">${j.notes}</p>` : ''}
+          </div>
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('[FORGE] Load cleaner data failed:', error);
+      document.getElementById('cleaner-completed-count').textContent = 'ERR';
+    }
   },
 
   async renderHouseJobs() {
@@ -1465,6 +1541,176 @@ const FORGE_MODULES = {
     JARVIS.Toast({ message: 'B2B enrichment pipeline (endpoint TBD)', duration: 2000 });
     // Phase 4 TODO: POST /api/forge/enrich-b2b-prospects
     // Similar to PSNM Intel pipeline, enrich decision maker details, company info, etc
+  },
+
+  // ── CLEANER / OPS ACTIONS ──────────────────────────────────────────────────
+
+  newCleanerJob() {
+    JARVIS_ACTIONS.showFormModal('+ New Clean Job', [
+      { name: 'scheduled_date', label: 'Scheduled Date', type: 'date', required: true },
+      { name: 'cleaner_name', label: 'Cleaner Name', type: 'text', required: false },
+      {
+        name: 'deep_clean',
+        label: 'Clean Type',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'false', label: 'Standard Turnover' },
+          { value: 'true', label: 'Deep Clean' }
+        ]
+      },
+      { name: 'cost_gbp', label: 'Cost (£)', type: 'number', required: false },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, required: false }
+    ], async (data) => {
+      const jobData = {
+        ...data,
+        deep_clean: data.deep_clean === 'true',
+        cost_gbp: data.cost_gbp ? parseFloat(data.cost_gbp) : null,
+        status: 'scheduled'
+      };
+
+      const result = await JARVIS_ACTIONS.createRecord('cleaner_jobs', jobData, 'Clean job scheduled');
+      if (result) {
+        this.renderCleanerOps();
+      }
+    });
+  },
+
+  async viewCleanerJobDetail(jobId) {
+    try {
+      const job = await API.supabaseQuery('cleaner_jobs', `id=eq.${jobId}&select=*`);
+      if (!job || job.length === 0) {
+        JARVIS.Toast({ message: 'Job not found', duration: 2000 });
+        return;
+      }
+
+      const j = job[0];
+      const statusColor = j.status === 'complete' ? '#4CAF50' :
+                          j.status === 'in_progress' ? 'var(--copper)' :
+                          j.status === 'issue' ? '#f44336' : '#999';
+
+      const date = new Date(j.scheduled_date);
+
+      JARVIS_ACTIONS.showDetailView(`Clean Job — ${date.toLocaleDateString('en-GB')}`, [
+        {
+          id: 'overview',
+          label: 'Details',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Scheduled Date</p>
+                  <p class="text-small">${date.toLocaleDateString('en-GB')}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Cleaner</p>
+                  <p class="text-small">${j.cleaner_name || 'Unassigned'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Status</p>
+                  <span class="jarvis-pill" style="background: ${statusColor}; color: #fff;">${j.status.replace(/_/g, ' ')}</span>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Type</p>
+                  <p class="text-small">${j.deep_clean ? 'Deep Clean' : 'Standard Turnover'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Duration</p>
+                  <p class="text-small">${j.duration_mins ? `${j.duration_mins} mins` : '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Cost</p>
+                  <p class="font-mono text-small">£${parseFloat(j.cost_gbp || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Completed At</p>
+                  <p class="text-small">${j.completed_at ? new Date(j.completed_at).toLocaleString('en-GB') : '—'}</p>
+                </div>
+              </div>
+
+              ${j.notes ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Notes</p>
+                  <p class="text-small">${j.notes}</p>
+                </div>
+              ` : ''}
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                ${j.status === 'scheduled' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markCleanerJobStatus('${j.id}', 'in_progress')">
+                    ▶️ Start Clean
+                  </button>
+                ` : ''}
+                ${j.status === 'in_progress' ? `
+                  <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markCleanerJobComplete('${j.id}')">
+                    ✓ Mark Complete
+                  </button>
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markCleanerJobStatus('${j.id}', 'issue')">
+                    ⚠️ Flag Issue
+                  </button>
+                ` : ''}
+                ${j.status === 'issue' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markCleanerJobStatus('${j.id}', 'in_progress')">
+                    ↩️ Resume
+                  </button>
+                ` : ''}
+                <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm"
+                        onclick="FORGE_MODULES.deleteCleanerJob('${j.id}')">
+                  Delete
+                </button>
+              </div>
+            </div>
+          `
+        }
+      ]);
+    } catch (error) {
+      console.error('[FORGE] View cleaner job failed:', error);
+      JARVIS.Toast({ message: 'Failed to load job', duration: 2000 });
+    }
+  },
+
+  async markCleanerJobStatus(jobId, newStatus) {
+    const result = await JARVIS_ACTIONS.updateRecord('cleaner_jobs', jobId, { status: newStatus }, `Status: ${newStatus.replace(/_/g, ' ')}`);
+    if (result) {
+      this.viewCleanerJobDetail(jobId);
+    }
+  },
+
+  async markCleanerJobComplete(jobId) {
+    JARVIS_ACTIONS.showFormModal('Mark Clean Complete', [
+      { name: 'duration_mins', label: 'Duration (minutes)', type: 'number', required: false }
+    ], async (data) => {
+      const updates = {
+        status: 'complete',
+        completed_at: new Date().toISOString(),
+        duration_mins: data.duration_mins ? parseInt(data.duration_mins) : null
+      };
+
+      const result = await JARVIS_ACTIONS.updateRecord('cleaner_jobs', jobId, updates, 'Clean marked complete');
+      if (result) {
+        this.viewCleanerJobDetail(jobId);
+      }
+    });
+  },
+
+  async deleteCleanerJob(jobId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Delete Clean Job',
+      'Are you sure you want to delete this clean job?',
+      async () => {
+        const result = await JARVIS_ACTIONS.updateRecord('cleaner_jobs', jobId, { status: 'deleted' }, 'Job deleted');
+        if (result) {
+          history.back();
+        }
+      }
+    );
   }
 };
 
