@@ -808,7 +808,7 @@ const PSNM_MODULES = {
         </div>
 
         <div style="display: flex; gap: 8px;">
-          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="PSNM_MODULES.viewCustomerDetail('${c.company}')">
+          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="PSNM_MODULES.viewCustomerDetail('${c.id || c.company}')">
             View Details
           </button>
           <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="window.open('mailto:${c.contact_email}')">
@@ -822,11 +822,142 @@ const PSNM_MODULES = {
   },
 
   newCustomer() {
-    JARVIS.Toast({ message: 'New customer form coming soon — wire to psnm_customers table', duration: 2000 });
+    JARVIS_ACTIONS.showFormModal('+ New Customer', [
+      { name: 'company', label: 'Company Name', type: 'text', required: true },
+      { name: 'contact_name', label: 'Contact Name', type: 'text', required: true },
+      { name: 'contact_email', label: 'Email', type: 'email', required: true },
+      { name: 'contact_phone', label: 'Phone', type: 'tel' },
+      { name: 'pallets_allocated', label: 'Pallets Required', type: 'number', required: true },
+      { name: 'monthly_value', label: 'Monthly Value (£)', type: 'number', required: true },
+      { name: 'start_date', label: 'Start Date', type: 'date', required: true },
+    ], async (data) => {
+      const customerData = {
+        ...data,
+        status: 'onboarding',
+        created_by: 'ben'
+      };
+      const result = await JARVIS_ACTIONS.createRecord('psnm_customers', customerData, `Customer created: ${data.company}`);
+      if (result) {
+        this.loadCustomers(); // Refresh list
+      }
+      return result !== null;
+    });
   },
 
-  viewCustomerDetail(customerName) {
-    JARVIS.Toast({ message: `Customer detail view: ${customerName}`, duration: 2000 });
+  async viewCustomerDetail(customerId) {
+    try {
+      // Fetch customer data
+      const customers = await API.supabaseQuery('psnm_customers', `id=eq.${customerId}&select=*`);
+      if (!customers || customers.length === 0) {
+        JARVIS.Toast({ message: 'Customer not found', duration: 2000 });
+        return;
+      }
+
+      const customer = customers[0];
+
+      // Build tabs
+      const tabs = [
+        {
+          id: 'overview',
+          label: 'Overview',
+          content: `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+              <div>
+                <p class="text-tiny text-tertiary">Company</p>
+                <p class="text-small font-weight-500">${customer.company}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Contact</p>
+                <p class="text-small">${customer.contact_name}</p>
+                <p class="text-tiny text-secondary">${customer.contact_email}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Status</p>
+                <span class="jarvis-pill ${customer.status === 'active' ? 'jarvis-pill--live' : ''}">${customer.status}</span>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Pallets</p>
+                <p class="text-small font-mono">${customer.pallets_allocated}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Monthly Value</p>
+                <p class="text-small font-mono">£${customer.monthly_value}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Start Date</p>
+                <p class="text-small font-mono">${new Date(customer.start_date).toLocaleDateString('en-GB')}</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="PSNM_MODULES.sendQuote('${customer.id}')">
+                📄 Send Quote
+              </button>
+              <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="PSNM_MODULES.sendAgreement('${customer.id}')">
+                📋 Send Agreement
+              </button>
+              ${customer.status === 'onboarding' ? `
+                <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="PSNM_MODULES.markCustomerLive('${customer.id}')">
+                  ✓ Mark Live
+                </button>
+              ` : ''}
+            </div>
+          `
+        },
+        { id: 'quotes', label: 'Quotes', content: '<p class="text-small text-tertiary">Quotes view - TBD Phase 4</p>' },
+        { id: 'agreements', label: 'Agreements', content: '<p class="text-small text-tertiary">Agreements view - TBD Phase 4</p>' },
+        { id: 'insurance', label: 'Insurance', content: '<p class="text-small text-tertiary">Insurance view - TBD Phase 4</p>' },
+        { id: 'bookings', label: 'Bookings', content: '<p class="text-small text-tertiary">Bookings view - TBD Phase 4</p>' },
+        { id: 'comms', label: 'Comms', content: '<p class="text-small text-tertiary">Communications log - TBD Phase 4</p>' },
+      ];
+
+      JARVIS_ACTIONS.showDetailView(customer.company, tabs);
+
+    } catch (error) {
+      console.error('[PSNM] Customer detail error:', error);
+      JARVIS.Toast({ message: 'Failed to load customer details', duration: 2000 });
+    }
+  },
+
+  async sendQuote(customerId) {
+    const result = await JARVIS_ACTIONS.sendEmail('/api/onboarding/send-pack', {
+      customer_id: customerId,
+      pack_type: 'quote'
+    }, 'Quote sent via SendGrid');
+
+    if (result) {
+      await JARVIS_ACTIONS.updateRecord('psnm_customers', customerId, {
+        status: 'quote_sent',
+        quote_sent_at: new Date().toISOString()
+      }, 'Quote sent');
+    }
+  },
+
+  async sendAgreement(customerId) {
+    const result = await JARVIS_ACTIONS.sendEmail('/api/onboarding/send-pack', {
+      customer_id: customerId,
+      pack_type: 'agreement'
+    }, 'Agreement sent via SendGrid');
+
+    if (result) {
+      await JARVIS_ACTIONS.updateRecord('psnm_customers', customerId, {
+        status: 'agreement_sent',
+        agreement_sent_at: new Date().toISOString()
+      }, 'Agreement sent');
+    }
+  },
+
+  async markCustomerLive(customerId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Mark Customer Live',
+      'This will activate the customer and begin billing. Continue?',
+      async () => {
+        await JARVIS_ACTIONS.updateRecord('psnm_customers', customerId, {
+          status: 'active',
+          activated_at: new Date().toISOString()
+        }, 'Customer is now live');
+        this.viewCustomerDetail(customerId); // Refresh detail view
+      }
+    );
   },
 
   async renderQuotesAgreements() {
