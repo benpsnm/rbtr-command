@@ -1,0 +1,101 @@
+{
+  "name": "04 House Jobs Daily Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Daily 18:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://mpxgyobotiqcawmqlhbf.supabase.co/rest/v1/house_jobs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "neq.done"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "order",
+              "value": "section.asc,created_at.asc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Query Undone House Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "RBTR Command Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all()[0].json;\n\n// Group by section\nconst sections = {};\njobs.forEach(job => {\n  if (!sections[job.section]) {\n    sections[job.section] = [];\n  }\n  sections[job.section].push(job);\n});\n\n// Calculate totals\nconst totalJobs = jobs.length;\nconst doneJobs = jobs.filter(j => j.status === 'done').length;\nconst remainingJobs = totalJobs - doneJobs;\nconst progressPct = Math.round((doneJobs / totalJobs) * 100);\n\n// Calculate spend\nconst estimatedSpend = jobs.reduce((sum, j) => {\n  const avg = ((parseFloat(j.cost_low) || 0) + (parseFloat(j.cost_high) || 0)) / 2;\n  return sum + avg;\n}, 0);\n\n// Top 3 Ben jobs\nconst benJobs = jobs.filter(j => j.who === 'ben' && j.status === 'not_started')\n  .slice(0, 3)\n  .map(j => `• ${j.title}`);\n\n// Build message\nconst launchDate = new Date('2026-06-07');\nconst today = new Date();\nconst daysToLaunch = Math.ceil((launchDate - today) / (1000 * 60 * 60 * 24));\n\nlet message = `🏠 *Forge House Jobs Digest*\\n\\n`;\nmessage += `📊 Progress: ${doneJobs}/${totalJobs} done (${progressPct}%)\\n`;\nmessage += `⏰ Launch: ${daysToLaunch} days (7 Jun 2026)\\n`;\nmessage += `💰 Est. remaining spend: £${Math.round(estimatedSpend)}\\n\\n`;\n\nfor (const [section, sectionJobs] of Object.entries(sections)) {\n  const done = sectionJobs.filter(j => j.status === 'done').length;\n  message += `*${section}*: ${done}/${sectionJobs.length} done\\n`;\n}\n\nif (benJobs.length > 0) {\n  message += `\\n*This week's Ben jobs:*\\n${benJobs.join('\\n')}\\n`;\n}\n\nmessage += `\\n_Open JARVIS → Forge → House Jobs for details_`;\n\nreturn [{ json: { message } }];"
+      },
+      "name": "Build Digest Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "8669062243",
+        "text": "={{$json.message}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Send Telegram Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "2",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Daily 18:00": {
+      "main": [[{"node": "Query Undone House Jobs", "type": "main", "index": 0}]]
+    },
+    "Query Undone House Jobs": {
+      "main": [[{"node": "Build Digest Message", "type": "main", "index": 0}]]
+    },
+    "Build Digest Message": {
+      "main": [[{"node": "Send Telegram Message", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "Europe/London"
+  },
+  "versionId": "1",
+  "id": "4"
+}

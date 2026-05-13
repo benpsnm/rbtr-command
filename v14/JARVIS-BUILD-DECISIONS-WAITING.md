@@ -63,6 +63,31 @@ Creates 2 tables:
 
 ---
 
+## PHASE 3 — Forge House Jobs
+
+### MIGRATION 068 NEEDS MANUAL APPLICATION
+**File:** `migrations/068_house_jobs.sql`
+
+Creates `house_jobs` table with 58 sample jobs across 6 sections:
+- Blue bedroom (8 jobs)
+- Pink bedroom (8 jobs)
+- Attic (5 jobs)
+- Garage (6 jobs)
+- Compliance (8 jobs - gas cert, EICR, EPC, etc)
+- Launch prep (23 jobs - photography, linen, WiFi, etc)
+
+**Launch Target:** 7 June 2026 (23 days from now)
+
+**BEN ACTION NEEDED:**
+1. Apply migration 068 in Supabase
+2. If real job list exists at ~/Documents/RBTR-Brain/00-Inbox/Barnsley_House_Outstanding_Jobs.md, replace sample data
+3. Or manually update jobs in JARVIS UI once built
+
+**Infrastructure Built:**
+- ⏳ JARVIS UI with filters, progress tracking, spend calculator (building next)
+
+---
+
 ## Files Changed (Phase 0)
 - `v14/.env.production` → Added new ELEVENLABS_API_KEY + OPENAI_API_KEY
 - `v14/.env.development.local` → Created (copy of .env.local)
