@@ -30,5 +30,8 @@
         { "key": "Access-Control-Allow-Methods", "value": "POST, GET, OPTIONS" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/jarvis", "destination": "/jarvis.html" }
   ]
 }
