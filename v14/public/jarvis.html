@@ -718,6 +718,9 @@
           <h1 class="jarvis-module-title">Cockpit</h1>
           <div class="jarvis-module-actions">
             <span class="text-small text-secondary font-mono" id="lastUpdate"></span>
+            <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="loadCockpitData()" title="Refresh cockpit data">
+              🔄
+            </button>
           </div>
         </div>
 
@@ -948,6 +951,9 @@
     </div>
   </div>
 
+  <!-- Scanline overlay (subtle western aesthetic) -->
+  <div class="jarvis-scanline-overlay"></div>
+
   <!-- SCRIPTS -->
   <script src="/js/jarvis-components.js"></script>
   <script src="/js/jarvis-api.js"></script>
@@ -971,6 +977,7 @@
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
     let cockpitData = null;
+    let lastCockpitUpdate = null;
 
     // ── INIT ─────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1318,12 +1325,66 @@
           document.getElementById('todayTasks').innerHTML = topTasks;
         }
 
-        document.getElementById('lastUpdate').textContent = `Updated ${new Date().toLocaleTimeString('en-GB')}`;
+        lastCockpitUpdate = Date.now();
+        updateLastUpdateTimestamp();
 
       } catch (err) {
         console.error('Failed to load cockpit data:', err);
         JARVIS.Toast({ message: 'Failed to load cockpit data', variant: 'default', duration: 3000 });
       }
+    }
+
+    // ── ANIMATE NUMBER ───────────────────────────────────────────────────────
+    function animateNumber(element, targetValue, options = {}) {
+      const {
+        duration = 600,
+        prefix = '',
+        suffix = '',
+        decimals = 0
+      } = options;
+
+      const startValue = parseFloat(element.textContent.replace(/[^0-9.-]/g, '')) || 0;
+      const diff = targetValue - startValue;
+      const startTime = Date.now();
+
+      function update() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+
+        const currentValue = startValue + (diff * easeProgress);
+        element.textContent = prefix + currentValue.toFixed(decimals) + suffix;
+
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        } else {
+          element.textContent = prefix + targetValue.toFixed(decimals) + suffix;
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    // ── UPDATE TIMESTAMP ─────────────────────────────────────────────────────
+    function updateLastUpdateTimestamp() {
+      if (!lastCockpitUpdate) return;
+      const now = Date.now();
+      const diff = now - lastCockpitUpdate;
+      const mins = Math.floor(diff / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+
+      let text = 'Updated ';
+      if (mins === 0) {
+        text += secs === 0 ? 'just now' : `${secs}s ago`;
+      } else if (mins < 60) {
+        text += `${mins}m ago`;
+      } else {
+        const hours = Math.floor(mins / 60);
+        text += `${hours}h ago`;
+      }
+
+      const el = document.getElementById('lastUpdate');
+      if (el) el.textContent = text;
     }
 
     // ── MODULE ROUTING ───────────────────────────────────────────────────────
@@ -1798,6 +1859,9 @@
 
     // ── LIVE UPDATES ─────────────────────────────────────────────────────────
     function startLiveUpdates() {
+      // Update relative timestamps every 10 seconds
+      setInterval(updateLastUpdateTimestamp, 10000);
+
       // Poll for updates every 30 seconds
       setInterval(() => {
         // TODO: Check for new alerts, tasks, etc
