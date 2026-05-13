@@ -112,6 +112,9 @@ const FORGE_MODULES = {
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Bookings Calendar</h1>
         <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="FORGE_MODULES.newBooking()">
+            + New Booking
+          </button>
           <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="FORGE_MODULES.prevMonth()">
             ← Prev
           </button>
@@ -196,59 +199,78 @@ const FORGE_MODULES = {
         </div>
         <div class="jarvis-card__body">
           <div id="upcoming-bookings-list">
-            ${this.renderUpcomingBookingsPlaceholder()}
+            Loading bookings...
           </div>
         </div>
       </div>
     `;
+
+    // Load real bookings after render
+    this.loadUpcomingBookings();
   },
 
-  renderUpcomingBookingsPlaceholder() {
-    const bookings = [
-      {
-        guest: 'Sarah Thompson',
-        platform: 'AirBnB',
-        check_in: new Date(Date.now() + 2 * 86400000),
-        check_out: new Date(Date.now() + 5 * 86400000),
-        guests: 4,
-        revenue: 426
-      },
-      {
-        guest: 'Mark Johnson',
-        platform: 'VRBO',
-        check_in: new Date(Date.now() + 6 * 86400000),
-        check_out: new Date(Date.now() + 9 * 86400000),
-        guests: 2,
-        revenue: 342
-      }
-    ];
+  async loadUpcomingBookings() {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const fourteenDaysOut = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
 
-    return bookings.map(b => {
-      const platformColor = b.platform === 'AirBnB' ? '#4CAF50' : b.platform === 'VRBO' ? '#2196F3' : 'var(--copper)';
-      return `
-        <div class="jarvis-card" style="background: var(--surface-deep); margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-            <div style="flex: 1;">
-              <h4 class="text-small" style="margin-bottom: 4px;">${b.guest}</h4>
-              <p class="text-tiny text-tertiary">${b.check_in.toLocaleDateString('en-GB')} → ${b.check_out.toLocaleDateString('en-GB')}</p>
+      const bookings = await API.supabaseQuery(
+        'str_bookings',
+        `check_in=gte.${today}&check_in=lte.${fourteenDaysOut}&status=neq.cancelled&order=check_in.asc&select=*`
+      );
+
+      const listEl = document.getElementById('upcoming-bookings-list');
+      if (!listEl) return;
+
+      if (!bookings || bookings.length === 0) {
+        listEl.innerHTML = '<p class="text-small text-tertiary">No upcoming bookings in the next 14 days.</p>';
+        return;
+      }
+
+      listEl.innerHTML = bookings.map(b => {
+        const platformColor = b.platform === 'airbnb' ? '#4CAF50' :
+                              b.platform === 'vrbo' ? '#2196F3' :
+                              'var(--copper)';
+        const platformLabel = b.platform === 'airbnb' ? 'AirBnB' :
+                              b.platform === 'vrbo' ? 'VRBO' :
+                              b.platform === 'booking_com' ? 'Booking.com' :
+                              b.platform === 'direct' ? 'Direct' : 'Manual';
+
+        const checkIn = new Date(b.check_in);
+        const checkOut = new Date(b.check_out);
+
+        return `
+          <div class="jarvis-card" style="background: var(--surface-deep); margin-bottom: 12px; cursor: pointer;"
+               onclick="FORGE_MODULES.viewBookingDetail('${b.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+              <div style="flex: 1;">
+                <h4 class="text-small" style="margin-bottom: 4px;">${b.guest_name || 'Guest'}</h4>
+                <p class="text-tiny text-tertiary">${checkIn.toLocaleDateString('en-GB')} → ${checkOut.toLocaleDateString('en-GB')}</p>
+              </div>
+              <span class="jarvis-pill font-mono text-pill" style="background: ${platformColor}; color: #fff;">
+                ${platformLabel}
+              </span>
             </div>
-            <span class="jarvis-pill font-mono text-pill" style="background: ${platformColor}; color: #fff;">
-              ${b.platform}
-            </span>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px;">
+              <div>
+                <p class="text-tiny text-tertiary">Guests</p>
+                <p class="text-small">${b.party_size || '—'}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Revenue</p>
+                <p class="font-mono text-small">£${parseFloat(b.gross_revenue || 0).toFixed(0)}</p>
+              </div>
+            </div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px;">
-            <div>
-              <p class="text-tiny text-tertiary">Guests</p>
-              <p class="text-small">${b.guests}</p>
-            </div>
-            <div>
-              <p class="text-tiny text-tertiary">Revenue</p>
-              <p class="font-mono text-small">£${b.revenue}</p>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
+    } catch (error) {
+      console.error('[FORGE] Load upcoming bookings failed:', error);
+      const listEl = document.getElementById('upcoming-bookings-list');
+      if (listEl) {
+        listEl.innerHTML = '<p class="text-small text-tertiary">Failed to load bookings.</p>';
+      }
+    }
   },
 
   prevMonth() { JARVIS.Toast({ message: 'Calendar navigation coming soon', duration: 2000 }); },
@@ -905,6 +927,246 @@ const FORGE_MODULES = {
         </div>
       </div>
     `;
+  },
+
+  // ── BOOKINGS ACTIONS ───────────────────────────────────────────────────────
+
+  newBooking() {
+    JARVIS_ACTIONS.showFormModal('+ New Booking', [
+      {
+        name: 'platform',
+        label: 'Platform',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'manual', label: 'Manual Entry' },
+          { value: 'airbnb', label: 'AirBnB' },
+          { value: 'vrbo', label: 'VRBO' },
+          { value: 'booking_com', label: 'Booking.com' },
+          { value: 'direct', label: 'Direct Booking' }
+        ]
+      },
+      { name: 'guest_name', label: 'Guest Name', type: 'text', required: true },
+      { name: 'guest_email', label: 'Guest Email', type: 'email', required: false },
+      { name: 'check_in', label: 'Check-In Date', type: 'date', required: true },
+      { name: 'check_out', label: 'Check-Out Date', type: 'date', required: true },
+      { name: 'party_size', label: 'Number of Guests', type: 'number', required: false },
+      { name: 'gross_revenue', label: 'Total Revenue (£)', type: 'number', required: false },
+      { name: 'special_requests', label: 'Special Requests', type: 'textarea', rows: 3, required: false }
+    ], async (data) => {
+      const bookingData = {
+        ...data,
+        status: 'confirmed',
+        party_size: data.party_size ? parseInt(data.party_size) : null,
+        gross_revenue: data.gross_revenue ? parseFloat(data.gross_revenue) : null
+      };
+
+      const result = await JARVIS_ACTIONS.createRecord('str_bookings', bookingData, 'Booking created');
+      if (result) {
+        this.renderBookingsCalendar();
+      }
+    });
+  },
+
+  async viewBookingDetail(bookingId) {
+    try {
+      const booking = await API.supabaseQuery('str_bookings', `id=eq.${bookingId}&select=*`);
+      if (!booking || booking.length === 0) {
+        JARVIS.Toast({ message: 'Booking not found', duration: 2000 });
+        return;
+      }
+
+      const b = booking[0];
+      const checkIn = new Date(b.check_in);
+      const checkOut = new Date(b.check_out);
+      const platformLabel = b.platform === 'airbnb' ? 'AirBnB' :
+                            b.platform === 'vrbo' ? 'VRBO' :
+                            b.platform === 'booking_com' ? 'Booking.com' :
+                            b.platform === 'direct' ? 'Direct' : 'Manual';
+
+      const statusColor = b.status === 'confirmed' ? 'var(--copper)' :
+                          b.status === 'checked_in' ? '#4CAF50' :
+                          b.status === 'completed' ? '#2196F3' : '#999';
+
+      JARVIS_ACTIONS.showDetailView(`Booking: ${b.guest_name || 'Guest'}`, [
+        {
+          id: 'overview',
+          label: 'Overview',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Platform</p>
+                  <p class="text-small">${platformLabel}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Status</p>
+                  <span class="jarvis-pill" style="background: ${statusColor}; color: #fff;">${b.status}</span>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">External ID</p>
+                  <p class="font-mono text-small">${b.external_id || '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Check-In</p>
+                  <p class="text-small">${checkIn.toLocaleDateString('en-GB')}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Check-Out</p>
+                  <p class="text-small">${checkOut.toLocaleDateString('en-GB')}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Nights</p>
+                  <p class="text-small">${b.nights || '—'}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Guests</p>
+                  <p class="text-small">${b.party_size || '—'}</p>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                  <p class="text-tiny text-tertiary">Gross Revenue</p>
+                  <p class="font-mono text-small">£${parseFloat(b.gross_revenue || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Platform Fee</p>
+                  <p class="font-mono text-small">£${parseFloat(b.platform_fee || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Net Revenue</p>
+                  <p class="font-mono text-small">£${parseFloat(b.net_revenue || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p class="text-tiny text-tertiary">Cleaning Fee</p>
+                  <p class="font-mono text-small">£${parseFloat(b.cleaning_fee || 0).toFixed(2)}</p>
+                </div>
+              </div>
+
+              ${b.special_requests ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Special Requests</p>
+                  <p class="text-small">${b.special_requests}</p>
+                </div>
+              ` : ''}
+
+              ${b.notes ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Internal Notes</p>
+                  <p class="text-small">${b.notes}</p>
+                </div>
+              ` : ''}
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm"
+                        onclick="FORGE_MODULES.sendGuestMessage('${b.id}', '${b.guest_email || ''}', '${b.guest_name || 'Guest'}')">
+                  📧 Send Message
+                </button>
+                ${b.status === 'confirmed' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markBookingCheckedIn('${b.id}')">
+                    ✓ Mark Checked In
+                  </button>
+                ` : ''}
+                ${b.status === 'checked_in' ? `
+                  <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm"
+                          onclick="FORGE_MODULES.markBookingCompleted('${b.id}')">
+                    ✓ Mark Completed
+                  </button>
+                ` : ''}
+                <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm"
+                        onclick="FORGE_MODULES.deleteBooking('${b.id}')">
+                  Cancel Booking
+                </button>
+              </div>
+            </div>
+          `
+        },
+        {
+          id: 'guest',
+          label: 'Guest Info',
+          content: `
+            <div style="display: grid; gap: 16px;">
+              <div>
+                <p class="text-tiny text-tertiary">Name</p>
+                <p class="text-small">${b.guest_name || '—'}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Email</p>
+                <p class="text-small">${b.guest_email || '—'}</p>
+              </div>
+              <div>
+                <p class="text-tiny text-tertiary">Party Size</p>
+                <p class="text-small">${b.party_size || '—'} guests</p>
+              </div>
+              ${b.review_left ? `
+                <div>
+                  <p class="text-tiny text-tertiary">Review Rating</p>
+                  <p class="text-small">${b.review_rating || '—'} ⭐</p>
+                </div>
+              ` : '<p class="text-small text-tertiary">No review left yet.</p>'}
+            </div>
+          `
+        }
+      ]);
+    } catch (error) {
+      console.error('[FORGE] View booking detail failed:', error);
+      JARVIS.Toast({ message: 'Failed to load booking', duration: 2000 });
+    }
+  },
+
+  sendGuestMessage(bookingId, guestEmail, guestName) {
+    if (!guestEmail) {
+      JARVIS.Toast({ message: 'No email address for this guest', duration: 2000 });
+      return;
+    }
+
+    JARVIS_ACTIONS.showFormModal('Send Guest Message', [
+      { name: 'subject', label: 'Subject', type: 'text', required: true },
+      { name: 'message', label: 'Message', type: 'textarea', rows: 8, required: true }
+    ], async (data) => {
+      const payload = {
+        to: guestEmail,
+        to_name: guestName,
+        subject: data.subject,
+        body: data.message,
+        booking_id: bookingId
+      };
+
+      const result = await JARVIS_ACTIONS.sendEmail('/api/forge/send-guest-email', payload, 'Message sent to guest');
+      return result !== null;
+    });
+  },
+
+  async markBookingCheckedIn(bookingId) {
+    const result = await JARVIS_ACTIONS.updateRecord('str_bookings', bookingId, { status: 'checked_in' }, 'Marked as checked in');
+    if (result) {
+      this.viewBookingDetail(bookingId);
+    }
+  },
+
+  async markBookingCompleted(bookingId) {
+    const result = await JARVIS_ACTIONS.updateRecord('str_bookings', bookingId, { status: 'completed' }, 'Marked as completed');
+    if (result) {
+      this.viewBookingDetail(bookingId);
+    }
+  },
+
+  async deleteBooking(bookingId) {
+    JARVIS_ACTIONS.showConfirmModal(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking? This will set the status to cancelled.',
+      async () => {
+        const result = await JARVIS_ACTIONS.updateRecord('str_bookings', bookingId, { status: 'cancelled' }, 'Booking cancelled');
+        if (result) {
+          history.back();
+        }
+      }
+    );
   }
 };
 
