@@ -704,6 +704,7 @@
   <!-- SCRIPTS -->
   <script src="/js/jarvis-components.js"></script>
   <script src="/js/jarvis-api.js"></script>
+  <script src="/js/jarvis-modules-psnm.js"></script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
@@ -991,43 +992,159 @@
     }
 
     // ── MODULE ROUTING ───────────────────────────────────────────────────────
-    function loadModule(module) {
+    function loadModule(module, submodule) {
       currentModule = module;
 
       // Update nav active state
       document.querySelectorAll('.jarvis-nav-icon').forEach(icon => {
         icon.classList.remove('jarvis-nav-icon--active');
       });
-      event.currentTarget?.classList.add('jarvis-nav-icon--active');
+      if (event?.currentTarget) {
+        event.currentTarget.classList.add('jarvis-nav-icon--active');
+      }
 
       // Update breadcrumb
       const breadcrumbMap = {
         cockpit: 'Cockpit',
         psnm: 'PSNM',
+        'psnm.atlas': 'PSNM / Atlas v3',
+        'psnm.wms': 'PSNM / WMS Prospects',
+        'psnm.ww': 'PSNM / WW Enquiries',
+        'psnm.customers': 'PSNM / Customers',
+        'psnm.quotes': 'PSNM / Quotes & Agreements',
+        'psnm.insurance': 'PSNM / Insurance',
+        'psnm.intel': 'PSNM / Intel Pipeline',
+        'psnm.revenue': 'PSNM / Revenue',
         forge: 'Forge / STR',
         rbtr: 'RBTR',
         personal: 'Personal',
         sarah: 'Sarah\'s Space',
         system: 'System'
       };
-      document.getElementById('breadcrumb').innerHTML = `<span>${breadcrumbMap[module] || module}</span>`;
 
-      // TODO: Load module content
-      if (module !== 'cockpit') {
+      const moduleKey = submodule ? `${module}.${submodule}` : module;
+      document.getElementById('breadcrumb').innerHTML = `<span>${breadcrumbMap[moduleKey] || moduleKey}</span>`;
+
+      // Route to module content
+      if (module === 'cockpit') {
+        location.reload(); // Reload to restore cockpit view
+      } else if (module === 'psnm') {
+        // PSNM sub-modules
+        if (!submodule) {
+          // Show PSNM landing/menu
+          showPSNMMenu();
+        } else if (submodule === 'atlas') {
+          PSNM_MODULES.renderAtlasV3();
+        } else if (submodule === 'wms') {
+          PSNM_MODULES.renderWMSProspects();
+        } else if (submodule === 'ww') {
+          PSNM_MODULES.renderWWEnquiries();
+        } else if (submodule === 'customers') {
+          PSNM_MODULES.renderCustomers();
+        } else if (submodule === 'quotes') {
+          PSNM_MODULES.renderQuotesAgreements();
+        } else if (submodule === 'insurance') {
+          PSNM_MODULES.renderInsurance();
+        } else if (submodule === 'intel') {
+          PSNM_MODULES.renderIntelPipeline();
+        } else if (submodule === 'revenue') {
+          PSNM_MODULES.renderRevenueDashboard();
+        }
+      } else {
+        // Other modules (coming in STAGE 4+)
         document.getElementById('mainStage').innerHTML = `
           <div class="jarvis-module-header">
             <h1 class="jarvis-module-title">${breadcrumbMap[module]}</h1>
           </div>
           <div class="jarvis-card">
             <div class="jarvis-card__body">
-              <p>Module: ${module} — coming soon in STAGE 3+</p>
+              <p>Module: ${module} — coming in STAGE 4+</p>
             </div>
           </div>
         `;
-      } else {
-        // Restore cockpit view
-        location.reload(); // Simple reload for now; will implement proper module switching later
       }
+    }
+
+    function showPSNMMenu() {
+      document.getElementById('mainStage').innerHTML = `
+        <div class="jarvis-module-header">
+          <h1 class="jarvis-module-title">PSNM</h1>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'atlas')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">🚀 Atlas v3</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Draft queue, intelligence pipeline, outreach automation</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'customers')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">👥 Customers</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Onboarding pipeline, agreements, insurance</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'ww')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">📨 WW Enquiries</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">WhichWarehouse lead tracker</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'quotes')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">📄 Quotes & Agreements</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Quote generation, agreement signing</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'insurance')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">🛡 Insurance</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Certificate verification queue</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'intel')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">🔍 Intel Pipeline</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Scraping, enrichment, classification</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'revenue')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">💰 Revenue</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">PSNM cash flow dashboard</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'wms')">
+            <div class="jarvis-card__header">
+              <h3 class="font-display text-h2">🏭 WMS Prospects</h3>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Warehouse management system prospects</p>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     // ── QUICK ACTIONS ────────────────────────────────────────────────────────
