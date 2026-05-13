@@ -144,28 +144,32 @@ const SYSTEM_MODULES = {
           <div style="display: grid; gap: 16px;">
             <div>
               <label class="text-small text-secondary">Color Scheme</label>
-              <select class="jarvis-input" style="margin-top: 8px;">
-                <option>Western Black & White + Copper (Current)</option>
-                <option disabled>Light Mode (Coming Soon)</option>
+              <select id="theme-color" class="jarvis-input" style="margin-top: 8px;">
+                <option value="western-bw">Western Black & White + Copper (Current)</option>
+                <option value="light" disabled>Light Mode (Coming Soon)</option>
               </select>
             </div>
 
             <div>
               <label class="text-small text-secondary">Motion</label>
-              <select class="jarvis-input" style="margin-top: 8px;">
-                <option>Full Animations (Current)</option>
-                <option>Reduced Motion</option>
-                <option>No Motion</option>
+              <select id="theme-motion" class="jarvis-input" style="margin-top: 8px;">
+                <option value="full">Full Animations (Current)</option>
+                <option value="reduced">Reduced Motion</option>
+                <option value="none">No Motion</option>
               </select>
             </div>
 
             <div>
               <label class="text-small text-secondary">Scanline Effect</label>
-              <select class="jarvis-input" style="margin-top: 8px;">
-                <option>Disabled (Current)</option>
-                <option>Enabled (Subtle)</option>
+              <select id="theme-scanline" class="jarvis-input" style="margin-top: 8px;">
+                <option value="disabled">Disabled (Current)</option>
+                <option value="enabled">Enabled (Subtle)</option>
               </select>
             </div>
+
+            <button class="jarvis-btn jarvis-btn--primary" onclick="SYSTEM_MODULES.saveTheme()" style="margin-top: 16px;">
+              Save Theme Preferences
+            </button>
           </div>
         </div>
       </div>
@@ -215,6 +219,11 @@ const SYSTEM_MODULES = {
     document.getElementById('mainStage').innerHTML = `
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Cron Status</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="SYSTEM_MODULES.refreshCronStatus()">
+            🔄 Refresh
+          </button>
+        </div>
       </div>
 
       <div class="jarvis-card">
@@ -267,8 +276,23 @@ const SYSTEM_MODULES = {
       </div>
 
       <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Manual Backup</h3>
+        </div>
         <div class="jarvis-card__body">
-          <p class="text-small text-tertiary">Backup + restore interface coming soon. Backups run daily at 03:00 via /api/cron-backup</p>
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">Trigger a manual database backup. Backups are stored in Supabase and run automatically daily at 03:00.</p>
+          <button class="jarvis-btn jarvis-btn--primary" onclick="SYSTEM_MODULES.runBackupNow()">
+            💾 Run Backup Now
+          </button>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Restore</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-tertiary">Restore interface coming soon (Phase 4 TODO)</p>
         </div>
       </div>
     `;
@@ -310,6 +334,64 @@ const SYSTEM_MODULES = {
         </div>
       </div>
     `;
+  },
+
+  // ── SYSTEM ACTIONS ─────────────────────────────────────────────────────────
+
+  saveTheme() {
+    const color = document.getElementById('theme-color')?.value || 'western-bw';
+    const motion = document.getElementById('theme-motion')?.value || 'full';
+    const scanline = document.getElementById('theme-scanline')?.value || 'disabled';
+
+    // Save to localStorage
+    localStorage.setItem('jarvis-theme-color', color);
+    localStorage.setItem('jarvis-theme-motion', motion);
+    localStorage.setItem('jarvis-theme-scanline', scanline);
+
+    // Apply motion preference
+    if (motion === 'none' || motion === 'reduced') {
+      document.body.style.setProperty('--transition-speed', '0s');
+    } else {
+      document.body.style.setProperty('--transition-speed', '0.3s');
+    }
+
+    // Apply scanline
+    if (scanline === 'enabled') {
+      document.body.classList.add('scanline-effect');
+    } else {
+      document.body.classList.remove('scanline-effect');
+    }
+
+    JARVIS.Toast({ message: 'Theme preferences saved', duration: 2000 });
+  },
+
+  async runBackupNow() {
+    JARVIS.Toast({ message: 'Running backup...', duration: 2000 });
+
+    try {
+      const response = await fetch('/api/cron-backup', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${window.CRON_SECRET || ''}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        JARVIS.Toast({ message: 'Backup completed successfully', duration: 3000 });
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('[SYSTEM] Backup failed:', error);
+      JARVIS.Toast({ message: 'Backup failed — check logs', duration: 3000 });
+    }
+  },
+
+  refreshCronStatus() {
+    this.renderCronStatus();
+    JARVIS.Toast({ message: 'Cron status refreshed', duration: 2000 });
   }
 };
 
