@@ -708,6 +708,7 @@
   <script src="/js/jarvis-modules-forge.js"></script>
   <script src="/js/jarvis-modules-booking-proof.js"></script>
   <script src="/js/jarvis-modules-rbtr.js"></script>
+  <script src="/js/jarvis-modules-personal.js"></script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
@@ -1067,6 +1068,32 @@
         } else {
           RBTR_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
         }
+      } else if (module === 'personal') {
+        // Personal modules
+        if (!submodule) {
+          PERSONAL_MODULES.renderLanding();
+        } else {
+          PERSONAL_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'sarah') {
+        // Sarah's Space
+        if (!submodule) {
+          SARAH_MODULES.renderLanding();
+        } else {
+          SARAH_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'system') {
+        // System modules (STAGE 7)
+        document.getElementById('mainStage').innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">System</h1>
+          </div>
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <p>System modules coming in STAGE 7</p>
+            </div>
+          </div>
+        `;
       } else {
         // Other modules (coming in STAGE 4+)
         document.getElementById('mainStage').innerHTML = `
