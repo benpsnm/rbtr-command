@@ -1,0 +1,464 @@
+{
+  "name": "WW Enquiry Auto-Process",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "filters": {
+          "from": "",
+          "subject": "",
+          "readStatus": "unread"
+        },
+        "format": "simple",
+        "options": {
+          "maxResults": 10
+        }
+      },
+      "id": "gmail-search",
+      "name": "Search Gmail for Unread WW Enquiries",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [470, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "email_subject",
+              "name": "email_subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "email_body",
+              "name": "email_body",
+              "value": "={{ $json.snippet }}",
+              "type": "string"
+            },
+            {
+              "id": "email_from",
+              "name": "email_from",
+              "value": "={{ $json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "email_id",
+              "name": "email_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-email-data",
+      "name": "Extract Email Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-5-20250929",
+        "text": "=# Email Classification for WhichWarehouse Enquiry\n\nAnalyze this warehouse storage enquiry and classify it based on PSNM's capabilities:\n\n**Subject:** {{ $json.email_subject }}\n**From:** {{ $json.email_from }}\n**Body:** {{ $json.email_body }}\n\n**PSNM Capabilities:**\n- Location: Barnsley, South Yorkshire\n- Storage: 4000+ pallet spaces, secure, temperature controlled\n- Handling: forklifts, pallet wrapping, inventory management\n- Access: 24/7 customer access available\n- Services: picking, packing, dispatch coordination\n\n**Classification Options:**\n- FULL_FIT: Perfect match for PSNM capabilities and location\n- PARTIAL_FIT: Some match but with caveats (e.g. slightly far but workable)\n- WRONG_FIT: Clearly wrong location, product type we can't handle, or hazmat we can't store\n\n**Output format (JSON only):**\n{\n  \"classification\": \"FULL_FIT|PARTIAL_FIT|WRONG_FIT\",\n  \"reasoning\": \"Brief explanation\",\n  \"extracted_data\": {\n    \"location\": \"location mentioned if any\",\n    \"pallet_count\": \"number of pallets mentioned\",\n    \"product_type\": \"what they're storing\",\n    \"hazmat\": true/false\n  }\n}",
+        "options": {
+          "maxTokens": 1024,
+          "temperature": 0.2
+        }
+      },
+      "id": "claude-classify",
+      "name": "Claude: Classify Enquiry",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.8,
+      "position": [910, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "is-fit",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "FULL_FIT,PARTIAL_FIT",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-fit",
+      "name": "Is Full or Partial Fit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-5-20250929",
+        "text": "=# Draft Reply for WhichWarehouse Enquiry\n\nWrite a professional email reply to this warehouse storage enquiry:\n\n**Original Email:**\nSubject: {{ $('Extract Email Data').item.json.email_subject }}\nFrom: {{ $('Extract Email Data').item.json.email_from }}\nBody: {{ $('Extract Email Data').item.json.email_body }}\n\n**Classification:** {{ $json.classification }}\n**Extracted Data:** {{ JSON.stringify($json.extracted_data) }}\n\n**PSNM Details to Include:**\n- Company: Pallet Storage Near Me (PSNM)\n- Location: Barnsley, South Yorkshire S70 area\n- Capacity: 4000+ pallet spaces available\n- Services: secure storage, 24/7 access, picking/packing, dispatch coordination\n- Rates: £X per pallet per week (fetch from Supabase config if available, or say \"competitive rates\")\n- Contact: Reply to this email or call Ben on 07506 255033\n\n**Tone:**\n- Professional but friendly\n- Ben's voice: direct, no corporate fluff\n- If PARTIAL_FIT, acknowledge the fit isn't perfect but explain how PSNM could still help\n- End with clear next step (call to discuss, or send pallet list)\n\n**Output:** Plain text email body only, no JSON.",
+        "options": {
+          "maxTokens": 1024,
+          "temperature": 0.7
+        }
+      },
+      "id": "claude-draft-reply",
+      "name": "Claude: Draft Reply",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.8,
+      "position": [1350, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "schema": [
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "id": "email_subject",
+              "displayName": "email_subject",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "id": "email_from",
+              "displayName": "email_from",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "id": "classification",
+              "displayName": "classification",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "id": "extracted_data",
+              "displayName": "extracted_data",
+              "required": false,
+              "type": "json"
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "id": "draft_body",
+              "displayName": "draft_body",
+              "required": false,
+              "type": "string"
+            }
+          ]
+        },
+        "table": "psnm_ww_enquiries",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_id": "={{ $('Extract Email Data').item.json.email_id }}",
+            "email_subject": "={{ $('Extract Email Data').item.json.email_subject }}",
+            "email_from": "={{ $('Extract Email Data').item.json.email_from }}",
+            "classification": "={{ $('Claude: Classify Enquiry').item.json.classification }}",
+            "extracted_data": "={{ $('Claude: Classify Enquiry').item.json.extracted_data }}",
+            "status": "draft_ready",
+            "draft_body": "={{ $json.output }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "supabase-insert",
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1570, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createDraft",
+        "subject": "=Re: {{ $('Extract Email Data').item.json.email_subject }}",
+        "message": "={{ $('Claude: Draft Reply').item.json.output }}",
+        "replyTo": "={{ $('Extract Email Data').item.json.email_id }}",
+        "options": {}
+      },
+      "id": "gmail-create-draft",
+      "name": "Create Gmail Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1790, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🆕 New WW Enquiry\n\n**From:** {{ $('Extract Email Data').item.json.email_from }}\n**Subject:** {{ $('Extract Email Data').item.json.email_subject }}\n**Classification:** {{ $('Claude: Classify Enquiry').item.json.classification }}\n\n📝 Draft reply ready in Gmail\n\nRef: {{ $('Extract Email Data').item.json.email_id }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-alert",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2010, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Extract Email Data').item.json.email_id }}",
+        "labelIds": ["Label_1"],
+        "options": {}
+      },
+      "id": "gmail-mark-read",
+      "name": "Mark Email as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2230, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "psnm_ww_enquiries",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_id": "={{ $('Extract Email Data').item.json.email_id }}",
+            "email_subject": "={{ $('Extract Email Data').item.json.email_subject }}",
+            "email_from": "={{ $('Extract Email Data').item.json.email_from }}",
+            "classification": "={{ $('Claude: Classify Enquiry').item.json.classification }}",
+            "extracted_data": "={{ $('Claude: Classify Enquiry').item.json.extracted_data }}",
+            "status": "wrong_fit"
+          }
+        },
+        "options": {}
+      },
+      "id": "supabase-log-wrong-fit",
+      "name": "Log WRONG_FIT to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1350, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Extract Email Data').item.json.email_id }}",
+        "labelIds": ["Label_1"],
+        "options": {}
+      },
+      "id": "gmail-mark-read-wrong",
+      "name": "Mark Email as Read (WRONG_FIT)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1570, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Search Gmail for Unread WW Enquiries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Gmail for Unread WW Enquiries": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Data": {
+      "main": [
+        [
+          {
+            "node": "Claude: Classify Enquiry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Classify Enquiry": {
+      "main": [
+        [
+          {
+            "node": "Is Full or Partial Fit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Full or Partial Fit?": {
+      "main": [
+        [
+          {
+            "node": "Claude: Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log WRONG_FIT to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Insert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Create Gmail Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Gmail Draft": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log WRONG_FIT to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read (WRONG_FIT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-13T00:00:00.000Z",
+  "versionId": "1"
+}

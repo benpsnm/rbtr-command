@@ -1,0 +1,560 @@
+{
+  "name": "PSNM Outreach Reply Intent Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 10 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "filters": {
+          "from": "",
+          "subject": "Re:",
+          "readStatus": "unread"
+        },
+        "format": "simple",
+        "options": {
+          "maxResults": 20
+        }
+      },
+      "id": "gmail-search-replies",
+      "name": "Search Gmail for Unread Replies",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [470, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "email_id",
+              "name": "email_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "email_subject",
+              "name": "email_subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "email_from",
+              "name": "email_from",
+              "value": "={{ $json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "email_body",
+              "name": "email_body",
+              "value": "={{ $json.plainText || $json.snippet }}",
+              "type": "string"
+            },
+            {
+              "id": "thread_id",
+              "name": "thread_id",
+              "value": "={{ $json.threadId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-reply-data",
+      "name": "Extract Reply Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-5-20250929",
+        "text": "=# Classify PSNM Outreach Reply Intent\n\nAnalyze this email reply to a PSNM outreach campaign and classify the sender's intent:\n\n**Subject:** {{ $json.email_subject }}\n**From:** {{ $json.email_from }}\n**Body:** {{ $json.email_body }}\n\n**Classification Options:**\n- **INTERESTED**: Expresses interest in PSNM services, wants to discuss, asks for rates, requests a call\n- **NOT_NOW**: Polite decline, \"maybe later\", \"we're good for now\", \"not at this time\"\n- **WRONG_CONTACT**: \"I don't handle this\", \"forward to X\", \"wrong department\"\n- **UNSUBSCRIBE**: Explicit request to stop emailing, remove from list, \"take me off your list\"\n- **ASKING_QUESTION**: Has a specific question about PSNM services, location, capabilities\n\n**Output format (JSON only):**\n{\n  \"intent\": \"INTERESTED|NOT_NOW|WRONG_CONTACT|UNSUBSCRIBE|ASKING_QUESTION\",\n  \"sentiment\": \"positive|neutral|negative\",\n  \"reasoning\": \"Brief explanation\",\n  \"key_points\": [\"extracted key points from the email\"],\n  \"suggested_action\": \"What Ben should do next\"\n}",
+        "options": {
+          "maxTokens": 1024,
+          "temperature": 0.2
+        }
+      },
+      "id": "claude-classify-intent",
+      "name": "Claude: Classify Intent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.8,
+      "position": [910, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "psnm_outreach_replies",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_id": "={{ $('Extract Reply Data').item.json.email_id }}",
+            "thread_id": "={{ $('Extract Reply Data').item.json.thread_id }}",
+            "email_from": "={{ $('Extract Reply Data').item.json.email_from }}",
+            "email_subject": "={{ $('Extract Reply Data').item.json.email_subject }}",
+            "email_body": "={{ $('Extract Reply Data').item.json.email_body }}",
+            "intent": "={{ $json.intent }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "key_points": "={{ $json.key_points }}",
+            "suggested_action": "={{ $json.suggested_action }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "supabase-insert-reply",
+      "name": "Insert Reply to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1130, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "intent-check",
+              "leftValue": "={{ $('Claude: Classify Intent').item.json.intent }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "switch-intent",
+      "name": "Switch on Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE psnm_prospects\nSET status = 'hot',\n    last_contact = NOW(),\n    notes = CONCAT(COALESCE(notes, ''), '\\n[{{ $now.format('yyyy-MM-dd') }}] Reply received - INTERESTED')\nWHERE LOWER(email) = LOWER('{{ $('Extract Reply Data').item.json.email_from }}')\nOR LOWER(domain) = LOWER('{{ $('Extract Reply Data').item.json.email_from.split('@')[1] }}');",
+        "options": {}
+      },
+      "id": "supabase-promote-hot",
+      "name": "Promote to HOT Prospect",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1570, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🔥 INTERESTED Reply from Outreach\n\n**From:** {{ $('Extract Reply Data').item.json.email_from }}\n**Subject:** {{ $('Extract Reply Data').item.json.email_subject }}\n\n**Key Points:**\n{{ $('Claude: Classify Intent').item.json.key_points.join('\\n') }}\n\n**Suggested Action:** {{ $('Claude: Classify Intent').item.json.suggested_action }}\n\n**First 100 chars of reply:**\n{{ $('Extract Reply Data').item.json.email_body.substring(0, 100) }}...",
+        "additionalFields": {}
+      },
+      "id": "telegram-interested",
+      "name": "Telegram: INTERESTED Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1790, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE psnm_prospects\nSET status = 'not_now',\n    follow_up_date = (NOW() + INTERVAL '60 days')::date,\n    last_contact = NOW(),\n    notes = CONCAT(COALESCE(notes, ''), '\\n[{{ $now.format('yyyy-MM-dd') }}] Reply received - NOT_NOW')\nWHERE LOWER(email) = LOWER('{{ $('Extract Reply Data').item.json.email_from }}')\nOR LOWER(domain) = LOWER('{{ $('Extract Reply Data').item.json.email_from.split('@')[1] }}');",
+        "options": {}
+      },
+      "id": "supabase-not-now",
+      "name": "Update: NOT_NOW + 60 Days",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1570, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE psnm_prospects\nSET status = 'wrong_contact',\n    last_contact = NOW(),\n    notes = CONCAT(COALEATE(notes, ''), '\\n[{{ $now.format('yyyy-MM-dd') }}] Wrong contact - suggest LinkedIn hunt')\nWHERE LOWER(email) = LOWER('{{ $('Extract Reply Data').item.json.email_from }}')\nOR LOWER(domain) = LOWER('{{ $('Extract Reply Data').item.json.email_from.split('@')[1] }}');",
+        "options": {}
+      },
+      "id": "supabase-wrong-contact",
+      "name": "Flag: WRONG_CONTACT",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1570, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🔍 WRONG_CONTACT - LinkedIn Hunt Needed\n\n**Company:** {{ $('Extract Reply Data').item.json.email_from.split('@')[1] }}\n**Reply from:** {{ $('Extract Reply Data').item.json.email_from }}\n\n**Their message:**\n{{ $('Extract Reply Data').item.json.email_body.substring(0, 150) }}...\n\n**Action:** Manual LinkedIn search to find right contact",
+        "additionalFields": {}
+      },
+      "id": "telegram-wrong-contact",
+      "name": "Telegram: WRONG_CONTACT Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1790, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE psnm_prospects\nSET status = 'unsubscribed',\n    last_contact = NOW(),\n    notes = CONCAT(COALESCE(notes, ''), '\\n[{{ $now.format('yyyy-MM-dd') }}] UNSUBSCRIBE request - never email again')\nWHERE LOWER(email) = LOWER('{{ $('Extract Reply Data').item.json.email_from }}')\nOR LOWER(domain) = LOWER('{{ $('Extract Reply Data').item.json.email_from.split('@')[1] }}');",
+        "options": {}
+      },
+      "id": "supabase-unsubscribe",
+      "name": "Mark: UNSUBSCRIBED",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1570, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-5-20250929",
+        "text": "=# Draft Answer for PSNM Question\n\nThe prospect has asked a question about PSNM services. Draft a helpful reply:\n\n**Original Email:**\nFrom: {{ $('Extract Reply Data').item.json.email_from }}\nSubject: {{ $('Extract Reply Data').item.json.email_subject }}\nBody: {{ $('Extract Reply Data').item.json.email_body }}\n\n**PSNM Context:**\n- Location: Barnsley, South Yorkshire S70 (10 mins from M1 J36/37)\n- Capacity: 4000+ pallet spaces, secure warehouse\n- Services: storage, picking, packing, dispatch coordination, inventory management\n- Access: 24/7 customer access available\n- Equipment: forklifts, pallet wrapping, loading bays\n- Rates: Competitive (£X/pallet/week - check Supabase config)\n- Contact: Ben Greenwood, 07506 255033, palletstoragenearme@gmail.com\n\n**Tone:**\n- Professional but direct (Ben's voice)\n- Answer their question fully\n- Offer a call if the answer is complex\n- End with clear next step\n\n**Output:** Plain text email body only, no JSON.",
+        "options": {
+          "maxTokens": 1024,
+          "temperature": 0.7
+        }
+      },
+      "id": "claude-draft-answer",
+      "name": "Claude: Draft Answer to Question",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.8,
+      "position": [1570, 500],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createDraft",
+        "subject": "=Re: {{ $('Extract Reply Data').item.json.email_subject }}",
+        "message": "={{ $json.output }}",
+        "replyTo": "={{ $('Extract Reply Data').item.json.email_id }}",
+        "options": {}
+      },
+      "id": "gmail-draft-answer",
+      "name": "Create Gmail Draft (Answer)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1790, 500],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=❓ Question from Prospect\n\n**From:** {{ $('Extract Reply Data').item.json.email_from }}\n**Subject:** {{ $('Extract Reply Data').item.json.email_subject }}\n\n📝 Draft answer ready in Gmail\n\n**Question (first 150 chars):**\n{{ $('Extract Reply Data').item.json.email_body.substring(0, 150) }}...",
+        "additionalFields": {}
+      },
+      "id": "telegram-question",
+      "name": "Telegram: Question Alert + Draft Ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2010, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Extract Reply Data').item.json.email_id }}",
+        "labelIds": ["Label_1"],
+        "options": {}
+      },
+      "id": "gmail-mark-read",
+      "name": "Mark Email as Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2230, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "psnm-gmail-oauth",
+          "name": "PSNM Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 10 minutes": {
+      "main": [
+        [
+          {
+            "node": "Search Gmail for Unread Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Gmail for Unread Replies": {
+      "main": [
+        [
+          {
+            "node": "Extract Reply Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Reply Data": {
+      "main": [
+        [
+          {
+            "node": "Claude: Classify Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Classify Intent": {
+      "main": [
+        [
+          {
+            "node": "Insert Reply to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Reply to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Switch on Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch on Intent": {
+      "main": [
+        [
+          {
+            "node": "Promote to HOT Prospect",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update: NOT_NOW + 60 Days",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag: WRONG_CONTACT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark: UNSUBSCRIBED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: Draft Answer to Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promote to HOT Prospect": {
+      "main": [
+        [
+          {
+            "node": "Telegram: INTERESTED Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: INTERESTED Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update: NOT_NOW + 60 Days": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag: WRONG_CONTACT": {
+      "main": [
+        [
+          {
+            "node": "Telegram: WRONG_CONTACT Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: WRONG_CONTACT Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark: UNSUBSCRIBED": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Draft Answer to Question": {
+      "main": [
+        [
+          {
+            "node": "Create Gmail Draft (Answer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Gmail Draft (Answer)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Question Alert + Draft Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Question Alert + Draft Ready": {
+      "main": [
+        [
+          {
+            "node": "Mark Email as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-13T00:00:00.000Z",
+  "versionId": "1"
+}
