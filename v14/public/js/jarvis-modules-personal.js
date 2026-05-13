@@ -296,32 +296,938 @@ const PERSONAL_MODULES = {
     JARVIS.Toast({ message: 'New task form coming soon — use /api/tasks POST for now', duration: 2000 });
   },
 
-  // ── STUBBED PERSONAL MODULES ───────────────────────────────────────────────
-  renderHabits() { this._stubModule('Habit Tracker', 'Ben\'s daily habit checklist. Port from V12.'); },
-  renderWellness() { this._stubModule('Wellness', 'Training, nutrition, sleep, supplements, bloods. Wire to rbtr_wellness_daily tables.'); },
-  renderNotes() { this._stubModule('Notes Vault', 'Quick notes + voice memo transcripts. Port from V12.'); },
-  renderPlanner() { this._stubModule('Planner', 'Daily / Weekly / Monthly / Yearly views. Port from V12.'); },
-  renderCalendar() { this._stubModule('Shared Calendar', 'Ben + Sarah + family events. Port from V12.'); },
-  renderNotifications() { this._stubModule('Notifications', 'System alerts + reminders. Port from V12.'); },
+  // ── HABIT TRACKER ──────────────────────────────────────────────────────────
+  renderHabits() {
+    const today = new Date().toLocaleDateString('en-GB');
+
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Habit Tracker</h1>
+        <div class="jarvis-module-actions">
+          <span class="text-small text-secondary">${today}</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Streak</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Days completed</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Completion Rate (30d)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0%</div>
+            <p class="text-small text-tertiary">Avg. daily completion</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Longest Streak</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Personal best</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Status</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0/8</div>
+            <p class="text-small text-tertiary">Habits complete</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Daily Habits</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Training Session</h4>
+                <p class="text-tiny text-tertiary">1h minimum — gym or home workout</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Protein Target</h4>
+                <p class="text-tiny text-tertiary">180g minimum daily</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Build Work</h4>
+                <p class="text-tiny text-tertiary">Truck progress or admin (30 min min)</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Content Creation</h4>
+                <p class="text-tiny text-tertiary">Film, edit, or post (any platform)</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Family Time</h4>
+                <p class="text-tiny text-tertiary">1h quality time (Hudson, Benson, Sarah, Peanut)</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">7+ Hours Sleep</h4>
+                <p class="text-tiny text-tertiary">Sleep tracker or manual log</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">No Alcohol</h4>
+                <p class="text-tiny text-tertiary">Zero units</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <input type="checkbox" style="width: 20px; height: 20px;" />
+              <div style="flex: 1;">
+                <h4 class="text-small font-weight-600">Morning Reflection</h4>
+                <p class="text-tiny text-tertiary">5 min journal or voice memo</p>
+              </div>
+            </label>
+          </div>
+
+          <p class="text-tiny text-tertiary" style="margin-top: 16px; color: var(--copper);">
+            Wire to rbtr_habits table. Track daily completion, streak logic, 30-day rolling average.
+          </p>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── WELLNESS ───────────────────────────────────────────────────────────────
+  async renderWellness() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Wellness</h1>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Weight</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—kg</div>
+            <p class="text-small text-tertiary">Current weight</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Avg. Sleep</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—h</div>
+            <p class="text-small text-tertiary">Last 7 days</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Workouts (30d)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—</div>
+            <p class="text-small text-tertiary">Training sessions</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Mood/Energy</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">—/10</div>
+            <p class="text-small text-tertiary">Today's rating</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Wellness Categories</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Training</h4>
+              <p class="text-tiny text-tertiary">Strength training 4x/week, cardio 2x/week, recovery protocols</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Nutrition</h4>
+              <p class="text-tiny text-tertiary">180g protein daily, calorie target, macro tracking</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Sleep</h4>
+              <p class="text-tiny text-tertiary">7-8h target, sleep tracker, quality score, bedtime routine</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Supplements</h4>
+              <p class="text-tiny text-tertiary">Daily stack: protein, creatine, omega-3, vitamin D, multivitamin</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Bloods</h4>
+              <p class="text-tiny text-tertiary">Quarterly blood panel: testosterone, vitamin levels, liver function</p>
+            </div>
+          </div>
+
+          <p class="text-tiny text-tertiary" style="margin-top: 16px; color: var(--copper);">
+            Wire to rbtr_wellness_daily table. Track weight, sleep, mood, energy, training sessions.
+          </p>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── NOTES VAULT ────────────────────────────────────────────────────────────
+  renderNotes() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Notes Vault</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="PERSONAL_MODULES.newNote()">
+            + New Note
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Total Notes</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Quick notes saved</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Voice Memos</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Transcribed via Claude</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Tags</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Categories created</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Last Week</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">New notes added</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Recent Notes</h3>
+          <div style="display: flex; gap: 12px; align-items: center; margin-top: 12px;">
+            <input type="text" class="jarvis-input" placeholder="Search notes..." style="width: 240px;" />
+            <select class="jarvis-input" style="width: 160px;">
+              <option value="">All tags</option>
+              <option value="build">Build</option>
+              <option value="content">Content</option>
+              <option value="personal">Personal</option>
+              <option value="ideas">Ideas</option>
+            </select>
+          </div>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-tertiary">No notes yet. Create your first note above.</p>
+          <p class="text-tiny text-tertiary" style="margin-top: 8px;">
+            Voice memos automatically transcribed via Claude API. Store quick thoughts, build ideas, content plans, personal reflections.
+          </p>
+        </div>
+      </div>
+    `;
+  },
+
+  newNote() {
+    JARVIS.Toast({ message: 'Note creation form coming soon', duration: 2000 });
+  },
+
+  // ── PLANNER ────────────────────────────────────────────────────────────────
+  renderPlanner() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Planner</h1>
+        <div class="jarvis-module-actions">
+          <div class="jarvis-tabs" id="planner-view-tabs">
+            <button class="jarvis-tab jarvis-tab--active" data-tab="daily" onclick="PERSONAL_MODULES.setPlannerView('daily')">Daily</button>
+            <button class="jarvis-tab" data-tab="weekly" onclick="PERSONAL_MODULES.setPlannerView('weekly')">Weekly</button>
+            <button class="jarvis-tab" data-tab="monthly" onclick="PERSONAL_MODULES.setPlannerView('monthly')">Monthly</button>
+            <button class="jarvis-tab" data-tab="yearly" onclick="PERSONAL_MODULES.setPlannerView('yearly')">Yearly</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Daily View</h3>
+          <span class="text-small text-secondary">${new Date().toLocaleDateString('en-GB')}</span>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">
+            Day planner with hourly blocks, tasks from rbtr_tasks, calendar events, habit tracker integration.
+          </p>
+
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">06:00 - Morning Routine</h4>
+              <p class="text-tiny text-tertiary">Wake, coffee, morning reflection, review today's plan</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">07:00 - Training</h4>
+              <p class="text-tiny text-tertiary">Gym session or home workout</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">09:00 - PSNM Work</h4>
+              <p class="text-tiny text-tertiary">Customer calls, quote generation, Atlas drafts</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">14:00 - Build Work</h4>
+              <p class="text-tiny text-tertiary">Truck fabrication or admin tasks</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">18:00 - Family Time</h4>
+              <p class="text-tiny text-tertiary">Dinner, Hudson/Benson activities, dog walk</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">21:00 - Evening Wind-Down</h4>
+              <p class="text-tiny text-tertiary">Content editing, reading, plan tomorrow</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  plannerView: 'daily',
+
+  setPlannerView(view) {
+    this.plannerView = view;
+    document.querySelectorAll('#planner-view-tabs .jarvis-tab').forEach(btn => {
+      btn.classList.toggle('jarvis-tab--active', btn.dataset.tab === view);
+    });
+    JARVIS.Toast({ message: `${view.charAt(0).toUpperCase() + view.slice(1)} view coming soon`, duration: 2000 });
+  },
+
+  // ── SHARED CALENDAR ────────────────────────────────────────────────────────
+  renderCalendar() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Shared Calendar</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--primary jarvis-btn--sm" onclick="PERSONAL_MODULES.newCalendarEvent()">
+            + New Event
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today's Events</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Scheduled events</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">This Week</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Upcoming events</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Ben's Events</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">This month</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Sarah's Events</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">This month</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Month View</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary">Shared family calendar: Ben's work schedule, Sarah's Pilates + AirBnB bookings, Hudson + Benson school activities, vet appointments, etc.</p>
+          <p class="text-tiny text-tertiary" style="margin-top: 8px; color: var(--copper);">
+            Wire to Google Calendar API. Sync Ben + Sarah calendars, display merged view, color-coded by person.
+          </p>
+
+          <div style="background: var(--surface-deep); height: 300px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-top: 16px;">
+            <p class="text-small text-tertiary">Calendar grid coming soon — month view with day cells, event markers</p>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  newCalendarEvent() {
+    JARVIS.Toast({ message: 'Calendar event form coming soon — wire to Google Calendar API', duration: 2000 });
+  },
+
+  // ── NOTIFICATIONS ──────────────────────────────────────────────────────────
+  renderNotifications() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Notifications</h1>
+        <div class="jarvis-module-actions">
+          <button class="jarvis-btn jarvis-btn--ghost jarvis-btn--sm" onclick="PERSONAL_MODULES.markAllRead()">
+            Mark All Read
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Unread</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">New notifications</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Today</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Received today</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">High Priority</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Needs attention</p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Archived</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div class="cockpit-money-value" style="color: var(--copper);">0</div>
+            <p class="text-small text-tertiary">Last 30 days</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Notification Types</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">System Alerts</h4>
+              <p class="text-tiny text-tertiary">Cron failures, API errors, backup alerts</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Task Reminders</h4>
+              <p class="text-tiny text-tertiary">Due date approaching, blocked tasks unblocked</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Business Updates</h4>
+              <p class="text-tiny text-tertiary">New PSNM enquiry, Booking Proof signup, Forge booking</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Content Notifications</h4>
+              <p class="text-tiny text-tertiary">YouTube comment, Patreon message, sponsor reply</p>
+            </div>
+
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="text-small font-weight-600" style="margin-bottom: 4px;">Calendar Events</h4>
+              <p class="text-tiny text-tertiary">15-min reminder before scheduled event</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Recent Notifications</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-tertiary">No notifications yet.</p>
+        </div>
+      </div>
+    `;
+  },
+
+  markAllRead() {
+    JARVIS.Toast({ message: 'All notifications marked as read', duration: 2000 });
+  },
   renderBankruptcyWorkbook() {
     document.getElementById('mainStage').innerHTML = `
       <div class="jarvis-module-header">
         <h1 class="jarvis-module-title">Bankruptcy Workbook</h1>
       </div>
-      <div class="jarvis-card">
+
+      <div class="jarvis-card" style="border: 2px solid var(--copper); margin-bottom: 32px;">
         <div class="jarvis-card__body">
-          <p class="text-small text-secondary">Personal bankruptcy documentation:</p>
-          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Personal-Bankruptcy/', '_blank')" style="margin-top: 12px;">
-            Open Docs Folder →
+          <p class="text-small text-secondary">
+            <strong style="color: var(--copper);">BANKRUPTCY CONFIRMED 11 MAY 2026</strong> — PSNM + Eternal Kustoms in scope. Sarah's STR business (Forge + Booking Proof) kept separate. Conversation with Sarah due 15 May 2026 (see rbtr_tasks).
+          </p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Documentation</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Personal-Bankruptcy/', '_blank')" style="width: 100%;">
+              Open Bankruptcy Docs Folder →
+            </button>
+            <p class="text-tiny text-tertiary" style="margin-top: 8px;">
+              Contains: IVA paperwork, creditor list, asset declarations, legal correspondence
+            </p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Three-Gate Check</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 8px;">
+              <li class="text-small">✓ Asset separation gate</li>
+              <li class="text-small">✓ Bankruptcy positioning gate</li>
+              <li class="text-small">✓ Sarah's load gate</li>
+            </ul>
+            <p class="text-tiny text-tertiary" style="margin-top: 8px;">
+              All agents run this check before any action affecting Ben or Sarah's businesses
+            </p>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Asset Ownership</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <div style="display: grid; gap: 8px;">
+              <div style="padding: 8px; background: var(--surface-deep); border-radius: 4px;">
+                <h4 class="text-tiny font-weight-600">Ben (In Scope)</h4>
+                <p class="text-tiny text-tertiary">PSNM, Eternal Kustoms</p>
+              </div>
+              <div style="padding: 8px; background: var(--surface-deep); border-radius: 4px;">
+                <h4 class="text-tiny font-weight-600">Sarah (Protected)</h4>
+                <p class="text-tiny text-tertiary">Forge STR, Booking Proof SaaS, all AirBnB assets</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Key Dates</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <div style="display: grid; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <span class="text-small">Bankruptcy confirmed</span>
+              <span class="font-mono text-small" style="color: var(--copper);">11 May 2026</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <span class="text-small">Sarah conversation due</span>
+              <span class="font-mono text-small" style="color: var(--copper);">15 May 2026</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <span class="text-small">RBTR departure</span>
+              <span class="font-mono text-small" style="color: var(--copper);">1 Jul 2027</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── LEGAL REMINDER ─────────────────────────────────────────────────────────
+  renderLegalReminder() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Legal Reminder</h1>
+      </div>
+
+      <div class="jarvis-card" style="border: 2px solid var(--copper);">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Narrative + Bankruptcy Context</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">
+            <strong>Context widget for every session:</strong> Ben is going through personal bankruptcy (confirmed 11 May 2026). All decisions must pass three-gate check (asset separation, bankruptcy positioning, Sarah's load).
+          </p>
+
+          <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; margin-bottom: 16px;">
+            <h4 class="text-small font-weight-600" style="margin-bottom: 8px;">Bankruptcy-Aware Rule (LOCKED)</h4>
+            <p class="text-tiny text-tertiary" style="line-height: 1.6;">
+              <strong>Asset separation gate:</strong> Does this create paper trail suggesting Ben operates Sarah's assets? Route through Sarah's identity.<br><br>
+              <strong>Bankruptcy positioning gate:</strong> Does this affect Ben's bankruptcy positioning? Stop and surface to Ben.<br><br>
+              <strong>Sarah's load gate:</strong> Does this add operational load to Sarah? Redesign for single-click.<br><br>
+              <strong>Sarah's STR business (Forge + Booking Proof):</strong> Sarah's in every dimension — director, shareholder, bank signatory, platform account holder, insurance named party, operator. Ben advises only.<br><br>
+              <strong>PSNM + Eternal Kustoms:</strong> Ben's businesses, in scope for bankruptcy. Conversation with Sarah due 15 May 2026 (see rbtr_tasks).
+            </p>
+          </div>
+
+          <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px;">
+            <h4 class="text-small font-weight-600" style="margin-bottom: 8px;">This Widget Appears On:</h4>
+            <p class="text-tiny text-tertiary">Every JARVIS session start, every Claude Code prompt, every major decision point. Collapsible after read, but always visible.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Legal Documents Access</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <button class="jarvis-btn jarvis-btn--secondary" onclick="window.open('file:///Users/bengreenwood/Documents/RBTR-Brain/03-Resources/Personal-Bankruptcy/', '_blank')" style="width: 100%;">
+            Open Bankruptcy Docs →
           </button>
         </div>
       </div>
     `;
   },
-  renderLegalReminder() { this._stubModule('Legal Reminder', 'Narrative + bankruptcy context widget. Port from V12.'); },
-  renderFourGates() { this._stubModule('Four Gates Check', 'Decision framework. Port from V12.'); },
-  renderOwnership() { this._stubModule('Ownership', 'APA status, ownership chain. Port from V12.'); },
-  renderFamily() { this._stubModule('Family', 'Hudson + Benson + Peanut activities. Port from V12.'); },
+
+  // ── FOUR GATES CHECK ───────────────────────────────────────────────────────
+  renderFourGates() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Four Gates Check</h1>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Decision Framework</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">
+            Before any major decision (business pivot, large purchase, time commitment, relationship change), run through four gates:
+          </p>
+
+          <div style="display: grid; gap: 16px;">
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; border-left: 4px solid var(--copper);">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px;">Gate 1: Alignment</h4>
+              <p class="text-small text-secondary" style="margin-bottom: 8px;">Does this align with RBTR mission (July 1 2027 departure, 5-year expedition)?</p>
+              <p class="text-tiny text-tertiary">Ask: Does this get us closer to departure or distract from it? Does it serve the expedition or delay it?</p>
+            </div>
+
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; border-left: 4px solid var(--copper);">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px;">Gate 2: Resources</h4>
+              <p class="text-small text-secondary" style="margin-bottom: 8px;">Can we afford this (time, money, energy) without compromising build progress?</p>
+              <p class="text-tiny text-tertiary">Ask: What's the true cost? What do we sacrifice to do this? Is there a cheaper/faster way?</p>
+            </div>
+
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; border-left: 4px solid var(--copper);">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px;">Gate 3: Family</h4>
+              <p class="text-small text-secondary" style="margin-bottom: 8px;">Does Sarah agree? Does this work for Hudson + Benson?</p>
+              <p class="text-tiny text-tertiary">Ask: Have I consulted Sarah properly? Are the kids on board? Does this add stress to the family unit?</p>
+            </div>
+
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; border-left: 4px solid var(--copper);">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px;">Gate 4: Reversibility</h4>
+              <p class="text-small text-secondary" style="margin-bottom: 8px;">Can we undo this if it goes wrong? What's the exit cost?</p>
+              <p class="text-tiny text-tertiary">Ask: If this fails, how bad is the downside? Can we walk away? Are we locked in?</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Decision Log</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-tertiary">Log major decisions with four-gate analysis. Track outcomes, learn from wins/failures.</p>
+          <p class="text-tiny text-tertiary" style="margin-top: 8px;">
+            Examples: Camera gear phased purchase (passed all 4), early sponsor outreach (failed Gate 2 — too early, deferred to Q4 2026), Booking Proof build (passed — Sarah's SaaS, aligned with RBTR timeline)
+          </p>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── OWNERSHIP ──────────────────────────────────────────────────────────────
+  renderOwnership() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Ownership</h1>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Asset Protection Agreement (APA) Status</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary" style="margin-bottom: 16px;">
+            Post-bankruptcy asset ownership chain. Sarah owns all STR business + Booking Proof IP. Ben advises but does not operate.
+          </p>
+
+          <div style="display: grid; gap: 12px;">
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px; border: 2px solid var(--copper);">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px; color: var(--copper);">Sarah Jane Jones (Protected)</h4>
+              <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 8px;">
+                <li class="text-small">✓ Forge STR business (4 Woodhead Mews AirBnB)</li>
+                <li class="text-small">✓ Booking Proof SaaS (founder, sole director)</li>
+                <li class="text-small">✓ All STR Ltd company shares (when formed)</li>
+                <li class="text-small">✓ Bank account signatory (sole)</li>
+                <li class="text-small">✓ Platform accounts (AirBnB, VRBO — in Sarah's name)</li>
+                <li class="text-small">✓ Insurance named party</li>
+              </ul>
+              <p class="text-tiny text-tertiary" style="margin-top: 12px;">
+                <strong>Ben's role:</strong> Advisor only. No operational control, no signatory rights, no ownership paper trail.
+              </p>
+            </div>
+
+            <div style="padding: 16px; background: var(--surface-deep); border-radius: 6px;">
+              <h4 class="font-display text-h2" style="font-size: 16px; margin-bottom: 8px;">Ben Greenwood (Bankruptcy Scope)</h4>
+              <ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 8px;">
+                <li class="text-small">✓ Pallet Storage Near Me (PSNM) — in bankruptcy scope</li>
+                <li class="text-small">✓ Eternal Kustoms — in bankruptcy scope</li>
+                <li class="text-small">✓ RBTR expedition — personal project (YouTube revenue post-departure not in scope)</li>
+              </ul>
+              <p class="text-tiny text-tertiary" style="margin-top: 12px;">
+                <strong>Status:</strong> Conversation with Sarah due 15 May 2026 (see rbtr_tasks). Agree PSNM + EK wind-down or continuation plan.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Ownership Chain Verification</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary">Before any business action, verify ownership chain:</p>
+          <div style="display: grid; gap: 8px; margin-top: 12px;">
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <p class="text-small">1. Who legally owns this asset?</p>
+            </div>
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <p class="text-small">2. Who is the bank signatory?</p>
+            </div>
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <p class="text-small">3. Who appears on platform accounts / insurance / contracts?</p>
+            </div>
+            <div style="padding: 12px; background: var(--surface-deep); border-radius: 6px;">
+              <p class="text-small">4. Does this action create a paper trail suggesting Ben operates Sarah's asset?</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  // ── FAMILY ─────────────────────────────────────────────────────────────────
+  renderFamily() {
+    document.getElementById('mainStage').innerHTML = `
+      <div class="jarvis-module-header">
+        <h1 class="jarvis-module-title">Family</h1>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Hudson (10 years old)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <p class="text-small text-secondary" style="margin-bottom: 12px;">Oldest son, homeschooled, on-camera talent for RBTR content</p>
+
+            <div style="display: grid; gap: 8px;">
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Interests</h4>
+              <p class="text-tiny text-tertiary">Photography, gaming, geography, science experiments</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Homeschool Focus</h4>
+              <p class="text-tiny text-tertiary">Math, English, geography (45-country route study), Spanish</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">RBTR Role</h4>
+              <p class="text-tiny text-tertiary">Kid's-eye-view photography, on-camera vlogs, cultural immersion ambassador</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Activities</h4>
+              <p class="text-tiny text-tertiary">Football, swimming, gaming with friends, YouTube Kids</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Benson (8 years old)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <p class="text-small text-secondary" style="margin-bottom: 12px;">Youngest son, homeschooled, RBTR on-camera talent</p>
+
+            <div style="display: grid; gap: 8px;">
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Interests</h4>
+              <p class="text-tiny text-tertiary">Animals, building (Lego), outdoor adventures, dog training</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Homeschool Focus</h4>
+              <p class="text-tiny text-tertiary">Reading, math, science (hands-on projects), Spanish basics</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">RBTR Role</h4>
+              <p class="text-tiny text-tertiary">Animal spotter, campsite helper, daily chores (water fill, dog care)</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Activities</h4>
+              <p class="text-tiny text-tertiary">Football, dog walks with Peanut, Lego building, family movie nights</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Peanut (Dog)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <p class="text-small text-secondary" style="margin-bottom: 12px;">Family dog, expedition mascot, Instagram appeal gold</p>
+
+            <div style="display: grid; gap: 8px;">
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Breed</h4>
+              <p class="text-tiny text-tertiary">Mixed breed (rescue), medium-sized, travel-friendly</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">RBTR Role</h4>
+              <p class="text-tiny text-tertiary">Morale officer, campsite security, content gold (dog + truck shots)</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Daily Routine</h4>
+              <p class="text-tiny text-tertiary">2x walks (morning + evening), feeding 2x daily, playtime with Hudson + Benson</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Travel Prep</h4>
+              <p class="text-tiny text-tertiary">Vaccinations (rabies, distemper, parvo), microchip, pet passport, border crossing documents</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="jarvis-card">
+          <div class="jarvis-card__header">
+            <h3 class="font-display text-h2">Sarah (Wife)</h3>
+          </div>
+          <div class="jarvis-card__body">
+            <p class="text-small text-secondary" style="margin-bottom: 12px;">Partner, homeschool lead, Booking Proof founder, Forge STR operator</p>
+
+            <div style="display: grid; gap: 8px;">
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Businesses</h4>
+              <p class="text-tiny text-tertiary">Forge STR (4 Woodhead Mews AirBnB), Booking Proof SaaS (founder)</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">RBTR Role</h4>
+              <p class="text-tiny text-tertiary">Homeschool lead, meal planning, family logistics, Patreon community, merch design</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Personal Goals (15-month plan)</h4>
+              <p class="text-tiny text-tertiary">Pilates instructor cert, AirBnB co-host (with Ben), fitness journey, Booking Proof launch</p>
+
+              <h4 class="text-tiny font-weight-600" style="margin-top: 8px;">Dedicated Module</h4>
+              <p class="text-tiny text-tertiary">See "Sarah's Space" section for full dedicated modules (Plan, Habits, Mood/Energy, Voice Cloning, Resources)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jarvis-card">
+        <div class="jarvis-card__header">
+          <h3 class="font-display text-h2">Family Calendar Sync</h3>
+        </div>
+        <div class="jarvis-card__body">
+          <p class="text-small text-secondary">Wire to Shared Calendar module. Track Hudson + Benson school activities, vet appointments (Peanut), Sarah's Pilates classes, family events.</p>
+          <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm" onclick="PERSONAL_MODULES.renderCalendar()" style="margin-top: 12px;">
+            View Family Calendar →
+          </button>
+        </div>
+      </div>
+    `;
+  },
 
   _stubModule(title, description) {
     document.getElementById('mainStage').innerHTML = `
