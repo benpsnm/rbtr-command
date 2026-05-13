@@ -705,6 +705,8 @@
   <script src="/js/jarvis-components.js"></script>
   <script src="/js/jarvis-api.js"></script>
   <script src="/js/jarvis-modules-psnm.js"></script>
+  <script src="/js/jarvis-modules-forge.js"></script>
+  <script src="/js/jarvis-modules-booking-proof.js"></script>
   <script>
     // ── GLOBAL STATE ─────────────────────────────────────────────────────────
     let currentModule = 'cockpit';
@@ -1049,6 +1051,13 @@
           PSNM_MODULES.renderIntelPipeline();
         } else if (submodule === 'revenue') {
           PSNM_MODULES.renderRevenueDashboard();
+        }
+      } else if (module === 'forge') {
+        // Forge / STR modules
+        if (!submodule) {
+          FORGE_MODULES.renderLanding();
+        } else {
+          FORGE_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
         }
       } else {
         // Other modules (coming in STAGE 4+)
