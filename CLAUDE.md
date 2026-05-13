@@ -57,6 +57,26 @@ Every session follows this sequence:
 - Commit + push if any code changed
 - If session ended with builds running, list them so next session resumes properly
 
+**TECH SCAN RITUAL (locked May 13 2026):**
+
+Every 3 days minimum, Claude proactively scans the market for new AI tools / agents / systems / tech that could aid PSNM, Forge, Booking Proof, RBTR, or personal ops.
+
+**Check at session start:**
+- Read ~/Documents/RBTR-Brain/00-Inbox/LAST-TECH-SCAN.md
+- If days_since > 3, raise it with Ben before anything else
+- "Tech scan due — running one now?" — one-line offer, don't lecture
+
+**Scan format:**
+- Top 2-4 genuine candidates only (no shiny-toy noise)
+- For each: what it is, what it solves, cost, integration effort, honest verdict
+- Bottom: explicit "don't bother" list for tools Ben might hear about elsewhere
+- End with Ben + Claude decision together on what to adopt
+
+**After every scan:**
+- Update LAST-TECH-SCAN.md with new date
+- Append scan summary to log section
+- If anything adopted, log to Obsidian decisions folder
+
 ---
 
 ## Owner & context

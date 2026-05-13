@@ -183,6 +183,26 @@ Rules: top_actions must be SPECIFIC — named prospect, named action. No generic
   lines.push(`• Days to July rent cliff: <b>${daysToCliff}</b>`);
   lines.push('');
 
+  // Tech scan status
+  try {
+    const fs = require('fs');
+    const techScanPath = '/Users/bengreenwood/Documents/RBTR-Brain/00-Inbox/LAST-TECH-SCAN.md';
+    if (fs.existsSync(techScanPath)) {
+      const content = fs.readFileSync(techScanPath, 'utf8');
+      const dateMatch = content.match(/\*\*Last scan date:\*\* (\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        const lastScan = new Date(dateMatch[1]);
+        const daysSince = Math.floor((now - lastScan) / 86400000);
+        const status = daysSince > 3 ? '⚠️ DUE — flag with Claude' : '✅ On track';
+        lines.push(`🔬 <b>TECH SCAN STATUS</b>`);
+        lines.push(`• Last scan: ${lastScan.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`);
+        lines.push(`• Days since: <b>${daysSince}</b>`);
+        lines.push(`• Status: ${status}`);
+        lines.push('');
+      }
+    }
+  } catch (_) { /* silently skip if file doesn't exist or can't be read */ }
+
   // Top 3 actions
   lines.push(`🔥 <b>TODAY'S TOP 3 ACTIONS</b>`);
   if (sections?.top_actions?.length) {
