@@ -28,20 +28,22 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
           'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
         },
         body: JSON.stringify({
           text,
           model_id: 'eleven_turbo_v2_5',
           voice_settings: {
-            stability: 0.5,
+            stability: 0.55,
             similarity_boost: 0.75,
+            style: 0.15,
+            use_speaker_boost: true,
           },
         }),
       }
