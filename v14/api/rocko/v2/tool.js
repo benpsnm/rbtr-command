@@ -5,6 +5,14 @@
 // Logs every execution to rocko_v2_messages
 // ═══════════════════════════════════════════════════════════════════════════
 
+import {
+  gmailSearch,
+  gmailRead,
+  gmailDraft,
+  calendarCheck,
+  calendarSuggestTime
+} from './_google_api.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -208,46 +216,75 @@ async function approve_atlas_draft(args) {
   };
 }
 
-// New 6 tools (Phase 2-3 implementation)
+// New 6 tools (Phase 3 — Gmail + Calendar real implementations)
 async function gmail_search(args) {
-  return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 3',
-    message: 'Gmail MCP integration pending',
-    query: args?.query
-  };
+  if (!args?.query) {
+    return { error: 'query required' };
+  }
+
+  try {
+    const result = await gmailSearch(args.query, args.max_results || 10);
+    return result;
+  } catch (error) {
+    return {
+      error: error.message,
+      hint: error.message.includes('No Google integration')
+        ? 'Run OAuth flow: GET /api/rocko/v2/google/auth/init'
+        : null
+    };
+  }
 }
 
 async function gmail_read(args) {
-  return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 3',
-    message: 'Gmail MCP integration pending'
-  };
+  if (!args?.message_id) {
+    return { error: 'message_id required' };
+  }
+
+  try {
+    const result = await gmailRead(args.message_id);
+    return result;
+  } catch (error) {
+    return { error: error.message };
+  }
 }
 
 async function gmail_draft(args) {
-  return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 3',
-    message: 'Gmail MCP integration pending'
-  };
+  if (!args?.to || !args?.subject || !args?.body) {
+    return { error: 'to, subject, body required' };
+  }
+
+  try {
+    const result = await gmailDraft(args.to, args.subject, args.body);
+    return result;
+  } catch (error) {
+    return { error: error.message };
+  }
 }
 
 async function calendar_check(args) {
-  return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 3',
-    message: 'Calendar MCP integration pending'
-  };
+  try {
+    const result = await calendarCheck(args?.days_ahead || 7);
+    return result;
+  } catch (error) {
+    return {
+      error: error.message,
+      hint: error.message.includes('No Google integration')
+        ? 'Run OAuth flow: GET /api/rocko/v2/google/auth/init'
+        : null
+    };
+  }
 }
 
 async function calendar_suggest_time(args) {
-  return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 3',
-    message: 'Calendar MCP integration pending'
-  };
+  try {
+    const result = await calendarSuggestTime(
+      args?.duration_minutes || 30,
+      args?.days_ahead || 7
+    );
+    return result;
+  } catch (error) {
+    return { error: error.message };
+  }
 }
 
 async function claude_code_fire(args) {
