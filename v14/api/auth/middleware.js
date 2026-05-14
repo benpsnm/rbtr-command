@@ -5,6 +5,12 @@ const jwt    = require('jsonwebtoken');
 const { parse } = require('cookie');
 
 function requireAuth(req) {
+  // Mobile PWA routes (/m/*) are auth-exempt for easy install
+  const url = req.url || '';
+  if (url.startsWith('/m/') || url === '/m') {
+    return { authorized: true, reason: 'mobile_pwa_exempt' };
+  }
+
   const rbtrToken  = process.env.RBTR_AUTH_TOKEN;
   const signingKey = process.env.SESSION_SIGNING_KEY;
 
