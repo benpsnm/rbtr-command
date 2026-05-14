@@ -208,19 +208,19 @@ module.exports = async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const action = (req.method === 'GET' ? req.query?.action : req.query?.action) || '';
+  let body = {};
+  if (req.method === 'POST') {
+    try { body = typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}'); }
+    catch { body = {}; }
+  }
+
+  const action = (req.method === 'GET' ? req.query?.action : body?.action) || '';
   if (!action) {
     return res.status(400).json({ ok: false, error: 'action param required' });
   }
 
   const access = checkAccess(req, action);
   if (!access.ok) return res.status(access.status || 401).json({ ok: false, error: access.error });
-
-  let body = {};
-  if (req.method === 'POST') {
-    try { body = typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}'); }
-    catch { body = {}; }
-  }
 
   try {
     let result;
@@ -245,6 +245,13 @@ module.exports = async function handler(req, res) {
       case 'run_hot_eval':     result = await runHotEval(body); break;
       case 'approve_draft':    result = await approveDraft(body); break;
       case 'reject_draft':     result = await rejectDraft(body); break;
+
+      // ── Generic Supabase query (for UI data fetching)
+      case 'supabase_query': {
+        if (!body.table) return res.status(400).json({ ok: false, error: 'table required' });
+        const rows = await db.select(body.table, body.query || 'select=*');
+        return res.status(200).json(rows || []);
+      }
 
       default:
         return res.status(400).json({ ok: false, error: `unknown action: ${action}` });
