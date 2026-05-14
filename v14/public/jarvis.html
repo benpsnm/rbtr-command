@@ -770,6 +770,109 @@
       gap: var(--space-3);
       flex-wrap: wrap;
     }
+
+    /* ── MODAL ─────────────────────────────────────────────────────────────── */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal--open {
+      display: flex;
+    }
+
+    .modal__overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      animation: fadeIn var(--duration-normal) var(--ease-out);
+    }
+
+    .modal__content {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 700px;
+      width: 90%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlideIn var(--duration-slow) var(--ease-out);
+      overflow: hidden;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal__header {
+      padding: var(--space-6);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal__title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--text-primary);
+    }
+
+    .modal__close {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .modal__close:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    .modal__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-6);
+    }
+
+    .modal__footer {
+      padding: var(--space-6);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: var(--space-3);
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -2661,6 +2764,490 @@
 
       renderRevenueDashboard: function() {
         document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Revenue Dashboard module coming soon</p></div></div>';
+      },
+    };
+
+    // ── RBTR MODULES ──────────────────────────────────────────────────────────
+    const RBTR_MODULES = {
+      renderLanding: function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">RBTR</h1>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'sponsors')">
+              <div class="jarvis-card__header">
+                <h3 class="font-display text-h2">🤝 Sponsors</h3>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Sponsor outreach, partnerships, tracking</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'build')">
+              <div class="jarvis-card__header">
+                <h3 class="font-display text-h2">🔧 Build Progress</h3>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Truck conversion stages, timeline</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'route')">
+              <div class="jarvis-card__header">
+                <h3 class="font-display text-h2">🗺️ Route Planning</h3>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">UK to Singapore, waypoints, logistics</p>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      renderSponsors: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">RBTR Sponsors</h1>
+            <div class="jarvis-module-actions">
+              <button class="jarvis-btn jarvis-btn--sm" onclick="RBTR_MODULES.openAddSponsorModal()">
+                + Add Sponsor
+              </button>
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <div id="sponsorsList">Loading sponsors...</div>
+            </div>
+          </div>
+        `;
+
+        // Fetch sponsors from rbtr_atlas_prospects table
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'rbtr_atlas_prospects',
+              query: 'order=tier.asc,value_estimate_gbp.desc&select=*'
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch sponsors');
+          const sponsors = await response.json();
+
+          const listEl = document.getElementById('sponsorsList');
+          if (sponsors.length === 0) {
+            listEl.innerHTML = '<p class="text-secondary">No sponsors found</p>';
+            return;
+          }
+
+          listEl.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Tier</th>
+                  <th>Status</th>
+                  <th>Value Est.</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sponsors.map(s => `
+                  <tr>
+                    <td>
+                      <strong style="cursor: pointer; color: var(--copper);"
+                              onclick="RBTR_MODULES.openSponsorModal('${s.id}')">
+                        ${s.company_name || 'Unknown'}
+                      </strong>
+                      ${s.website_url ? `<br><span class="text-small text-secondary">${s.website_url}</span>` : ''}
+                    </td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${s.tier === 1 ? 'success' : s.tier === 2 ? 'default' : 'secondary'}">
+                        Tier ${s.tier || 3}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${s.status === 'signed' ? 'success' : s.status === 'replied' ? 'warning' : 'default'}">
+                        ${s.status || 'target'}
+                      </span>
+                    </td>
+                    <td class="font-mono">£${(s.value_estimate_gbp || 0).toLocaleString()}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost"
+                              onclick="RBTR_MODULES.openSponsorModal('${s.id}')">
+                        Draft Email
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+        } catch (error) {
+          document.getElementById('sponsorsList').innerHTML =
+            `<p class="text-danger">Error loading sponsors: ${error.message}</p>`;
+        }
+      },
+
+      openSponsorModal: async function(sponsorId) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('sponsorModal');
+        if (!modal) {
+          modal = document.createElement('div');
+          modal.id = 'sponsorModal';
+          modal.className = 'modal';
+          document.body.appendChild(modal);
+        }
+
+        // Show loading state
+        modal.innerHTML = `
+          <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+          <div class="modal__content">
+            <div class="modal__body" style="padding: 48px; text-align: center;">
+              <p>Loading sponsor and generating email draft...</p>
+            </div>
+          </div>
+        `;
+        modal.classList.add('modal--open');
+
+        try {
+          // Fetch sponsor data
+          const sponsorRes = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'rbtr_atlas_prospects',
+              query: `id=eq.${sponsorId}&select=*`
+            })
+          });
+
+          if (!sponsorRes.ok) throw new Error('Failed to fetch sponsor');
+          const sponsors = await sponsorRes.json();
+          const sponsor = sponsors[0];
+
+          if (!sponsor) throw new Error('Sponsor not found');
+
+          // Generate email draft
+          const draftRes = await fetch('/api/rocko/draft-sponsor-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sponsor_id: sponsor.id,
+              sponsor_name: sponsor.company_name,
+              sponsor_tier: sponsor.tier,
+              sponsor_url: sponsor.website_url,
+            })
+          });
+
+          if (!draftRes.ok) throw new Error('Failed to generate draft');
+          const draftData = await draftRes.json();
+
+          // Render modal with draft
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">${sponsor.company_name}</h2>
+                <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+              </div>
+
+              <div class="modal__body">
+                <div style="margin-bottom: 24px;">
+                  <div style="display: grid; gap: 8px; margin-bottom: 16px;">
+                    <div><strong>Tier:</strong> ${sponsor.tier || 3}</div>
+                    <div><strong>Status:</strong>
+                      <span class="jarvis-badge jarvis-badge--${sponsor.status === 'signed' ? 'success' : 'default'}">
+                        ${sponsor.status || 'target'}
+                      </span>
+                    </div>
+                    <div><strong>Value Est.:</strong> £${(sponsor.value_estimate_gbp || 0).toLocaleString()}</div>
+                    ${sponsor.website_url ? `<div><strong>Website:</strong> <a href="${sponsor.website_url}" target="_blank" style="color: var(--copper);">${sponsor.website_url}</a></div>` : ''}
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <h3 class="font-display text-h3" style="margin-bottom: 8px;">Email Draft</h3>
+                  <div style="margin-bottom: 8px;">
+                    <strong>Subject:</strong> ${draftData.subject || 'Partnership Opportunity: RBTR Overland Expedition 2027'}
+                  </div>
+                  <textarea id="emailDraft"
+                            style="width: 100%; min-height: 300px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-primary); font-family: var(--font-body); font-size: 14px; resize: vertical;"
+                  >${draftData.draft}</textarea>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+                  <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                          onclick="RBTR_MODULES.copyEmailToClipboard()">
+                    📋 Copy to Clipboard
+                  </button>
+                  <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                          onclick="RBTR_MODULES.regenerateDraft('${sponsor.id}')">
+                    🔄 Regenerate
+                  </button>
+                </div>
+
+                <div style="border-top: 1px solid var(--border); padding-top: 16px;">
+                  <h4 class="font-display text-small" style="margin-bottom: 12px;">Update Status</h4>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'contacted' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'contacted')">
+                      Mark Contacted
+                    </button>
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'replied' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'replied')">
+                      Mark Replied
+                    </button>
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'signed' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'signed')">
+                      Mark Signed
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                  Close
+                </button>
+              </div>
+            </div>
+          `;
+
+        } catch (error) {
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">Error</h2>
+                <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+              </div>
+              <div class="modal__body">
+                <p class="text-danger">${error.message}</p>
+              </div>
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                  Close
+                </button>
+              </div>
+            </div>
+          `;
+        }
+      },
+
+      openAddSponsorModal: function() {
+        let modal = document.getElementById('sponsorModal');
+        if (!modal) {
+          modal = document.createElement('div');
+          modal.id = 'sponsorModal';
+          modal.className = 'modal';
+          document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+          <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+          <div class="modal__content">
+            <div class="modal__header">
+              <h2 class="modal__title">Add New Sponsor</h2>
+              <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+            </div>
+
+            <div class="modal__body">
+              <form id="addSponsorForm" style="display: grid; gap: 16px;">
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Company Name *</label>
+                  <input type="text" name="company_name" required
+                         class="jarvis-input" style="width: 100%;" placeholder="e.g. Alu-Cab">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Website URL</label>
+                  <input type="url" name="website_url"
+                         class="jarvis-input" style="width: 100%;" placeholder="https://...">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Tier</label>
+                  <select name="tier" class="jarvis-input" style="width: 100%;">
+                    <option value="1">Tier 1 (Premium)</option>
+                    <option value="2" selected>Tier 2 (Mid-tier)</option>
+                    <option value="3">Tier 3 (Local/Small)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Value Estimate (£)</label>
+                  <input type="number" name="value_estimate_gbp"
+                         class="jarvis-input" style="width: 100%;" placeholder="5000" min="0">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Notes</label>
+                  <textarea name="notes" rows="3"
+                            class="jarvis-input" style="width: 100%; resize: vertical;"
+                            placeholder="Why this sponsor? Product fit? Contact info?"></textarea>
+                </div>
+              </form>
+            </div>
+
+            <div class="modal__footer">
+              <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                Cancel
+              </button>
+              <button class="jarvis-btn" onclick="RBTR_MODULES.submitNewSponsor()">
+                Add Sponsor
+              </button>
+            </div>
+          </div>
+        `;
+
+        modal.classList.add('modal--open');
+      },
+
+      submitNewSponsor: async function() {
+        const form = document.getElementById('addSponsorForm');
+        const formData = new FormData(form);
+        const data = {
+          company_name: formData.get('company_name'),
+          website_url: formData.get('website_url') || null,
+          tier: parseInt(formData.get('tier')),
+          value_estimate_gbp: parseFloat(formData.get('value_estimate_gbp')) || 0,
+          notes: formData.get('notes') || null,
+          status: 'target',
+        };
+
+        if (!data.company_name) {
+          JARVIS.Toast({ message: 'Company name is required', duration: 2000 });
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_insert',
+              table: 'rbtr_atlas_prospects',
+              data: data
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to add sponsor');
+
+          JARVIS.Toast({ message: 'Sponsor added successfully', duration: 2000 });
+          this.closeSponsorModal();
+          this.renderSponsors(); // Refresh list
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      closeSponsorModal: function() {
+        const modal = document.getElementById('sponsorModal');
+        if (modal) {
+          modal.classList.remove('modal--open');
+          setTimeout(() => modal.remove(), 300);
+        }
+      },
+
+      copyEmailToClipboard: async function() {
+        const draftText = document.getElementById('emailDraft');
+        if (!draftText) return;
+
+        try {
+          await navigator.clipboard.writeText(draftText.value);
+          JARVIS.Toast({ message: 'Email copied to clipboard!', duration: 2000 });
+        } catch (error) {
+          JARVIS.Toast({ message: 'Failed to copy', duration: 2000 });
+        }
+      },
+
+      regenerateDraft: function(sponsorId) {
+        this.closeSponsorModal();
+        setTimeout(() => this.openSponsorModal(sponsorId), 100);
+      },
+
+      updateSponsorStatus: async function(sponsorId, newStatus) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_update',
+              table: 'rbtr_atlas_prospects',
+              query: `id=eq.${sponsorId}`,
+              data: {
+                status: newStatus,
+                updated_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to update status');
+
+          JARVIS.Toast({ message: `Status updated to ${newStatus}`, duration: 2000 });
+
+          // Refresh modal
+          this.closeSponsorModal();
+          setTimeout(() => this.openSponsorModal(sponsorId), 100);
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderBuild: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Build Progress module coming soon</p></div></div>';
+      },
+
+      renderRoute: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Route Planning module coming soon</p></div></div>';
+      },
+    };
+
+    // ── FORGE MODULES (STR) ───────────────────────────────────────────────────
+    const FORGE_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Forge (STR) modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── PERSONAL MODULES ──────────────────────────────────────────────────────
+    const PERSONAL_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Personal modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── SARAH MODULES ─────────────────────────────────────────────────────────
+    const SARAH_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Sarah\'s modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── SYSTEM MODULES ────────────────────────────────────────────────────────
+    const SYSTEM_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>System modules coming soon</p></div></div>';
       },
     };
   </script>
