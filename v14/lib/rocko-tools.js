@@ -125,18 +125,26 @@ export const ROCKO_TOOLS = [
 
   {
     name: 'fetch_recent_replies',
-    description: 'Fetch recent replies from outreach prospects in last N hours.',
+    description: 'Fetch recent replies from atlas prospects (PSNM + RBTR) in last 48 hours.',
     input_schema: {
       type: 'object',
-      properties: {
-        hours: { type: 'integer', default: 24, description: 'Hours to look back' },
-      },
+      properties: {},
     },
     execute: async (input) => {
-      const hours = input.hours || 24;
-      const since = new Date(Date.now() - hours * 3600000).toISOString();
-      const touches = await sbQuery('psnm_outreach_touches', `outcome=eq.reply&sent_date=gte.${since}&order=sent_date.desc&select=*`);
-      return touches;
+      const since = new Date(Date.now() - 48 * 3600000).toISOString();
+
+      const [psnmReplies, rbtrReplies] = await Promise.all([
+        sbQuery('psnm_atlas_replies', `received_at=gte.${since}&order=received_at.desc&select=*`).catch(() => []),
+        sbQuery('rbtr_atlas_replies', `received_at=gte.${since}&order=received_at.desc&select=*`).catch(() => []),
+      ]);
+
+      return {
+        psnm_replies: psnmReplies.length,
+        rbtr_replies: rbtrReplies.length,
+        total: psnmReplies.length + rbtrReplies.length,
+        psnm: psnmReplies,
+        rbtr: rbtrReplies,
+      };
     },
   },
 
@@ -244,20 +252,27 @@ export const ROCKO_TOOLS = [
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
       // Aggregate from multiple sources
-      const [quotes, invoices] = await Promise.all([
+      const [quotes, invoices, paidInvoices, strBookings, upcomingCosts] = await Promise.all([
         sbQuery('psnm_quotes', 'status=eq.accepted&select=monthly_rate').catch(() => []),
         sbQuery('psnm_invoices', 'status=eq.pending&select=amount').catch(() => []),
+        sbQuery('psnm_invoices', 'status=eq.paid&select=amount').catch(() => []),
+        sbQuery('str_bookings', `check_in=gte.${new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0]}&select=gross_revenue`).catch(() => []),
+        sbQuery('rbtr_tasks', 'category=eq.cost&status=neq.completed&select=estimated_cost').catch(() => []),
       ]);
 
       const weeklyRevenue = quotes.reduce((sum, q) => sum + (parseFloat(q.monthly_rate) || 0), 0);
       const outstanding = invoices.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      const paidTotal = paidInvoices.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      const strRevenue = strBookings.reduce((sum, b) => sum + (parseFloat(b.gross_revenue) || 0), 0);
+      const upcomingCostsTotal = upcomingCosts.reduce((sum, t) => sum + (parseFloat(t.estimated_cost) || 0), 0);
+
+      const benSarahCombined = paidTotal + strRevenue;
 
       return {
-        ben_cash: 'See rbtr_cash_log table (TODO)',
-        sarah_cash: 'See sarah_cash_log table (TODO)',
-        week_banked: `£${weeklyRevenue.toFixed(2)} (PSNM quotes)`,
-        outstanding: `£${outstanding.toFixed(2)} (${invoices.length} invoices)`,
-        note: 'Partial implementation - full cash tracking requires additional tables',
+        ben_sarah_combined: `£${benSarahCombined.toFixed(2)}`,
+        this_week_banked: `£${weeklyRevenue.toFixed(2)} (PSNM) + £${strRevenue.toFixed(2)} (STR)`,
+        outstanding_invoices: `£${outstanding.toFixed(2)} (${invoices.length} invoices)`,
+        upcoming_costs: `£${upcomingCostsTotal.toFixed(2)}`,
       };
     },
   },
@@ -307,15 +322,26 @@ export const ROCKO_TOOLS = [
     description: 'Get RBTR sponsor pipeline status.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      const sponsors = await sbQuery('rbtr_sponsors', 'order=status.asc,value_estimate_gbp.desc&select=*');
+      // Use rbtr_atlas_prospects table (migration 069)
+      const sponsors = await sbQuery('rbtr_atlas_prospects', 'order=status.asc,value_estimate_gbp.desc&select=*');
       const statusCounts = sponsors.reduce((acc, s) => {
         acc[s.status] = (acc[s.status] || 0) + 1;
         return acc;
       }, {});
       const totalValue = sponsors.reduce((sum, s) => sum + (parseFloat(s.value_estimate_gbp) || 0), 0);
+
+      // Recent activity (last 7 days)
+      const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+      const recentActivity = sponsors.filter(s => s.updated_at >= sevenDaysAgo).length;
+
       return {
         total_sponsors: sponsors.length,
+        targets: statusCounts['target'] || 0,
+        contacted: (statusCounts['drafted'] || 0) + (statusCounts['approved'] || 0) + (statusCounts['dispatched'] || 0),
+        replied: statusCounts['replied'] || 0,
+        signed: statusCounts['signed'] || 0,
         by_status: statusCounts,
+        recent_activity_7d: recentActivity,
         total_value_gbp: totalValue,
         sponsors: sponsors.slice(0, 10), // top 10
       };
@@ -477,21 +503,38 @@ export const ROCKO_TOOLS = [
 
   {
     name: 'search_supabase',
-    description: 'Generic Supabase table search with text matching. Use as fallback when no specific tool exists.',
+    description: 'Generic Supabase table search with parameterized filters. Use as fallback when no specific tool exists.',
     input_schema: {
       type: 'object',
       properties: {
-        table: { type: 'string' },
-        query: { type: 'string', description: 'Search term' },
+        table: { type: 'string', description: 'Table name (alphanumeric + underscore only)' },
+        filters: { type: 'string', description: 'PostgREST filter syntax, e.g. "status=eq.open&priority=eq.high"' },
         limit: { type: 'integer', default: 10 },
       },
-      required: ['table', 'query'],
+      required: ['table'],
     },
     execute: async (input) => {
-      const limit = input.limit || 10;
-      // Simple text search - can be enhanced with Postgres full-text search
-      const results = await sbQuery(input.table, `select=*&limit=${limit}`);
-      return results;
+      // Sanitize table name - alphanumeric + underscore only
+      const safeTable = input.table.replace(/[^a-zA-Z0-9_]/g, '');
+      if (safeTable !== input.table) {
+        throw new Error('Invalid table name - only alphanumeric and underscore allowed');
+      }
+
+      // Enforce max limit of 50
+      const limit = Math.min(input.limit || 10, 50);
+
+      // Build query string - PostgREST handles parameterization
+      let qs = `select=*&limit=${limit}`;
+      if (input.filters) {
+        qs = `${input.filters}&${qs}`;
+      }
+
+      const results = await sbQuery(safeTable, qs);
+      return {
+        table: safeTable,
+        count: results.length,
+        results,
+      };
     },
   },
 
@@ -543,12 +586,16 @@ export const ROCKO_TOOLS = [
     description: 'Get current git status of v14 codebase.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // Requires server-side exec - create /api/git/status endpoint for this
-      return {
-        note: 'Git status requires server-side exec',
-        workaround: 'Use POST /api/git/status endpoint (TODO: create)',
-        suggestion: 'For now, ask Ben to run `git status` locally',
-      };
+      const response = await fetch('http://localhost:3000/api/git/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Git status failed: ${response.status}`);
+      }
+
+      return await response.json();
     },
   },
 
@@ -563,12 +610,18 @@ export const ROCKO_TOOLS = [
       required: ['path'],
     },
     execute: async (input) => {
-      // Requires server-side fs read - create /api/obsidian/read endpoint
-      return {
-        note: 'Obsidian read requires server-side fs access',
-        workaround: 'Use POST /api/obsidian/read endpoint (TODO: create)',
-        requested_path: input.path,
-      };
+      const response = await fetch('http://localhost:3000/api/obsidian/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: input.path }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `Read failed: ${response.status}`);
+      }
+
+      return await response.json();
     },
   },
 
@@ -584,61 +637,124 @@ export const ROCKO_TOOLS = [
       required: ['filename', 'content'],
     },
     execute: async (input) => {
-      // Requires server-side fs write - create /api/obsidian/write endpoint
-      return {
-        note: 'Obsidian write requires server-side fs access',
-        workaround: 'Use POST /api/obsidian/write endpoint (TODO: create)',
-        filename: input.filename,
-        content_length: input.content.length,
-      };
+      const response = await fetch('http://localhost:3000/api/obsidian/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: input.filename, content: input.content }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `Write failed: ${response.status}`);
+      }
+
+      return await response.json();
     },
   },
 
   {
     name: 'fetch_active_builds_running',
-    description: 'Check if any autonomous builds are currently running.',
+    description: 'Check if any autonomous builds are currently running by checking state files and git status.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
-      // Check agent tracking or process state
-      // For now, return empty array (no builds tracked)
+      const fs = (await import('fs')).default;
+      const path = (await import('path')).default;
+
+      const activeBuilds = [];
+
+      // Check scripts/.state/ directory for state files
+      const stateDir = '/Users/bengreenwood/Desktop/rbtr-command/scripts/.state';
+      try {
+        if (fs.existsSync(stateDir)) {
+          const stateFiles = fs.readdirSync(stateDir);
+          for (const file of stateFiles) {
+            const filePath = path.join(stateDir, file);
+            const stats = fs.statSync(filePath);
+            const ageMinutes = (Date.now() - stats.mtimeMs) / 60000;
+            // If modified in last 10 minutes, consider it active
+            if (ageMinutes < 10) {
+              activeBuilds.push({
+                type: 'state_file',
+                name: file,
+                last_updated: stats.mtime,
+                age_minutes: Math.round(ageMinutes),
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // State dir doesn't exist or can't be read
+      }
+
+      // Check JARVIS-OVERNIGHT-PROGRESS.md timestamp
+      const progressFile = '/Users/bengreenwood/Desktop/rbtr-command/v14/JARVIS-OVERNIGHT-PROGRESS.md';
+      try {
+        if (fs.existsSync(progressFile)) {
+          const stats = fs.statSync(progressFile);
+          const ageMinutes = (Date.now() - stats.mtimeMs) / 60000;
+          if (ageMinutes < 60) {
+            activeBuilds.push({
+              type: 'progress_log',
+              name: 'JARVIS-OVERNIGHT-PROGRESS.md',
+              last_updated: stats.mtime,
+              age_minutes: Math.round(ageMinutes),
+            });
+          }
+        }
+      } catch (err) {
+        // File doesn't exist
+      }
+
       return {
-        active_builds: [],
-        note: 'Build tracking not yet implemented - requires agent state management',
+        active_builds: activeBuilds,
+        count: activeBuilds.length,
+        status: activeBuilds.length > 0 ? 'builds_detected' : 'idle',
       };
     },
   },
 
   {
     name: 'run_build_progress',
-    description: 'Trigger a specific build or maintenance task.',
+    description: 'Get progress for a specific build area by querying tasks.',
     input_schema: {
       type: 'object',
       properties: {
-        area: { type: 'string', description: 'Build area: atlas, backup, cleanup, etc' },
+        area: { type: 'string', description: 'Build area: psnm, rbtr, forge, jarvis, booking-proof, etc' },
       },
       required: ['area'],
     },
     execute: async (input) => {
-      // Map area to actual endpoint/action
-      const areaMap = {
-        'atlas': '/api/atlas3?action=run_dispatch',
-        'backup': '/api/cron-backup',
-        'cleanup': '/api/diagnose/post-build',
-      };
+      // Query rbtr_tasks for the specified area/category
+      const tasks = await sbQuery('rbtr_tasks', `category=eq.${input.area}&select=id,status,title,priority`).catch(() => []);
 
-      const endpoint = areaMap[input.area];
-      if (!endpoint) {
+      if (tasks.length === 0) {
         return {
-          error: `Unknown build area: ${input.area}`,
-          available: Object.keys(areaMap),
+          area: input.area,
+          total_tasks: 0,
+          progress_percent: 100,
+          message: `No tasks found for area: ${input.area}`,
         };
       }
 
+      // Group by status
+      const statusCounts = tasks.reduce((acc, t) => {
+        acc[t.status] = (acc[t.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const completed = statusCounts['complete'] || 0;
+      const total = tasks.length;
+      const progressPercent = Math.round((completed / total) * 100);
+
       return {
         area: input.area,
-        endpoint,
-        note: `Trigger build via: curl -X POST ${endpoint}`,
-        status: 'Manual trigger required (automated trigger TODO)',
+        total_tasks: total,
+        completed: completed,
+        in_progress: statusCounts['in_progress'] || 0,
+        open: statusCounts['open'] || 0,
+        blocked: statusCounts['blocked'] || 0,
+        progress_percent: progressPercent,
+        by_status: statusCounts,
       };
     },
   },
