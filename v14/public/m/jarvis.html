@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>JARVIS</title>
+
+  <!-- PWA Meta -->
+  <link rel="manifest" href="/m/manifest.json">
+  <meta name="theme-color" content="#0a0a0a">
+
+  <!-- iOS Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JARVIS">
+  <link rel="apple-touch-icon" href="/m/icon-192.svg">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      position: fixed;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* WAVEFORM — Top 40% */
+    #waveform-container {
+      height: 40vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 100%;
+      width: 90%;
+    }
+
+    .bar {
+      width: 4px;
+      background: linear-gradient(180deg, #c87a3a 0%, #a66430 100%);
+      border-radius: 2px;
+      transition: height 0.1s ease;
+      height: 20px;
+      opacity: 0.6;
+    }
+
+    .bar.active {
+      opacity: 1;
+    }
+
+    /* MIC BUTTON — Middle 15% */
+    #mic-section {
+      height: 15vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #0a0a0a;
+    }
+
+    #mic-button {
+      width: 60vw;
+      min-width: 200px;
+      max-width: 280px;
+      height: 70px;
+      border-radius: 35px;
+      background: linear-gradient(135deg, #c87a3a 0%, #a66430 100%);
+      border: none;
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(200, 122, 58, 0.3);
+      transition: transform 0.1s ease;
+    }
+
+    #mic-button:active {
+      transform: scale(0.96);
+    }
+
+    #mic-button.listening {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(200, 122, 58, 0.3); }
+      50% { box-shadow: 0 4px 40px rgba(200, 122, 58, 0.7); }
+    }
+
+    #status-text {
+      font-size: 12px;
+      color: #888;
+      min-height: 16px;
+    }
+
+    /* CHAT HISTORY — Bottom 45% */
+    #chat-container {
+      height: 45vh;
+      overflow-y: auto;
+      padding: 16px;
+      background: #0f0f0f;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 16px;
+      max-width: 85%;
+      word-wrap: break-word;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    .message.user {
+      background: #1a1a1a;
+      align-self: flex-end;
+      border: 1px solid #333;
+    }
+
+    .message.assistant {
+      background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+      align-self: flex-start;
+      border-left: 3px solid #c87a3a;
+    }
+
+    .message.system {
+      background: #1a1a1a;
+      align-self: center;
+      font-size: 13px;
+      color: #888;
+      font-style: italic;
+      border: none;
+      max-width: 90%;
+    }
+
+    /* MODULE DRAWER ICON */
+    #drawer-icon {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom) + 16px);
+      right: 16px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      border: 2px solid #c87a3a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #drawer-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: #c87a3a;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* MODULE DRAWER */
+    #module-drawer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1a1a1a;
+      border-top: 2px solid #c87a3a;
+      padding: 24px;
+      padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      z-index: 99;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    #module-drawer.open {
+      transform: translateY(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .drawer-header h2 {
+      font-size: 20px;
+      color: #c87a3a;
+    }
+
+    .close-drawer {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .module-card {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .module-card:active {
+      transform: scale(0.96);
+      border-color: #c87a3a;
+    }
+
+    .module-card h3 {
+      font-size: 14px;
+      color: #e0e0e0;
+      margin-bottom: 4px;
+    }
+
+    .module-card p {
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* LOADING SPINNER */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #333;
+      border-top-color: #c87a3a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- WAVEFORM -->
+  <div id="waveform-container">
+    <div id="waveform"></div>
+  </div>
+
+  <!-- MIC BUTTON -->
+  <div id="mic-section">
+    <button id="mic-button">Hold to speak</button>
+    <div id="status-text"></div>
+  </div>
+
+  <!-- CHAT HISTORY -->
+  <div id="chat-container" id="chat-history"></div>
+
+  <!-- MODULE DRAWER ICON -->
+  <div id="drawer-icon">
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7"></rect>
+      <rect x="14" y="3" width="7" height="7"></rect>
+      <rect x="14" y="14" width="7" height="7"></rect>
+      <rect x="3" y="14" width="7" height="7"></rect>
+    </svg>
+  </div>
+
+  <!-- MODULE DRAWER -->
+  <div id="module-drawer">
+    <div class="drawer-header">
+      <h2>Modules</h2>
+      <button class="close-drawer">&times;</button>
+    </div>
+    <div class="module-grid">
+      <div class="module-card" data-module="psnm">
+        <h3>PSNM</h3>
+        <p>Stats & prospects</p>
+      </div>
+      <div class="module-card" data-module="rbtr">
+        <h3>RBTR</h3>
+        <p>Pipeline view</p>
+      </div>
+      <div class="module-card" data-module="forge">
+        <h3>Forge</h3>
+        <p>Countdown</p>
+      </div>
+      <div class="module-card" data-module="marketplace">
+        <h3>Marketplace</h3>
+        <p>Quick search</p>
+      </div>
+      <div class="module-card" data-module="task">
+        <h3>+Task</h3>
+        <p>Add new</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// PWA SERVICE WORKER
+// ═══════════════════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/m/sw.js').catch(err => {
+      console.error('SW registration failed:', err);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const state = {
+  sessionId: `session_${Date.now()}`,
+  isListening: false,
+  isSpeaking: false,
+  mediaRecorder: null,
+  audioChunks: [],
+  recognition: null,
+  chatHistory: []
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOM ELEMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+const micButton = document.getElementById('mic-button');
+const statusText = document.getElementById('status-text');
+const chatContainer = document.getElementById('chat-container');
+const drawerIcon = document.getElementById('drawer-icon');
+const moduleDrawer = document.getElementById('module-drawer');
+const closeDrawerBtn = document.querySelector('.close-drawer');
+const waveformContainer = document.getElementById('waveform');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WAVEFORM GENERATION
+// ═══════════════════════════════════════════════════════════════════════════
+const BAR_COUNT = 40;
+const bars = [];
+
+for (let i = 0; i < BAR_COUNT; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  waveformContainer.appendChild(bar);
+  bars.push(bar);
+}
+
+function animateWaveform(active = false) {
+  bars.forEach((bar, i) => {
+    const baseHeight = 20;
+    const randomHeight = active ? Math.random() * 80 + 20 : baseHeight;
+    bar.style.height = `${randomHeight}px`;
+    if (active) {
+      bar.classList.add('active');
+    } else {
+      bar.classList.remove('active');
+    }
+  });
+}
+
+setInterval(() => {
+  if (state.isListening || state.isSpeaking) {
+    animateWaveform(true);
+  } else {
+    animateWaveform(false);
+  }
+}, 100);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHAT UI
+// ═══════════════════════════════════════════════════════════════════════════
+function addMessage(role, content) {
+  state.chatHistory.push({ role, content });
+
+  const msg = document.createElement('div');
+  msg.className = `message ${role}`;
+  msg.textContent = content;
+  chatContainer.appendChild(msg);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function setStatus(text) {
+  statusText.textContent = text;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WEB SPEECH API (SPEECH RECOGNITION)
+// ═══════════════════════════════════════════════════════════════════════════
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    addMessage('system', 'Speech recognition not available on this device.');
+    return null;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-GB';
+
+  recognition.onstart = () => {
+    state.isListening = true;
+    micButton.classList.add('listening');
+    micButton.textContent = 'Listening...';
+    setStatus('Speak now');
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    addMessage('user', transcript);
+    sendToRocko(transcript);
+  };
+
+  recognition.onerror = (event) => {
+    console.error('Recognition error:', event.error);
+    setStatus('Error: ' + event.error);
+    resetMicButton();
+  };
+
+  recognition.onend = () => {
+    resetMicButton();
+  };
+
+  return recognition;
+}
+
+function resetMicButton() {
+  state.isListening = false;
+  micButton.classList.remove('listening');
+  micButton.textContent = 'Hold to speak';
+  setStatus('');
+}
+
+state.recognition = initSpeechRecognition();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROCKO CHAT
+// ═══════════════════════════════════════════════════════════════════════════
+async function sendToRocko(message) {
+  setStatus('Thinking...');
+
+  try {
+    const response = await fetch('/api/rocko/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        session_id: state.sessionId
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Chat API failed');
+    }
+
+    const data = await response.json();
+    const reply = data.response || 'No response';
+
+    addMessage('assistant', reply);
+    setStatus('');
+
+    // Speak the response
+    await speakText(reply);
+
+  } catch (error) {
+    console.error('Chat error:', error);
+    addMessage('system', 'Failed to reach Rocko');
+    setStatus('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TTS (WEB SPEECH API)
+// ═══════════════════════════════════════════════════════════════════════════
+async function speakText(text) {
+  if (!('speechSynthesis' in window)) {
+    console.warn('TTS not available');
+    return;
+  }
+
+  return new Promise((resolve) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-GB';
+    utterance.rate = 1.1;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+      state.isSpeaking = true;
+    };
+
+    utterance.onend = () => {
+      state.isSpeaking = false;
+      resolve();
+    };
+
+    utterance.onerror = () => {
+      state.isSpeaking = false;
+      resolve();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MIC BUTTON INTERACTION
+// ═══════════════════════════════════════════════════════════════════════════
+micButton.addEventListener('click', () => {
+  if (!state.recognition) {
+    addMessage('system', 'Speech recognition not available');
+    return;
+  }
+
+  if (state.isListening) {
+    state.recognition.stop();
+  } else {
+    state.recognition.start();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULE DRAWER
+// ═══════════════════════════════════════════════════════════════════════════
+drawerIcon.addEventListener('click', () => {
+  moduleDrawer.classList.add('open');
+});
+
+closeDrawerBtn.addEventListener('click', () => {
+  moduleDrawer.classList.remove('open');
+});
+
+document.querySelectorAll('.module-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const module = card.dataset.module;
+    addMessage('system', `Opening ${module.toUpperCase()} module...`);
+    moduleDrawer.classList.remove('open');
+
+    // Module actions would go here
+    // For now, just send a command to Rocko
+    sendToRocko(`Show me ${module}`);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+addMessage('system', 'JARVIS ready');
+animateWaveform(false);
+</script>
+
+</body>
+</html>
