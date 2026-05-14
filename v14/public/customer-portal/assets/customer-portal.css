@@ -1,0 +1,376 @@
+/* PSNM Customer Portal — Brand Identity Styles */
+
+:root {
+  --psnm-black: #1a1a1a;
+  --psnm-white: #ffffff;
+  --psnm-grey-light: #f9f9f9;
+  --psnm-grey: #e5e5e5;
+  --psnm-grey-dark: #666666;
+  --psnm-success: #10b981;
+  --psnm-warning: #f59e0b;
+  --psnm-error: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  color: var(--psnm-black);
+  background: var(--psnm-white);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h1 { font-size: 32px; margin-bottom: 24px; }
+h2 { font-size: 24px; margin-bottom: 16px; }
+h3 { font-size: 20px; margin-bottom: 12px; }
+
+/* Layout */
+.portal-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.portal-header {
+  background: var(--psnm-black);
+  color: var(--psnm-white);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.portal-logo {
+  font-size: 24px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--psnm-white);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.portal-logo img {
+  height: 32px;
+}
+
+.portal-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.portal-user span {
+  font-size: 14px;
+}
+
+.portal-nav {
+  background: var(--psnm-grey-light);
+  border-bottom: 1px solid var(--psnm-grey);
+  padding: 0 20px;
+  overflow-x: auto;
+}
+
+.portal-nav-list {
+  list-style: none;
+  display: flex;
+  gap: 0;
+}
+
+.portal-nav-list li a {
+  display: block;
+  padding: 16px 20px;
+  text-decoration: none;
+  color: var(--psnm-grey-dark);
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.portal-nav-list li a:hover,
+.portal-nav-list li a.active {
+  color: var(--psnm-black);
+  border-bottom-color: var(--psnm-black);
+}
+
+.portal-main {
+  flex: 1;
+  padding: 32px 20px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.portal-footer {
+  background: var(--psnm-grey-light);
+  border-top: 1px solid var(--psnm-grey);
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--psnm-grey-dark);
+}
+
+/* Cards */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.card {
+  background: var(--psnm-white);
+  border: 1px solid var(--psnm-grey);
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.card-header {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--psnm-grey);
+}
+
+.card-header h3 {
+  margin: 0;
+}
+
+.card-stat {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 16px 0;
+}
+
+.card-label {
+  font-size: 14px;
+  color: var(--psnm-grey-dark);
+  margin-bottom: 8px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--psnm-black);
+  color: var(--psnm-white);
+}
+
+.btn-primary:hover {
+  background: #333;
+}
+
+.btn-secondary {
+  background: var(--psnm-white);
+  color: var(--psnm-black);
+  border: 2px solid var(--psnm-black);
+}
+
+.btn-secondary:hover {
+  background: var(--psnm-grey-light);
+}
+
+.btn-small {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid var(--psnm-grey);
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--psnm-black);
+}
+
+/* Tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+}
+
+.table th,
+.table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--psnm-grey);
+}
+
+.table th {
+  font-weight: 700;
+  background: var(--psnm-grey-light);
+}
+
+.table tr:hover {
+  background: var(--psnm-grey-light);
+}
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 12px;
+}
+
+.badge-success {
+  background: var(--psnm-success);
+  color: var(--psnm-white);
+}
+
+.badge-warning {
+  background: var(--psnm-warning);
+  color: var(--psnm-white);
+}
+
+.badge-error {
+  background: var(--psnm-error);
+  color: var(--psnm-white);
+}
+
+/* Login page */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--psnm-grey-light);
+  padding: 20px;
+}
+
+.login-box {
+  background: var(--psnm-white);
+  border-radius: 8px;
+  padding: 48px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.login-logo {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 32px;
+}
+
+/* Alert messages */
+.alert {
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.alert-success {
+  background: #d1fae5;
+  color: var(--psnm-success);
+}
+
+.alert-error {
+  background: #fee2e2;
+  color: var(--psnm-error);
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.spinner {
+  border: 3px solid var(--psnm-grey);
+  border-top-color: var(--psnm-black);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+
+  .portal-main {
+    padding: 20px 16px;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-box {
+    padding: 32px 24px;
+  }
+
+  .table {
+    font-size: 14px;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .portal-header {
+    padding: 12px 16px;
+  }
+
+  .portal-logo {
+    font-size: 20px;
+  }
+
+  .portal-user {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .card {
+    padding: 16px;
+  }
+}

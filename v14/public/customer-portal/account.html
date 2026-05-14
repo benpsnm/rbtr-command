@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account - PSNM Customer Portal</title>
+  <link rel="stylesheet" href="/customer-portal/assets/customer-portal.css">
+</head>
+<body>
+  <div class="portal-container">
+    <header class="portal-header">
+      <a href="/customer-portal/dashboard.html" class="portal-logo">
+        <div>PSNM</div>
+      </a>
+      <div class="portal-user">
+        <span id="customerName">Loading...</span>
+        <a href="/api/customer/auth/logout" class="btn btn-secondary btn-small">Logout</a>
+      </div>
+    </header>
+
+    <nav class="portal-nav">
+      <ul class="portal-nav-list">
+        <li><a href="/customer-portal/dashboard.html">Dashboard</a></li>
+        <li><a href="/customer-portal/billing.html">Billing</a></li>
+        <li><a href="/customer-portal/storage.html">Storage</a></li>
+        <li><a href="/customer-portal/account.html">Account</a></li>
+      </ul>
+    </nav>
+
+    <main class="portal-main">
+      <h1>Account Settings</h1>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Contact Details</h3>
+        </div>
+        <form id="contactForm">
+          <div class="form-group">
+            <label for="contact_name" class="form-label">Contact Name</label>
+            <input type="text" id="contact_name" class="form-input" placeholder="John Smith">
+          </div>
+
+          <div class="form-group">
+            <label for="phone" class="form-label">Phone Number</label>
+            <input type="tel" id="phone" class="form-input" placeholder="07700 900000">
+          </div>
+
+          <div class="form-group">
+            <label for="email" class="form-label">Email Address</label>
+            <input type="email" id="email" class="form-input" readonly style="background: #f9f9f9;" placeholder="you@company.com">
+            <p style="font-size: 12px; color: #666; margin-top: 4px;">Email cannot be changed. Contact us to update.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="billing_address" class="form-label">Billing Address</label>
+            <textarea id="billing_address" class="form-input" rows="3" placeholder="123 Street Name&#10;City, Postcode"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="delivery_address" class="form-label">Delivery Address</label>
+            <textarea id="delivery_address" class="form-input" rows="3" placeholder="456 Business Park&#10;City, Postcode"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Update Contact Details</button>
+        </form>
+      </div>
+
+      <div class="card" id="insurance">
+        <div class="card-header">
+          <h3>Insurance Evidence</h3>
+        </div>
+
+        <div id="currentInsurance" style="margin-bottom: 20px;">
+          <p>Loading insurance status...</p>
+        </div>
+
+        <form id="insuranceForm">
+          <div class="form-group">
+            <label for="insuranceFile" class="form-label">Upload Insurance Certificate</label>
+            <input type="file" id="insuranceFile" accept=".pdf,.jpg,.jpeg,.png" required>
+            <p style="font-size: 12px; color: #666; margin-top: 4px;">
+              Accepted formats: PDF, JPG, PNG (max 10MB)
+            </p>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Upload Insurance Evidence</button>
+        </form>
+      </div>
+    </main>
+
+    <footer class="portal-footer">
+      <p>
+        <strong>PSNM — Pallet Storage Near Me</strong><br>
+        1,602-space warehouse, Hellaby, Rotherham S66 8HR<br>
+        <a href="https://palletstoragenearme.co.uk" style="color: inherit;">palletstoragenearme.co.uk</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="/customer-portal/assets/customer-portal.js"></script>
+  <script>
+    const { apiCall, formatDate, checkAuth, setActiveNav, showAlert } = window.PSNM;
+
+    let currentCustomer = null;
+
+    async function loadAccount() {
+      setActiveNav('account');
+
+      try {
+        currentCustomer = await checkAuth();
+        if (!currentCustomer) return;
+
+        document.getElementById('customerName').textContent = currentCustomer.company || currentCustomer.contact_name;
+
+        // Populate form fields
+        document.getElementById('contact_name').value = currentCustomer.contact_name || '';
+        document.getElementById('phone').value = currentCustomer.phone || '';
+        document.getElementById('email').value = currentCustomer.email || '';
+        document.getElementById('billing_address').value = currentCustomer.billing_address || '';
+        document.getElementById('delivery_address').value = currentCustomer.delivery_address || '';
+
+        // Show insurance status
+        const insuranceDiv = document.getElementById('currentInsurance');
+        if (currentCustomer.insurance_evidence_url) {
+          const uploadDate = currentCustomer.insurance_evidence_uploaded_at || '';
+          insuranceDiv.innerHTML = `
+            <div style="padding: 16px; background: #d1fae5; border-radius: 6px;">
+              <p style="margin-bottom: 8px;"><strong>✓ Insurance Evidence On File</strong></p>
+              <p style="font-size: 14px; color: #10b981;">
+                Uploaded: ${formatDate(uploadDate)}<br>
+                <a href="${currentCustomer.insurance_evidence_url}" target="_blank" style="color: #10b981; text-decoration: underline;">View Document</a>
+              </p>
+            </div>
+          `;
+        } else {
+          insuranceDiv.innerHTML = `
+            <div style="padding: 16px; background: #fee2e2; border-radius: 6px;">
+              <p style="color: #ef4444;"><strong>⚠ No insurance evidence on file</strong></p>
+              <p style="font-size: 14px; color: #ef4444;">Please upload your current insurance certificate.</p>
+            </div>
+          `;
+        }
+
+      } catch (error) {
+        console.error('Account load error:', error);
+        showAlert('Failed to load account details: ' + error.message, 'error');
+      }
+    }
+
+    // Handle contact form submission
+    document.getElementById('contactForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Updating...';
+
+      try {
+        const updates = {
+          contact_name: document.getElementById('contact_name').value,
+          phone: document.getElementById('phone').value,
+          billing_address: document.getElementById('billing_address').value,
+          delivery_address: document.getElementById('delivery_address').value,
+        };
+
+        await apiCall('/api/customer/account/update', {
+          method: 'POST',
+          body: JSON.stringify(updates),
+        });
+
+        showAlert('Contact details updated successfully', 'success');
+
+      } catch (error) {
+        showAlert('Failed to update: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Update Contact Details';
+      }
+    });
+
+    // Handle insurance upload
+    document.getElementById('insuranceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const fileInput = document.getElementById('insuranceFile');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        showAlert('Please select a file', 'error');
+        return;
+      }
+
+      // Check file size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showAlert('File too large. Maximum size is 10MB.', 'error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading...';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/customer/insurance/upload', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          showAlert('Insurance evidence uploaded successfully', 'success');
+          fileInput.value = '';
+          // Reload account to show updated insurance status
+          setTimeout(() => loadAccount(), 1000);
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+
+      } catch (error) {
+        showAlert('Upload failed: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Upload Insurance Evidence';
+      }
+    });
+
+    loadAccount();
+  </script>
+</body>
+</html>

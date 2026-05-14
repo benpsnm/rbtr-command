@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing - PSNM Customer Portal</title>
+  <link rel="stylesheet" href="/customer-portal/assets/customer-portal.css">
+</head>
+<body>
+  <div class="portal-container">
+    <header class="portal-header">
+      <a href="/customer-portal/dashboard.html" class="portal-logo">
+        <div>PSNM</div>
+      </a>
+      <div class="portal-user">
+        <span id="customerName">Loading...</span>
+        <a href="/api/customer/auth/logout" class="btn btn-secondary btn-small">Logout</a>
+      </div>
+    </header>
+
+    <nav class="portal-nav">
+      <ul class="portal-nav-list">
+        <li><a href="/customer-portal/dashboard.html">Dashboard</a></li>
+        <li><a href="/customer-portal/billing.html">Billing</a></li>
+        <li><a href="/customer-portal/storage.html">Storage</a></li>
+        <li><a href="/customer-portal/account.html">Account</a></li>
+      </ul>
+    </nav>
+
+    <main class="portal-main">
+      <h1>Billing & Invoices</h1>
+
+      <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+        <select id="yearFilter" class="form-input" style="width: auto;">
+          <option value="">All Years</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+        </select>
+
+        <select id="statusFilter" class="form-input" style="width: auto;">
+          <option value="all">All Statuses</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="paid">Paid</option>
+          <option value="overdue">Overdue</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Invoice History</h3>
+        </div>
+        <div id="invoicesTable">
+          <p>Loading invoices...</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="portal-footer">
+      <p>
+        <strong>PSNM — Pallet Storage Near Me</strong><br>
+        1,602-space warehouse, Hellaby, Rotherham S66 8HR<br>
+        <a href="https://palletstoragenearme.co.uk" style="color: inherit;">palletstoragenearme.co.uk</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="/customer-portal/assets/customer-portal.js"></script>
+  <script>
+    const { apiCall, formatCurrency, formatDate, checkAuth, setActiveNav } = window.PSNM;
+
+    let allInvoices = [];
+
+    async function loadInvoices() {
+      setActiveNav('billing');
+
+      try {
+        const customer = await checkAuth();
+        if (customer) {
+          document.getElementById('customerName').textContent = customer.company || customer.contact_name;
+        }
+
+        const year = document.getElementById('yearFilter').value;
+        const status = document.getElementById('statusFilter').value;
+
+        const params = new URLSearchParams();
+        if (year) params.append('year', year);
+        if (status && status !== 'all') params.append('status', status);
+
+        const data = await apiCall(`/api/customer/invoices?${params.toString()}`);
+        allInvoices = data.invoices;
+
+        renderInvoices(allInvoices);
+
+      } catch (error) {
+        console.error('Invoices load error:', error);
+        alert('Failed to load invoices: ' + error.message);
+      }
+    }
+
+    function renderInvoices(invoices) {
+      const table = document.getElementById('invoicesTable');
+
+      if (invoices.length === 0) {
+        table.innerHTML = '<p>No invoices found</p>';
+        return;
+      }
+
+      table.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Due Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoices.map(inv => {
+              const statusClass = inv.status === 'paid' ? 'badge-success' :
+                                  inv.status === 'overdue' ? 'badge-error' : 'badge-warning';
+              return `
+                <tr>
+                  <td><strong>${inv.invoice_number}</strong></td>
+                  <td>${formatDate(inv.created_at)}</td>
+                  <td><strong>${formatCurrency(inv.amount)}</strong></td>
+                  <td><span class="badge ${statusClass}">${inv.status.toUpperCase()}</span></td>
+                  <td>${formatDate(inv.due_date)}</td>
+                  <td>
+                    ${inv.pdf_url ? `<a href="${inv.pdf_url}" class="btn btn-secondary btn-small" target="_blank">Download PDF</a>` :
+                     '<span style="font-size: 12px; color: #666;">PDF unavailable</span>'}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <p style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e5e5; font-size: 14px; color: #666;">
+          <strong>Payment queries:</strong> Contact us at hello@palletstoragenearme.co.uk or call 01709 123 456.
+        </p>
+      `;
+    }
+
+    // Event listeners for filters
+    document.getElementById('yearFilter').addEventListener('change', loadInvoices);
+    document.getElementById('statusFilter').addEventListener('change', loadInvoices);
+
+    // Initial load
+    loadInvoices();
+  </script>
+</body>
+</html>

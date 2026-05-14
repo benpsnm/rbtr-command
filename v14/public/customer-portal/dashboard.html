@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - PSNM Customer Portal</title>
+  <link rel="stylesheet" href="/customer-portal/assets/customer-portal.css">
+</head>
+<body>
+  <div class="portal-container">
+    <header class="portal-header">
+      <a href="/customer-portal/dashboard.html" class="portal-logo">
+        <div>PSNM</div>
+      </a>
+      <div class="portal-user">
+        <span id="customerName">Loading...</span>
+        <a href="/api/customer/auth/logout" class="btn btn-secondary btn-small">Logout</a>
+      </div>
+    </header>
+
+    <nav class="portal-nav">
+      <ul class="portal-nav-list">
+        <li><a href="/customer-portal/dashboard.html">Dashboard</a></li>
+        <li><a href="/customer-portal/billing.html">Billing</a></li>
+        <li><a href="/customer-portal/storage.html">Storage</a></li>
+        <li><a href="/customer-portal/account.html">Account</a></li>
+      </ul>
+    </nav>
+
+    <main class="portal-main">
+      <h1>Dashboard</h1>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-header">
+            <h3>Current Storage</h3>
+          </div>
+          <div class="card-stat" id="palletCount">-</div>
+          <div class="card-label">Pallets in storage</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Outstanding Balance</h3>
+          </div>
+          <div class="card-stat" id="outstandingBalance">£0</div>
+          <div class="card-label">Due now</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Active Bookings</h3>
+          </div>
+          <div class="card-stat" id="bookingCount">-</div>
+          <div class="card-label">Current bookings</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Current Bookings</h3>
+        </div>
+        <div id="bookingsTable">
+          <p>Loading bookings...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Unpaid Invoices</h3>
+        </div>
+        <div id="invoicesTable">
+          <p>Loading invoices...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Quick Actions</h3>
+        </div>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <a href="/customer-portal/account.html" class="btn btn-secondary">Update Contact Details</a>
+          <a href="/customer-portal/account.html#insurance" class="btn btn-secondary">Upload Insurance</a>
+          <a href="mailto:hello@palletstoragenearme.co.uk" class="btn btn-secondary">Contact PSNM</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="portal-footer">
+      <p>
+        <strong>PSNM — Pallet Storage Near Me</strong><br>
+        1,602-space warehouse, Hellaby, Rotherham S66 8HR<br>
+        <a href="https://palletstoragenearme.co.uk" style="color: inherit;">palletstoragenearme.co.uk</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="/customer-portal/assets/customer-portal.js"></script>
+  <script>
+    const { apiCall, formatCurrency, formatDate, checkAuth, setActiveNav } = window.PSNM;
+
+    async function loadDashboard() {
+      setActiveNav('dashboard');
+
+      try {
+        // Check auth and get customer name
+        const customer = await checkAuth();
+        if (customer) {
+          document.getElementById('customerName').textContent = customer.company || customer.contact_name;
+        }
+
+        // Load dashboard data
+        const data = await apiCall('/api/customer/dashboard');
+
+        // Update summary cards
+        document.getElementById('palletCount').textContent = data.pallet_count || 0;
+        document.getElementById('outstandingBalance').textContent = formatCurrency(data.outstanding_balance || 0);
+        document.getElementById('bookingCount').textContent = data.bookings.length;
+
+        // Render bookings table
+        const bookingsTable = document.getElementById('bookingsTable');
+        if (data.bookings.length === 0) {
+          bookingsTable.innerHTML = '<p>No active bookings</p>';
+        } else {
+          bookingsTable.innerHTML = `
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Pallets</th>
+                  <th>Location</th>
+                  <th>Start Date</th>
+                  <th>Monthly Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.bookings.map(b => `
+                  <tr>
+                    <td>${b.pallet_count}</td>
+                    <td>${b.location}</td>
+                    <td>${formatDate(b.start_date)}</td>
+                    <td>${formatCurrency(b.monthly_rate)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        // Render unpaid invoices
+        const invoicesTable = document.getElementById('invoicesTable');
+        if (data.unpaid_invoices.length === 0) {
+          invoicesTable.innerHTML = '<p>No unpaid invoices</p>';
+        } else {
+          invoicesTable.innerHTML = `
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Amount</th>
+                  <th>Due Date</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.unpaid_invoices.map(inv => `
+                  <tr>
+                    <td>${inv.invoice_number}</td>
+                    <td><strong>${formatCurrency(inv.amount)}</strong></td>
+                    <td>${formatDate(inv.due_date)}</td>
+                    <td>${inv.description || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <p style="margin-top: 16px; font-size: 14px; color: #666;">
+              To pay an invoice, please contact us at hello@palletstoragenearme.co.uk or call 01709 123 456.
+            </p>
+          `;
+        }
+
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+        alert('Failed to load dashboard: ' + error.message);
+      }
+    }
+
+    // Check for magic link token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (token) {
+      // Redirect to verify endpoint
+      window.location.href = `/api/customer/auth/verify?token=${token}`;
+    } else {
+      // Normal dashboard load
+      loadDashboard();
+    }
+  </script>
+</body>
+</html>
