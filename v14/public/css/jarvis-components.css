@@ -1,0 +1,505 @@
+/**
+ * JARVIS Component Styles
+ * Created: 2026-05-13
+ * Companion styles for jarvis-components.js
+ */
+
+/* ── CARD ────────────────────────────────────────────────────────────────── */
+.jarvis-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--card-padding);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.jarvis-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.jarvis-card__header {
+  margin-bottom: var(--space-4);
+}
+
+.jarvis-card__header h3 {
+  color: var(--text-primary);
+}
+
+.jarvis-card__body {
+  color: var(--text-secondary);
+}
+
+.jarvis-card__footer {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* ── BUTTON ──────────────────────────────────────────────────────────────── */
+.jarvis-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.jarvis-btn--md {
+  padding: 12px 20px;
+}
+
+.jarvis-btn--sm {
+  padding: 8px 16px;
+  font-size: 12px;
+  min-height: 36px;
+}
+
+.jarvis-btn--lg {
+  padding: 16px 28px;
+  font-size: 16px;
+  min-height: 52px;
+}
+
+.jarvis-btn--primary {
+  background: var(--copper);
+  color: var(--bg);
+}
+
+.jarvis-btn--primary:hover:not(:disabled) {
+  background: var(--copper-glow);
+}
+
+.jarvis-btn--secondary {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+
+.jarvis-btn--secondary:hover:not(:disabled) {
+  border-color: var(--copper);
+  background: var(--copper-faint);
+}
+
+.jarvis-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.jarvis-btn--ghost:hover:not(:disabled) {
+  background: var(--copper-faint);
+  color: var(--text-primary);
+}
+
+.jarvis-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.jarvis-btn--icon-only {
+  aspect-ratio: 1;
+  padding: 0;
+}
+
+/* ── INPUT ───────────────────────────────────────────────────────────────── */
+.jarvis-input {
+  width: 100%;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: all var(--duration-fast) var(--ease-out);
+  min-height: 44px;
+}
+
+.jarvis-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.jarvis-input:focus {
+  outline: none;
+  border-color: var(--copper);
+  box-shadow: var(--shadow-copper);
+}
+
+.jarvis-input.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ── STATUS PILL ─────────────────────────────────────────────────────────── */
+.jarvis-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.jarvis-pill--live {
+  border-color: var(--copper);
+  color: var(--copper);
+}
+
+.jarvis-pill--live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--copper);
+  animation: pulse 1200ms infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
+}
+
+.jarvis-pill--warning {
+  color: var(--copper);
+  font-weight: 600;
+}
+
+.jarvis-pill--error {
+  font-weight: 700;
+}
+
+/* ── TABLE ───────────────────────────────────────────────────────────────── */
+.jarvis-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.jarvis-table thead th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.jarvis-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.jarvis-table tbody tr:hover {
+  background: var(--copper-faint);
+}
+
+.jarvis-table tbody td {
+  padding: var(--space-4);
+  color: var(--text-primary);
+}
+
+.jarvis-table tbody td.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── TABS ────────────────────────────────────────────────────────────────── */
+.jarvis-tabs {
+  display: flex;
+  gap: var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+
+.jarvis-tab {
+  position: relative;
+  padding: var(--space-3) 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.jarvis-tab:hover {
+  color: var(--text-primary);
+}
+
+.jarvis-tab--active {
+  color: var(--text-primary);
+}
+
+.jarvis-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--copper);
+  animation: slideIn var(--duration-normal) var(--ease-out);
+}
+
+@keyframes slideIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ── MODAL ───────────────────────────────────────────────────────────────── */
+.jarvis-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn var(--duration-normal) var(--ease-out);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.jarvis-modal {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-height: 90vh;
+  overflow: auto;
+  animation: modalIn var(--duration-normal) var(--ease-out);
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.jarvis-modal--md {
+  width: 90%;
+  max-width: 560px;
+}
+
+.jarvis-modal--lg {
+  width: 90%;
+  max-width: 920px;
+}
+
+.jarvis-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--border);
+}
+
+.jarvis-modal__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  font-size: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.jarvis-modal__close:hover {
+  background: var(--copper-faint);
+  color: var(--copper);
+}
+
+.jarvis-modal__body {
+  padding: var(--space-8);
+}
+
+.jarvis-modal__footer {
+  padding: var(--space-6) var(--space-8);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* ── TOAST ───────────────────────────────────────────────────────────────── */
+.jarvis-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  pointer-events: none;
+}
+
+.jarvis-toast {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  max-width: 360px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(100%);
+  opacity: 0;
+  transition: all var(--duration-normal) var(--ease-out);
+  pointer-events: all;
+}
+
+.jarvis-toast--show {
+  transform: translateX(0);
+  opacity: 1;
+  box-shadow: var(--shadow-copper);
+}
+
+.jarvis-toast--default {
+  color: var(--text-primary);
+}
+
+.jarvis-toast--live {
+  border-color: var(--copper);
+  box-shadow: 0 0 0 1px var(--copper), 0 0 24px rgba(184, 115, 51, 0.3);
+}
+
+/* ── SPARKLINE ───────────────────────────────────────────────────────────── */
+.jarvis-sparkline {
+  display: block;
+}
+
+/* ── NUMBER DISPLAY ──────────────────────────────────────────────────────── */
+.jarvis-number {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── PROGRESS RING ───────────────────────────────────────────────────────── */
+.jarvis-progress-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jarvis-progress-ring__label {
+  position: absolute;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── COMMAND PALETTE ─────────────────────────────────────────────────────── */
+.jarvis-command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  z-index: 3000;
+  animation: fadeIn var(--duration-normal) var(--ease-out);
+}
+
+.jarvis-command-palette {
+  width: 90%;
+  max-width: 600px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: modalIn var(--duration-normal) var(--ease-out);
+}
+
+.jarvis-command-palette__input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  font-size: 16px;
+}
+
+.jarvis-command-palette__results {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.jarvis-command-palette__item {
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+  border-bottom: 1px solid var(--border);
+}
+
+.jarvis-command-palette__item:last-child {
+  border-bottom: none;
+}
+
+.jarvis-command-palette__item:hover,
+.jarvis-command-palette__item--selected {
+  background: var(--copper-faint);
+}
+
+.jarvis-command-palette__item-label {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.jarvis-command-palette__item-desc {
+  color: var(--text-secondary);
+}
+
+/* ── LOADING SKELETON ────────────────────────────────────────────────────── */
+.jarvis-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--copper-faint) 0%,
+    var(--border) 50%,
+    var(--copper-faint) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1400ms infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

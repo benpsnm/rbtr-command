@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Storage Agreement — Pallet Storage Near Me</title>
+<style>
+  :root{--fg:#111;--muted:#555;--border:#ddd}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px;color:var(--fg);background:#fff}
+  body{padding:40px 24px 80px}
+  .doc{max-width:720px;margin:0 auto}
+  .header{margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid var(--fg)}
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start}
+  .logo{font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:var(--muted);margin-bottom:2px}
+  h1{font-size:22px;font-weight:800;margin:4px 0}
+  .meta{text-align:right;font-size:13px;color:var(--muted);line-height:1.7}
+  .meta strong{display:block;font-size:16px;color:var(--fg)}
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:24px 0}
+  .party h3{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .party p{font-size:14px;line-height:1.6}
+  .clause{margin:24px 0}
+  .clause-num{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .clause h2{font-size:16px;font-weight:700;margin:4px 0 10px}
+  .clause p,.clause li{font-size:14px;line-height:1.7;color:#333;margin-bottom:8px}
+  .clause ul{padding-left:20px}
+  .highlight{background:#fffbeb;border-left:4px solid #f5a623;padding:12px 16px;border-radius:0 6px 6px 0;margin:12px 0;font-size:14px;color:#78350f}
+  .rate-table{width:100%;border-collapse:collapse;margin:12px 0}
+  .rate-table th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600}
+  .rate-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:14px}
+  .rate-table td.num{text-align:right;font-family:ui-monospace,"Cascadia Code",monospace}
+  .sig-section{margin-top:40px;padding-top:24px;border-top:2px solid var(--fg)}
+  .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:24px}
+  .sig-box h3{font-size:12px;font-weight:600;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+  .sig-line{border-bottom:1px solid var(--fg);height:48px;margin-bottom:8px}
+  .sig-label{font-size:12px;color:var(--muted)}
+  .print-btn{padding:8px 16px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:20px}
+  @media print{
+    body{padding:0;font-size:11pt}
+    .no-print{display:none}
+    .doc{max-width:100%}
+    .sig-section{page-break-inside:avoid}
+  }
+  .loading{color:var(--muted);padding:40px;text-align:center}
+  .error{color:#dc2626;padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<div class="doc" id="doc">
+  <div class="loading">Loading agreement…</div>
+</div>
+
+<script>
+async function loadAgreement() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  if (!id) { renderError('No agreement ID in URL.'); return; }
+
+  try {
+    const r = await fetch(`/api/onboarding/customers?action=agreement_doc&agreement_id=${id}`);
+    if (!r.ok) { renderError('Agreement not found.'); return; }
+    const data = await r.json();
+    renderAgreement(data.agreement, data.customer, data.quote);
+  } catch(e) {
+    renderError('Failed to load agreement.');
+  }
+}
+
+function fmt(n) { return n != null ? '£' + Number(n).toFixed(2) : '—'; }
+function fmtDate(s) { if (!s) return '___________'; return new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); }
+
+function renderAgreement(a, c, q) {
+  const custName = c?.business_name || '___________';
+  const custContact = c?.contact_name || '___________';
+  const pallets = q?.pallet_count || '___________';
+  const storageRate = q?.storage_rate_pw ? fmt(q.storage_rate_pw) + '/pallet/week' : '(see quote)';
+  const monthly = q?.monthly_storage_cost ? fmt(q.monthly_storage_cost) + '/month est.' : '(see quote)';
+  const effectiveFrom = fmtDate(a.effective_from);
+  const minTerm = a.minimum_term_weeks || 4;
+  const noticeDays = a.notice_period_days || 30;
+  const tcVersion = a.tc_version || 'v1.0-april-2026';
+
+  document.getElementById('doc').innerHTML = `
+    <div class="no-print">
+      <button class="print-btn" onclick="window.print()">🖨 Print / Save as PDF to sign</button>
+      <p style="font-size:13px;color:#666;margin-bottom:24px">Print this page, sign the signature section, and email or photograph the signed copy to <strong>sales@palletstoragenearme.co.uk</strong></p>
+    </div>
+
+    <div class="header">
+      <div class="header-row">
+        <div>
+          <div class="logo">Pallet Storage Near Me</div>
+          <h1>Pallet Storage Agreement</h1>
+          <p style="color:#666;font-size:13px;margin-top:4px">Agreement No: <strong>${a.agreement_number}</strong> · Date: ${a.agreement_date} · T&amp;Cs: ${tcVersion}</p>
+        </div>
+        <div class="meta">
+          <strong>${a.agreement_number}</strong>
+          Effective: ${effectiveFrom}<br>
+          Minimum term: ${minTerm} weeks<br>
+          Notice period: ${noticeDays} days
+        </div>
+      </div>
+    </div>
+
+    <div class="parties">
+      <div class="party">
+        <h3>Warehouse Operator ("PSNM")</h3>
+        <p><strong>Pallet Storage Near Me</strong><br>
+        Unit 3C, Hellaby Industrial Estate<br>Denaby Way, Rotherham<br>South Yorkshire S66 8HR<br>
+        Tel: 07506 255033<br>Email: sales@palletstoragenearme.co.uk</p>
+      </div>
+      <div class="party">
+        <h3>Customer</h3>
+        <p><strong>${custName}</strong><br>
+        Contact: ${custContact}<br>
+        ${c?.email ? 'Email: ' + c.email + '<br>' : ''}
+        ${c?.phone ? 'Tel: ' + c.phone + '<br>' : ''}
+        ${c?.billing_address || ''}</p>
+      </div>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 1</div>
+      <h2>Service</h2>
+      <p>PSNM agrees to provide ambient pallet storage and associated handling services at Unit 3C Hellaby Industrial Estate, Rotherham S66 8HR ("the Facility"), subject to the terms of this Agreement and the PSNM Standard Terms and Conditions (${tcVersion}) which are incorporated by reference and form part of this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 2</div>
+      <h2>Storage Schedule</h2>
+      <table class="rate-table">
+        <thead><tr><th>Service</th><th>Volume</th><th class="num">Rate</th></tr></thead>
+        <tbody>
+          <tr><td>Ambient pallet storage</td><td>${pallets} pallets</td><td class="num">${storageRate}</td></tr>
+          <tr><td>Goods-in handling</td><td>Per pallet movement</td><td class="num">${q?.receipt_rate ? fmt(q.receipt_rate) + '/movement' : '£3.50/movement'}</td></tr>
+          <tr><td>Goods-out handling</td><td>Per pallet movement</td><td class="num">${q?.despatch_rate ? fmt(q.despatch_rate) + '/movement' : '£3.50/movement'}</td></tr>
+          <tr><td><strong>Estimated monthly cost</strong></td><td colspan="2" class="num"><strong>${monthly}</strong></td></tr>
+        </tbody>
+      </table>
+      <p style="color:#666;font-size:13px">Rates are fixed for the initial minimum term. After the minimum term, PSNM may adjust rates with 30 days' written notice. The Customer's right to exit on 30 days' notice applies at all times after the minimum term.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 3</div>
+      <h2>Term and Termination</h2>
+      <p>This Agreement commences on ${effectiveFrom} (or the date of first inbound, whichever is later) and continues for a minimum period of <strong>${minTerm} weeks</strong>. After the minimum term, the Agreement continues on a rolling monthly basis until terminated by either party giving <strong>${noticeDays} days' written notice</strong>.</p>
+      <p>PSNM may terminate immediately and without notice in the event of: (a) non-payment of invoices after 14 days; (b) material breach of these terms; (c) storage of prohibited goods; or (d) any event creating a safety or legal risk to PSNM or other customers.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 4</div>
+      <h2>Payment</h2>
+      <p>Invoices are issued monthly in advance. Payment is due within 7 days of invoice date. Interest accrues on overdue amounts at 8% above Bank of England base rate (Late Payment of Commercial Debts (Interest) Act 1998). Access to the Facility may be suspended after 14 days of non-payment.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 5</div>
+      <h2>Insurance</h2>
+      <div class="highlight">
+        <strong>Customer self-insurance required.</strong> PSNM does not insure customer goods. The Customer is solely responsible for insuring their own goods against all risks while at the Facility.
+      </div>
+      <p>The Customer warrants that it holds, and will maintain throughout the term, appropriate goods-in-storage insurance at full replacement value of peak stock held at the Facility. A valid certificate of insurance must be provided to PSNM before the first inbound delivery. PSNM may request evidence of renewal at any time.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 6</div>
+      <h2>Goods Acceptance</h2>
+      <p>The Customer warrants that all goods stored at the Facility are: (a) accurately described; (b) legally owned or the Customer has authority to store them; (c) ambient and non-hazardous, unless expressly agreed in writing by PSNM. The following are excluded: food and foodstuffs, pharmaceutical or medical products, hazardous materials, temperature-sensitive goods, controlled substances, and goods of illegal provenance.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 7</div>
+      <h2>Liability</h2>
+      <p>PSNM's total liability to the Customer in respect of any single event shall not exceed the total storage fees paid by the Customer in the preceding 12 months. PSNM is not liable for indirect, consequential, or economic loss of any kind. PSNM's liability for damage to Customer goods is limited to instances of gross negligence on the part of PSNM staff.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 8</div>
+      <h2>Site Disclosure</h2>
+      <div class="highlight">
+        The Facility at Unit 3C shares a fire-separation wall with a neighbouring light-industrial tenant. The Customer has been informed of this and has taken appropriate advice from its insurers before signing this Agreement.
+      </div>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 9</div>
+      <h2>Lien</h2>
+      <p>PSNM has a general lien over all goods held at the Facility pending payment of all sums due under this Agreement or any other arrangement between the parties. If any sum remains unpaid 28 days after written notice, PSNM may sell the goods and apply proceeds to the outstanding debt, accounting to the Customer for any surplus.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 10</div>
+      <h2>Governing Law</h2>
+      <p>This Agreement is governed by the law of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+    </div>
+
+    <div class="clause">
+      <div class="clause-num">Clause 11</div>
+      <h2>Entire Agreement</h2>
+      <p>This Agreement, together with the PSNM Standard Terms and Conditions (${tcVersion}) and any accepted quote, constitutes the entire agreement between the parties and supersedes all prior negotiations, representations, and arrangements relating to the subject matter. Any variation must be agreed in writing by both parties.</p>
+    </div>
+
+    <div class="sig-section">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Signatures</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:24px">By signing below, both parties agree to the terms of this Agreement and the PSNM Standard Terms and Conditions (${tcVersion}).</p>
+      <div class="sig-grid">
+        <div class="sig-box">
+          <h3>Pallet Storage Near Me</h3>
+          <div class="sig-line"></div>
+          <div class="sig-label">Signature</div>
+          <div style="margin-top:16px;font-size:14px"><strong>Ben Greenwood</strong><br>Pallet Storage Near Me<br>Date: _______________</div>
+        </div>
+        <div class="sig-box">
+          <h3>Customer</h3>
+          <div class="sig-line"></div>
+          <div class="sig-label">Signature</div>
+          <div style="margin-top:16px;font-size:14px"><strong>${custName}</strong><br>Name: _______________<br>Position: _______________<br>Date: _______________</div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#999;margin-top:32px">Pallet Storage Near Me · Unit 3C Hellaby Industrial Estate · Rotherham S66 8HR · Agreement ${a.agreement_number} · T&Cs ${tcVersion}</p>
+  `;
+}
+
+function renderError(msg) {
+  document.getElementById('doc').innerHTML = `<div class="error">${msg}</div>`;
+}
+
+loadAgreement();
+</script>
+</body>
+</html>

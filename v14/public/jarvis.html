@@ -1,0 +1,3752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="JARVIS Command Centre - Operations dashboard for PSNM Warehouse, RBTR Expedition, Forge STR, and Booking Proof. Real-time monitoring, AI assistant, and business intelligence.">
+  <title>JARVIS — RBTR Command Centre</title>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+
+  <style>
+    /* ── JARVIS LAYOUT ─────────────────────────────────────────────────────── */
+    .jarvis-layout {
+      display: grid;
+      grid-template-areas:
+        "topbar topbar topbar"
+        "leftrail main rightrail"
+        "bottombar bottombar bottombar";
+      grid-template-columns: var(--left-rail-collapsed) 1fr var(--right-rail-width);
+      grid-template-rows: var(--top-bar-height) 1fr var(--bottom-bar-height);
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── SCANLINE OVERLAY (2% opacity, reduced-motion aware) ──────────────── */
+    @media (prefers-reduced-motion: no-preference) {
+      .jarvis-layout::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.02) 1px,
+          transparent 1px,
+          transparent 2px
+        );
+        pointer-events: none;
+        z-index: 9999;
+      }
+    }
+
+    /* ── WESTERN CORNER ACCENTS (8x8px L-shapes copper on focused cards) ───── */
+    .jarvis-card:focus-within::before,
+    .jarvis-card:focus-within::after,
+    .jarvis-card:hover::before,
+    .jarvis-card:hover::after {
+      content: '';
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-color: var(--copper);
+      border-style: solid;
+      opacity: 0.6;
+      transition: opacity var(--duration-fast) var(--ease-out);
+    }
+    .jarvis-card:focus-within::before,
+    .jarvis-card:hover::before {
+      top: -1px;
+      left: -1px;
+      border-width: 2px 0 0 2px;
+    }
+    .jarvis-card:focus-within::after,
+    .jarvis-card:hover::after {
+      bottom: -1px;
+      right: -1px;
+      border-width: 0 2px 2px 0;
+    }
+
+    /* ── NUMBER ANIMATION (0→value 600ms ease-out) ────────────────────────── */
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-number {
+      animation: countUp var(--duration-slow) var(--ease-out);
+    }
+
+    /* ── TOP BAR ───────────────────────────────────────────────────────────── */
+    .jarvis-topbar {
+      grid-area: topbar;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-6);
+      gap: var(--space-6);
+      z-index: 100;
+    }
+
+    .jarvis-logo {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--copper);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .jarvis-logo__subtitle {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-left: 4px;
+    }
+
+    .jarvis-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .jarvis-search-bar {
+      flex: 1;
+      max-width: 400px;
+    }
+
+    .jarvis-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .jarvis-alerts-bell {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .jarvis-alerts-bell:hover {
+      border-color: var(--copper);
+      background: var(--copper-faint);
+    }
+
+    .jarvis-alerts-bell--pulse::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 8px;
+      height: 8px;
+      background: var(--copper);
+      border-radius: 50%;
+      animation: pulse 1200ms infinite alternate;
+    }
+
+    .jarvis-user-menu {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 6px 12px;
+      background: var(--surface-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .jarvis-user-menu:hover {
+      border-color: var(--copper);
+    }
+
+    .jarvis-user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--copper);
+      color: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .jarvis-datetime {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: right;
+    }
+
+    /* ── LEFT RAIL ─────────────────────────────────────────────────────────── */
+    .jarvis-leftrail {
+      grid-area: leftrail;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-4) 0;
+      gap: var(--space-2);
+      z-index: 90;
+      overflow-y: auto;
+    }
+
+    .jarvis-nav-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      position: relative;
+    }
+
+    .jarvis-nav-icon:hover {
+      background: var(--copper-faint);
+    }
+
+    .jarvis-nav-icon--active {
+      background: var(--copper-faint);
+    }
+
+    .jarvis-nav-icon--active::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      background: var(--copper);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .jarvis-system-health {
+      margin-top: auto;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--copper);
+      box-shadow: 0 0 8px var(--copper);
+    }
+
+    /* ── ROCKO PRESENCE ZONE ───────────────────────────────────────────────── */
+    .rocko-presence {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100px;
+      background: var(--surface-deep);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 80;
+      padding: var(--space-4) var(--space-6);
+      gap: var(--space-2);
+    }
+
+    .rocko-waveform-container {
+      width: 100%;
+      height: 50px;
+      position: relative;
+    }
+
+    #rockoWaveform {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .rocko-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .rocko-mic-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: transparent;
+      border: 2px solid var(--copper);
+      color: var(--copper);
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      flex-shrink: 0;
+    }
+
+    .rocko-mic-btn:hover {
+      background: var(--copper-faint);
+      transform: scale(1.05);
+    }
+
+    .rocko-mic-btn--active {
+      background: var(--copper);
+      color: var(--bg);
+      box-shadow: 0 0 20px var(--copper);
+    }
+
+    .rocko-text-toggle-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: transparent;
+      border: 2px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      flex-shrink: 0;
+    }
+
+    .rocko-text-toggle-btn:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+      background: var(--copper-faint);
+    }
+
+    .rocko-text-toggle-btn--active {
+      border-color: var(--copper);
+      color: var(--copper);
+      background: var(--copper-faint);
+    }
+
+    .rocko-state-text {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: left;
+      line-height: 1.5;
+    }
+
+    .rocko-text-active {
+      color: var(--copper);
+      font-weight: 600;
+    }
+
+    .rocko-text-input-container {
+      flex: 1;
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .rocko-text-input {
+      flex: 1;
+      padding: var(--space-3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .rocko-text-input:focus {
+      outline: none;
+      border-color: var(--copper);
+    }
+
+    .rocko-send-btn {
+      padding: var(--space-3) var(--space-4);
+      background: var(--copper);
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .rocko-send-btn:hover {
+      background: var(--copper-bright);
+    }
+
+    .rocko-clear-btn {
+      padding: var(--space-2) var(--space-3);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .rocko-clear-btn:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    /* ── CENTER STAGE ──────────────────────────────────────────────────────── */
+    .jarvis-main {
+      grid-area: main;
+      background: var(--bg);
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .jarvis-main-content {
+      padding: var(--page-padding);
+    }
+
+    .jarvis-module-header {
+      margin-bottom: var(--space-8);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+    }
+
+    .jarvis-module-title {
+      font-family: var(--font-display);
+      font-size: 32px;
+      color: var(--text-primary);
+    }
+
+    .jarvis-module-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    /* ── COCKPIT GRID ──────────────────────────────────────────────────────── */
+    .cockpit-row {
+      display: grid;
+      gap: var(--card-gap);
+      margin-bottom: var(--row-gap);
+    }
+
+    .cockpit-row--3col {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    .cockpit-row--4col {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .cockpit-narrative-card .jarvis-card__body {
+      min-height: 120px;
+    }
+
+    .cockpit-money-value {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--copper);
+      margin: var(--space-3) 0;
+    }
+
+    .cockpit-ops-section {
+      border-left: 2px solid var(--copper-dim);
+      padding-left: var(--space-4);
+    }
+
+    .cockpit-ops-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cockpit-ops-stat:last-child {
+      border-bottom: none;
+    }
+
+    .cockpit-ops-stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .cockpit-ops-stat-value {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* ── RIGHT RAIL ────────────────────────────────────────────────────────── */
+    .jarvis-rightrail {
+      grid-area: rightrail;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+      z-index: 90;
+    }
+
+    .jarvis-rightrail-section {
+      background: var(--surface-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4);
+    }
+
+    .jarvis-rightrail-section__title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--copper);
+      margin-bottom: var(--space-3);
+    }
+
+    .jarvis-task-item {
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .jarvis-task-item:last-child {
+      border-bottom: none;
+    }
+
+    .jarvis-alert-item {
+      padding: var(--space-2);
+      background: var(--surface-elevated);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-2);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .jarvis-quick-btn {
+      width: 100%;
+      text-align: left;
+      margin-bottom: var(--space-2);
+    }
+
+    /* ── BOTTOM BAR ────────────────────────────────────────────────────────── */
+    .jarvis-bottombar {
+      grid-area: bottombar;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-6);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      gap: var(--space-6);
+      z-index: 100;
+    }
+
+    .jarvis-status-indicator {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .jarvis-status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--copper);
+    }
+
+    /* ── RESPONSIVE HELPERS ────────────────────────────────────────────────── */
+    .jarvis-mobile-only {
+      display: none;
+    }
+
+    .jarvis-desktop-only {
+      display: flex;
+    }
+
+    /* ── MOBILE ────────────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .jarvis-layout {
+        grid-template-areas:
+          "topbar"
+          "main"
+          "bottombar";
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--top-bar-height) 1fr 56px;
+      }
+
+      .jarvis-leftrail {
+        display: none;
+      }
+
+      .jarvis-rightrail {
+        display: none;
+      }
+
+      .jarvis-mobile-only {
+        display: flex;
+      }
+
+      .jarvis-desktop-only {
+        display: none !important;
+      }
+
+      .jarvis-bottombar {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        padding: 0;
+        gap: 0;
+        border-top: 1px solid var(--border-strong);
+      }
+
+      .jarvis-mobile-nav-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px;
+        background: transparent;
+        border: none;
+        font-size: 9px;
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+
+      .jarvis-mobile-nav-btn--active {
+        color: var(--copper);
+        background: var(--copper-faint);
+      }
+
+      .jarvis-search-bar {
+        max-width: 200px;
+      }
+
+      .cockpit-row--3col,
+      .cockpit-row--4col {
+        grid-template-columns: 1fr;
+      }
+
+      /* Slide-panel full-width on mobile */
+      .slide-panel {
+        width: 100vw;
+        max-width: 100vw;
+      }
+
+      /* Modal takes full width on mobile */
+      .modal__content {
+        max-width: 95vw;
+        max-height: 95vh;
+        margin: 0 8px;
+      }
+
+      /* Tables scroll horizontally on mobile */
+      .jarvis-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      /* Module headers stack on mobile */
+      .jarvis-module-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .jarvis-module-actions {
+        width: 100%;
+      }
+
+      /* Search inputs full width on mobile */
+      .jarvis-input[type="search"] {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+
+    /* ── ANIMATIONS ────────────────────────────────────────────────────────── */
+    .cockpit-card {
+      opacity: 0;
+      transform: scale(0.92) translateY(8px);
+      animation: cockpitCardIn var(--duration-arrival) var(--ease-out) forwards;
+    }
+
+    .cockpit-card:nth-child(1) { animation-delay: 0ms; }
+    .cockpit-card:nth-child(2) { animation-delay: 120ms; }
+    .cockpit-card:nth-child(3) { animation-delay: 240ms; }
+    .cockpit-card:nth-child(4) { animation-delay: 360ms; }
+
+    @keyframes cockpitCardIn {
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    /* ── SLIDE-IN PANEL ────────────────────────────────────────────────────── */
+    .slide-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 600px;
+      height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform var(--duration-slow) var(--ease-out);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .slide-panel--open {
+      transform: translateX(0);
+    }
+
+    .slide-panel__overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--duration-slow) var(--ease-out);
+      z-index: 999;
+    }
+
+    .slide-panel__overlay--visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .slide-panel__header {
+      padding: var(--space-6);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slide-panel__title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--text-primary);
+    }
+
+    .slide-panel__close {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .slide-panel__close:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    .slide-panel__tabs {
+      padding: var(--space-4) var(--space-6) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .slide-panel__content {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-6);
+    }
+
+    .slide-panel__actions {
+      padding: var(--space-6);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    /* ── MODAL ─────────────────────────────────────────────────────────────── */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal--open {
+      display: flex;
+    }
+
+    .modal__overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      animation: fadeIn var(--duration-normal) var(--ease-out);
+    }
+
+    .modal__content {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 700px;
+      width: 90%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlideIn var(--duration-slow) var(--ease-out);
+      overflow: hidden;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal__header {
+      padding: var(--space-6);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal__title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--text-primary);
+    }
+
+    .modal__close {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .modal__close:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    .modal__body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-6);
+    }
+
+    .modal__footer {
+      padding: var(--space-6);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: var(--space-3);
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <!-- JARVIS LAYOUT -->
+  <div class="jarvis-layout">
+    <!-- TOP BAR -->
+    <div class="jarvis-topbar">
+      <div class="jarvis-logo">
+        RBTR
+        <span class="jarvis-logo__subtitle">JARVIS</span>
+      </div>
+
+      <div class="jarvis-breadcrumb" id="breadcrumb">
+        <span>Cockpit</span>
+      </div>
+
+      <div class="jarvis-search-bar">
+        <input type="text" class="jarvis-input" placeholder="Cmd+K for commands" readonly onclick="openCommandPalette()">
+      </div>
+
+      <div class="jarvis-topbar-actions">
+        <button class="jarvis-alerts-bell" id="alertsBell" onclick="toggleAlerts()">
+          🔔
+        </button>
+
+        <div class="jarvis-user-menu" onclick="toggleUserMenu()">
+          <div class="jarvis-user-avatar">BG</div>
+          <div class="jarvis-datetime" id="datetime"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEFT RAIL -->
+    <div class="jarvis-leftrail">
+      <div class="jarvis-nav-icon jarvis-nav-icon--active" onclick="loadModule('cockpit')" title="Cockpit">
+        🧭
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('psnm')" title="PSNM">
+        🏭
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('forge')" title="Forge / STR">
+        🏡
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('rbtr')" title="RBTR">
+        🚛
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('personal')" title="Personal">
+        👤
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('sarah')" title="Sarah's Space">
+        ❤️
+      </div>
+      <div class="jarvis-nav-icon" onclick="loadModule('system')" title="System">
+        ⚙️
+      </div>
+
+      <div class="jarvis-system-health" title="System Operational"></div>
+    </div>
+
+    <!-- CENTER STAGE -->
+    <main class="jarvis-main" id="mainStage" role="main">
+      <!-- ROCKO PRESENCE ZONE (always visible) -->
+      <div class="rocko-presence">
+        <div class="rocko-waveform-container">
+          <canvas id="rockoWaveform" width="1200" height="50"></canvas>
+        </div>
+        <div class="rocko-controls">
+          <button class="rocko-mic-btn" id="rockoMicBtn" title="Click or hold spacebar to talk">
+            🎤
+          </button>
+          <button class="rocko-text-toggle-btn" id="rockoTextToggleBtn" title="Toggle text input">
+            ⌨️
+          </button>
+          <div class="rocko-state-text" id="rockoStateText">
+            Rocko ready. Click mic or press spacebar to talk.
+          </div>
+          <button class="rocko-clear-btn" onclick="Rocko.clearConversation()" title="Clear conversation">
+            Clear
+          </button>
+        </div>
+        <!-- Text input fallback -->
+        <div class="rocko-text-input-container" style="display: none;" id="rockoTextInputContainer">
+          <input type="text" class="rocko-text-input" id="rockoTextInput" placeholder="Type your message here..." />
+          <button class="rocko-send-btn" onclick="sendRockoTextMessage()">Send</button>
+        </div>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div class="jarvis-main-content">
+        <!-- COCKPIT VIEW (default) -->
+        <div id="cockpit-view">
+        <div class="jarvis-module-header">
+          <h1 class="jarvis-module-title">Cockpit</h1>
+          <div class="jarvis-module-actions">
+            <span class="text-small text-secondary font-mono" id="lastUpdate"></span>
+          </div>
+        </div>
+
+        <!-- Row 1: Narrative -->
+        <div class="cockpit-row cockpit-row--3col">
+          <div class="jarvis-card cockpit-card cockpit-narrative-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Yesterday Banked</h2>
+            </div>
+            <div class="jarvis-card__body" id="yesterdayBanked">
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 80%;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 60%;"></div>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card cockpit-narrative-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Today's Plan</h2>
+            </div>
+            <div class="jarvis-card__body" id="todaysPlan">
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="width: 70%;"></div>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card cockpit-narrative-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Week Goals</h2>
+            </div>
+            <div class="jarvis-card__body" id="weekGoals">
+              <div class="jarvis-skeleton jarvis-skeleton--block" style="height: 60px; margin-bottom: 12px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--block" style="height: 60px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Money Flow -->
+        <div class="cockpit-row cockpit-row--4col">
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Cash Position</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <div class="cockpit-money-value" id="cashPosition">£0</div>
+              <p class="text-small text-tertiary">Ben + Sarah combined</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">This Week Banked</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <div class="cockpit-money-value" id="weekBanked">£0</div>
+              <div id="weekSparkline"></div>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Outstanding Invoices</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <div class="cockpit-money-value" id="outstandingInvoices">£0</div>
+              <p class="text-small text-tertiary" id="invoiceCount">0 invoices</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Upcoming Costs</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <div class="cockpit-money-value" id="upcomingCosts">£0</div>
+              <p class="text-small text-tertiary">Next 7 days</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Operations -->
+        <div class="cockpit-row cockpit-row--3col">
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">PSNM</h2>
+            </div>
+            <div class="jarvis-card__body cockpit-ops-section" id="psnmOps">
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Forge</h2>
+            </div>
+            <div class="jarvis-card__body cockpit-ops-section" id="forgeOps">
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+              <div class="jarvis-skeleton jarvis-skeleton--text" style="height: 24px;"></div>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">RBTR</h2>
+            </div>
+            <div class="jarvis-card__body cockpit-ops-section" id="rbtrOps">
+              <p class="text-small text-tertiary">Loading...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: Personal + Sarah -->
+        <div class="cockpit-row cockpit-row--3col">
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Habits</h2>
+            </div>
+            <div class="jarvis-card__body" id="habits">
+              <p class="text-small text-tertiary">Loading...</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Wellness</h2>
+            </div>
+            <div class="jarvis-card__body" id="wellness">
+              <p class="text-small text-tertiary">Loading...</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card cockpit-card">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">Family</h2>
+            </div>
+            <div class="jarvis-card__body" id="family">
+              <p class="text-small text-tertiary">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div> <!-- end jarvis-main-content -->
+    </main>
+
+    <!-- RIGHT RAIL -->
+    <div class="jarvis-rightrail">
+      <div class="jarvis-rightrail-section">
+        <div class="jarvis-rightrail-section__title">NOW</div>
+        <div class="font-mono text-small" id="nowTime"></div>
+        <div class="text-tiny text-secondary" id="dayProgress"></div>
+      </div>
+
+      <div class="jarvis-rightrail-section">
+        <div class="jarvis-rightrail-section__title">TODAY</div>
+        <div id="todayTasks">
+          <p class="text-tiny text-tertiary">No tasks due today</p>
+        </div>
+      </div>
+
+      <div class="jarvis-rightrail-section">
+        <div class="jarvis-rightrail-section__title">LIVE ALERTS</div>
+        <div id="liveAlerts">
+          <p class="text-tiny text-tertiary">All quiet</p>
+        </div>
+      </div>
+
+      <div class="jarvis-rightrail-section">
+        <div class="jarvis-rightrail-section__title">HOT</div>
+        <div id="hotProspects">
+          <p class="text-tiny text-tertiary">No hot prospects</p>
+        </div>
+      </div>
+
+      <div class="jarvis-rightrail-section">
+        <div class="jarvis-rightrail-section__title">QUICK FIRE</div>
+        <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm jarvis-quick-btn" onclick="quickAction('task')">+ Task</button>
+        <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm jarvis-quick-btn" onclick="quickAction('quote')">+ Quote</button>
+        <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm jarvis-quick-btn" onclick="quickAction('note')">+ Note</button>
+        <button class="jarvis-btn jarvis-btn--secondary jarvis-btn--sm jarvis-quick-btn" onclick="quickAction('buildlog')">+ Build Log</button>
+      </div>
+    </div>
+
+    <!-- BOTTOM BAR -->
+    <div class="jarvis-bottombar">
+      <!-- Desktop status indicators -->
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <div class="jarvis-status-dot"></div>
+        <span>Crons: 7 active</span>
+      </div>
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <span>API Quota: 92%</span>
+      </div>
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <span>Vercel: Production</span>
+      </div>
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <span id="gitStatus">Git: clean</span>
+      </div>
+      <div class="jarvis-status-indicator jarvis-desktop-only">
+        <span>Rocko: Sonnet 4.5</span>
+      </div>
+
+      <!-- Mobile nav buttons (hidden on desktop) -->
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only jarvis-mobile-nav-btn--active" onclick="loadModule('cockpit')">
+        <span style="font-size: 18px;">🧭</span>
+        <span>Cockpit</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('psnm')">
+        <span style="font-size: 18px;">🏭</span>
+        <span>PSNM</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('forge')">
+        <span style="font-size: 18px;">🏡</span>
+        <span>Forge</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('rbtr')">
+        <span style="font-size: 18px;">🚛</span>
+        <span>RBTR</span>
+      </button>
+      <button class="jarvis-mobile-nav-btn jarvis-mobile-only" onclick="loadModule('personal')">
+        <span style="font-size: 18px;">👤</span>
+        <span>Personal</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/jarvis-components.js"></script>
+  <script src="/js/jarvis-api.js"></script>
+  <script src="/js/jarvis-actions.js"></script>
+  <script src="/js/jarvis-rocko-voice.js"></script>
+  <script src="/js/jarvis-modules-psnm.js"></script>
+  <script src="/js/jarvis-modules-forge.js"></script>
+  <script src="/js/jarvis-modules-booking-proof.js"></script>
+  <script src="/js/jarvis-modules-rbtr.js"></script>
+  <script src="/js/jarvis-modules-personal.js"></script>
+  <script src="/js/jarvis-modules-system.js"></script>
+  <script>
+    // ── API KEYS (REMOVED) ────────────────────────────────────────────────────
+    // API keys now handled server-side via proxy endpoints for security:
+    // - POST /api/rocko/stt (Whisper STT)
+    // - POST /api/rocko/tts (ElevenLabs TTS)
+    // - POST /api/rocko/chat (Anthropic + tools)
+    // Client never sees OPENAI_API_KEY, ELEVENLABS_API_KEY, or ANTHROPIC_API_KEY
+  </script>
+  <script>
+    // ── GLOBAL STATE ─────────────────────────────────────────────────────────
+    let currentModule = 'cockpit';
+    let cockpitData = null;
+
+    // ── INIT ─────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+      initDateTime();
+      initCommandPalette();
+      initRocko();
+      initRightRailCollapse();
+      initClickableBottomBar();
+      await checkAuthAndLoad();
+      startLiveUpdates();
+    });
+
+    // ── ROCKO INITIALIZATION ─────────────────────────────────────────────────
+    async function initRocko() {
+      const initialized = await Rocko.init('rockoWaveform');
+      if (!initialized) {
+        console.error('[JARVIS] Failed to initialize Rocko');
+        return;
+      }
+
+      // Mic button click handler
+      const micBtn = document.getElementById('rockoMicBtn');
+      micBtn.addEventListener('click', () => {
+        if (Rocko.state === 'idle') {
+          Rocko.startListening();
+        } else if (Rocko.state === 'listening') {
+          Rocko.stopListening();
+        }
+      });
+
+      // Text toggle button click handler
+      const textToggleBtn = document.getElementById('rockoTextToggleBtn');
+      const textContainer = document.getElementById('rockoTextInputContainer');
+      textToggleBtn.addEventListener('click', () => {
+        const isVisible = textContainer.style.display !== 'none';
+        textContainer.style.display = isVisible ? 'none' : 'flex';
+        textToggleBtn.classList.toggle('rocko-text-toggle-btn--active', !isVisible);
+        if (!isVisible) {
+          // Focus input when showing
+          document.getElementById('rockoTextInput').focus();
+        }
+      });
+
+      // Text input handler
+      const textInput = document.getElementById('rockoTextInput');
+      textInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          sendRockoTextMessage();
+        }
+      });
+    }
+
+    function sendRockoTextMessage() {
+      const input = document.getElementById('rockoTextInput');
+      const message = input.value.trim();
+      if (message) {
+        Rocko.sendTextMessage(message);
+        input.value = '';
+      }
+    }
+
+    // ── AUTH CHECK ───────────────────────────────────────────────────────────
+    async function checkAuthAndLoad() {
+      const isAuthed = await API.checkAuth();
+      if (!isAuthed) {
+        // Redirect to login if not authenticated
+        // For now, continue with loading (will show empty data if Supabase calls fail)
+        console.warn('Not authenticated — some data may not load');
+      }
+      await loadCockpitData();
+    }
+
+    // ── ANIMATE NUMBERS (0→value over 600ms) ─────────────────────────────────
+    function animateNumber(element, target, duration = 600) {
+      const start = 0;
+      const startTime = performance.now();
+
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = Math.floor(start + (target - start) * progress);
+
+        element.textContent = current.toLocaleString();
+        element.classList.add('animate-number');
+
+        if (progress < 1) {
+          requestAnimationFrame(update);
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    // Automatically animate all elements with data-animate attribute
+    function animateAllNumbers() {
+      document.querySelectorAll('[data-animate]').forEach(el => {
+        const target = parseInt(el.textContent.replace(/[^0-9]/g, '')) || 0;
+        if (target > 0) {
+          animateNumber(el, target);
+        }
+      });
+    }
+
+    // ── DATE/TIME ────────────────────────────────────────────────────────────
+    function initDateTime() {
+      updateDateTime();
+      setInterval(updateDateTime, 1000);
+    }
+
+    function updateDateTime() {
+      const now = new Date();
+      const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const date = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+      document.getElementById('datetime').innerHTML = `${time}<br>${date}`;
+      document.getElementById('nowTime').textContent = time;
+
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(now);
+      dayEnd.setHours(23, 59, 59, 999);
+      const dayProgress = ((now - dayStart) / (dayEnd - dayStart)) * 100;
+      document.getElementById('dayProgress').textContent = `${Math.round(dayProgress)}% of day complete`;
+    }
+
+    // ── COMMAND PALETTE ──────────────────────────────────────────────────────
+    function initCommandPalette() {
+      document.addEventListener('keydown', (e) => {
+        // Cmd+K for command palette
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          openCommandPalette();
+        }
+
+        // Cmd+1-7 for left rail navigation
+        if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '7') {
+          e.preventDefault();
+          const modules = ['cockpit', 'psnm', 'forge', 'rbtr', 'personal', 'sarah', 'system'];
+          const index = parseInt(e.key) - 1;
+          if (modules[index]) {
+            loadModule(modules[index]);
+          }
+        }
+      });
+    }
+
+    function openCommandPalette() {
+      const commands = [
+        { label: 'Go to Cockpit', description: 'Main dashboard', action: () => loadModule('cockpit') },
+        { label: 'Go to PSNM', description: 'Warehouse operations', action: () => loadModule('psnm') },
+        { label: 'Go to Forge', description: 'STR management', action: () => loadModule('forge') },
+        { label: 'Go to RBTR', description: 'Expedition planning', action: () => loadModule('rbtr') },
+        { label: 'Create Task', description: 'Add new task', action: () => quickAction('task') },
+        { label: 'Create Quote', description: 'PSNM quote', action: () => quickAction('quote') },
+        { label: 'Refresh Data', description: 'Reload cockpit', action: () => loadCockpitData() }
+      ];
+
+      const palette = JARVIS.CommandPalette({
+        commands,
+        onSelect: (cmd) => cmd.action(),
+        onClose: () => {}
+      });
+
+      document.body.appendChild(palette);
+    }
+
+    // ── LOAD COCKPIT DATA ────────────────────────────────────────────────────
+    async function loadCockpitData() {
+      try {
+        // Fetch all cockpit data from Supabase
+        const data = await API.getCockpitData();
+        cockpitData = data;
+
+        // ── ROW 1: NARRATIVE ─────────────────────────────────────────────────
+        // Yesterday Banked
+        if (data.dailyLog && data.dailyLog.length > 0) {
+          const events = data.dailyLog.map(e => `
+            <div style="margin-bottom: 8px;">
+              <span class="jarvis-pill jarvis-pill--${e.event_type === 'win' ? 'live' : 'default'} font-mono text-pill">${e.event_type}</span>
+              <p class="text-small" style="margin-top: 4px;">${e.description}</p>
+            </div>
+          `).join('');
+          document.getElementById('yesterdayBanked').innerHTML = events;
+        } else {
+          document.getElementById('yesterdayBanked').innerHTML = `
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">🎯</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">Log your first win</p>
+              <p class="jarvis-empty-state__description">Track daily progress to build momentum. Takes 30 seconds.</p>
+            </div>
+          `;
+        }
+
+        // Today's Plan
+        if (data.todayTasks && data.todayTasks.length > 0) {
+          const tasks = data.todayTasks.slice(0, 5).map(t => `
+            <div class="jarvis-task-item">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-small">${t.description}</span>
+                <span class="jarvis-pill jarvis-pill--${t.status === 'in_progress' ? 'live' : 'default'} font-mono text-pill">${t.status}</span>
+              </div>
+            </div>
+          `).join('');
+          document.getElementById('todaysPlan').innerHTML = tasks;
+        } else {
+          document.getElementById('todaysPlan').innerHTML = `
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">✅</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">All clear for today</p>
+              <p class="jarvis-empty-state__description">Add your first task via Quick Fire or Cmd+K.</p>
+            </div>
+          `;
+        }
+
+        // Week Goals
+        if (data.weekGoals && data.weekGoals.length > 0) {
+          const goals = data.weekGoals.map(g => {
+            const ring = JARVIS.ProgressRing({ percent: g.progress_pct || 0, size: 48, label: `${g.progress_pct || 0}%` });
+            const goalEl = document.createElement('div');
+            goalEl.style.cssText = 'display: flex; gap: 12px; align-items: center; margin-bottom: 12px;';
+            goalEl.innerHTML = `
+              <div>${ring.outerHTML}</div>
+              <div style="flex: 1;">
+                <p class="text-small font-weight-500">${g.goal}</p>
+                <p class="text-tiny text-tertiary">${g.status}</p>
+              </div>
+            `;
+            return goalEl.outerHTML;
+          }).join('');
+          document.getElementById('weekGoals').innerHTML = goals;
+        } else {
+          document.getElementById('weekGoals').innerHTML = `
+            <div class="jarvis-empty-state" style="padding: var(--space-6);">
+              <div class="jarvis-empty-state__icon">🎲</div>
+              <p class="jarvis-empty-state__title" style="font-size: 16px; margin-bottom: 8px;">Set this week's goals</p>
+              <p class="jarvis-empty-state__description">3-5 measurable outcomes. Review Sunday night.</p>
+            </div>
+          `;
+        }
+
+        // ── ROW 2: MONEY FLOW ────────────────────────────────────────────────
+        // Cash Position (placeholder — wire to real cash tracking later)
+        document.getElementById('cashPosition').textContent = '—';
+
+        // Week Banked (placeholder — wire to revenue aggregation later)
+        document.getElementById('weekBanked').textContent = '—';
+        document.getElementById('weekSparkline').innerHTML = '';
+
+        // Outstanding Invoices (placeholder)
+        document.getElementById('outstandingInvoices').textContent = '—';
+        document.getElementById('invoiceCount').textContent = '—';
+
+        // Upcoming Costs (placeholder)
+        document.getElementById('upcomingCosts').textContent = '—';
+
+        // ── ROW 3: OPERATIONS ────────────────────────────────────────────────
+        // PSNM
+        if (data.psnm) {
+          document.getElementById('psnmOps').innerHTML = `
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Active customers</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.live || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Quotes sent</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.quotes || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Hot prospects</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.leads || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Total pipeline</span>
+              <span class="cockpit-ops-stat-value">${data.psnm.total || 0}</span>
+            </div>
+          `;
+        }
+
+        // Forge / STR
+        if (data.str) {
+          const occupancy = data.str.totalBookings > 0 ? Math.round((data.str.thisWeekBookings / 7) * 100) : 0;
+          document.getElementById('forgeOps').innerHTML = `
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">This week bookings</span>
+              <span class="cockpit-ops-stat-value">${data.str.thisWeekBookings || 0}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Occupancy</span>
+              <span class="cockpit-ops-stat-value">${occupancy}%</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Revenue (all time)</span>
+              <span class="cockpit-ops-stat-value">£${Math.round(data.str.revenue || 0)}</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Booking Proof MRR</span>
+              <span class="cockpit-ops-stat-value">—</span>
+            </div>
+          `;
+        }
+
+        // RBTR (placeholder — wire to build progress / sponsor tracking later)
+        document.getElementById('rbtrOps').innerHTML = `
+          <div class="cockpit-ops-stat">
+            <span class="cockpit-ops-stat-label">Truck build %</span>
+            <span class="cockpit-ops-stat-value">—</span>
+          </div>
+          <div class="cockpit-ops-stat">
+            <span class="cockpit-ops-stat-label">Sponsors (confirmed/target)</span>
+            <span class="cockpit-ops-stat-value">—/53</span>
+          </div>
+          <div class="cockpit-ops-stat">
+            <span class="cockpit-ops-stat-label">Content this week</span>
+            <span class="cockpit-ops-stat-value">—</span>
+          </div>
+        `;
+
+        // ── ROW 4: PERSONAL + SARAH ──────────────────────────────────────────
+        // Habits (placeholder — wire to habit tracking later)
+        document.getElementById('habits').innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <p class="text-small font-weight-600" style="margin-bottom: 8px;">Ben</p>
+              <p class="text-tiny text-tertiary">Habit tracker coming in STAGE 6</p>
+            </div>
+            <div>
+              <p class="text-small font-weight-600" style="margin-bottom: 8px;">Sarah</p>
+              <p class="text-tiny text-tertiary">Habit tracker coming in STAGE 6</p>
+            </div>
+          </div>
+        `;
+
+        // Wellness
+        if (data.wellness) {
+          const moodRing = JARVIS.ProgressRing({ percent: (data.wellness.mood / 10) * 100, size: 56, label: data.wellness.mood });
+          const energyRing = JARVIS.ProgressRing({ percent: (data.wellness.energy / 10) * 100, size: 56, label: data.wellness.energy });
+          document.getElementById('wellness').innerHTML = `
+            <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 12px;">
+              <div>${moodRing.outerHTML}</div>
+              <div>
+                <p class="text-small">Mood</p>
+                <p class="text-tiny text-tertiary">${data.wellness.mood}/10</p>
+              </div>
+              <div>${energyRing.outerHTML}</div>
+              <div>
+                <p class="text-small">Energy</p>
+                <p class="text-tiny text-tertiary">${data.wellness.energy}/10</p>
+              </div>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Sleep</span>
+              <span class="cockpit-ops-stat-value">${data.wellness.sleep_hours || '—'}h</span>
+            </div>
+            <div class="cockpit-ops-stat">
+              <span class="cockpit-ops-stat-label">Weight</span>
+              <span class="cockpit-ops-stat-value">${data.wellness.weight_kg || '—'}kg</span>
+            </div>
+          `;
+        } else {
+          document.getElementById('wellness').innerHTML = `<p class="text-small text-tertiary">No wellness data for today</p>`;
+        }
+
+        // Family (placeholder)
+        document.getElementById('family').innerHTML = `
+          <p class="text-small text-tertiary">Family calendar coming in STAGE 6</p>
+        `;
+
+        // ── RIGHT RAIL: TODAY TASKS ──────────────────────────────────────────
+        if (data.todayTasks && data.todayTasks.length > 0) {
+          const topTasks = data.todayTasks.slice(0, 3).map(t => `
+            <div class="jarvis-task-item">
+              <p class="text-tiny">${t.description}</p>
+              <span class="jarvis-pill font-mono text-pill" style="margin-top: 4px;">${t.status}</span>
+            </div>
+          `).join('');
+          document.getElementById('todayTasks').innerHTML = topTasks;
+        }
+
+        document.getElementById('lastUpdate').textContent = `Updated ${new Date().toLocaleTimeString('en-GB')}`;
+
+      } catch (err) {
+        console.error('Failed to load cockpit data:', err);
+        JARVIS.Toast({ message: 'Failed to load cockpit data', variant: 'default', duration: 3000 });
+      }
+    }
+
+    // ── MODULE ROUTING ───────────────────────────────────────────────────────
+    function loadModule(module, submodule) {
+      currentModule = module;
+
+      // Update nav active state
+      document.querySelectorAll('.jarvis-nav-icon').forEach(icon => {
+        icon.classList.remove('jarvis-nav-icon--active');
+      });
+      if (event?.currentTarget) {
+        event.currentTarget.classList.add('jarvis-nav-icon--active');
+      }
+
+      // Update breadcrumb
+      const breadcrumbMap = {
+        cockpit: 'Cockpit',
+        psnm: 'PSNM',
+        'psnm.atlas': 'PSNM / Atlas v3',
+        'psnm.wms': 'PSNM / WMS Prospects',
+        'psnm.ww': 'PSNM / WW Enquiries',
+        'psnm.customers': 'PSNM / Customers',
+        'psnm.quotes': 'PSNM / Quotes & Agreements',
+        'psnm.insurance': 'PSNM / Insurance',
+        'psnm.intel': 'PSNM / Intel Pipeline',
+        'psnm.revenue': 'PSNM / Revenue',
+        forge: 'Forge / STR',
+        rbtr: 'RBTR',
+        personal: 'Personal',
+        sarah: 'Sarah\'s Space',
+        system: 'System'
+      };
+
+      const moduleKey = submodule ? `${module}.${submodule}` : module;
+      document.getElementById('breadcrumb').innerHTML = `<span>${breadcrumbMap[moduleKey] || moduleKey}</span>`;
+
+      // Route to module content
+      if (module === 'cockpit') {
+        location.reload(); // Reload to restore cockpit view
+      } else if (module === 'psnm') {
+        // PSNM sub-modules
+        if (!submodule) {
+          // Show PSNM landing/menu
+          showPSNMMenu();
+        } else if (submodule === 'atlas') {
+          PSNM_MODULES.renderAtlasV3();
+        } else if (submodule === 'wms') {
+          PSNM_MODULES.renderWMSProspects();
+        } else if (submodule === 'ww') {
+          PSNM_MODULES.renderWWEnquiries();
+        } else if (submodule === 'customers') {
+          PSNM_MODULES.renderCustomers();
+        } else if (submodule === 'quotes') {
+          PSNM_MODULES.renderQuotesAgreements();
+        } else if (submodule === 'insurance') {
+          PSNM_MODULES.renderInsurance();
+        } else if (submodule === 'intel') {
+          PSNM_MODULES.renderIntelPipeline();
+        } else if (submodule === 'revenue') {
+          PSNM_MODULES.renderRevenueDashboard();
+        }
+      } else if (module === 'forge') {
+        // Forge / STR modules
+        if (!submodule) {
+          FORGE_MODULES.renderLanding();
+        } else {
+          FORGE_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'rbtr') {
+        // RBTR modules
+        if (!submodule) {
+          RBTR_MODULES.renderLanding();
+        } else {
+          RBTR_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'personal') {
+        // Personal modules
+        if (!submodule) {
+          PERSONAL_MODULES.renderLanding();
+        } else {
+          PERSONAL_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'sarah') {
+        // Sarah's Space
+        if (!submodule) {
+          SARAH_MODULES.renderLanding();
+        } else {
+          SARAH_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+        }
+      } else if (module === 'system') {
+        // System modules
+        if (!submodule) {
+          SYSTEM_MODULES.renderLanding();
+        } else {
+          const methodName = `render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`;
+          if (SYSTEM_MODULES[methodName]) {
+            SYSTEM_MODULES[methodName]();
+          } else {
+            document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Module coming soon</p></div></div>';
+          }
+        }
+      } else {
+        // Other modules (coming in STAGE 4+)
+        document.getElementById('mainStage').innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">${breadcrumbMap[module]}</h1>
+          </div>
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <p>Module: ${module} — coming in STAGE 4+</p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function showPSNMMenu() {
+      document.getElementById('mainStage').innerHTML = `
+        <div class="jarvis-module-header">
+          <h1 class="jarvis-module-title">PSNM</h1>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'atlas')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">🚀 Atlas v3</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Draft queue, intelligence pipeline, outreach automation</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'customers')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">👥 Customers</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Onboarding pipeline, agreements, insurance</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'ww')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">📨 WW Enquiries</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">WhichWarehouse lead tracker</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'quotes')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">📄 Quotes & Agreements</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Quote generation, agreement signing</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'insurance')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">🛡 Insurance</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Certificate verification queue</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'intel')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">🔍 Intel Pipeline</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Scraping, enrichment, classification</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'revenue')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">💰 Revenue</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">PSNM cash flow dashboard</p>
+            </div>
+          </div>
+
+          <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('psnm', 'wms')">
+            <div class="jarvis-card__header">
+              <h2 class="font-display text-h2">🏭 WMS Prospects</h2>
+            </div>
+            <div class="jarvis-card__body">
+              <p class="text-small text-secondary">Warehouse management system prospects</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ── QUICK ACTIONS ────────────────────────────────────────────────────────
+    async function quickAction(type) {
+      switch (type) {
+        case 'task':
+          await showTaskModal();
+          break;
+        case 'quote':
+          await showQuoteModal();
+          break;
+        case 'note':
+          await showNoteModal();
+          break;
+        case 'buildlog':
+          await showBuildLogModal();
+          break;
+        default:
+          JARVIS.Toast({ message: `Quick action: ${type} — not implemented`, duration: 2000 });
+      }
+    }
+
+    // ── TASK MODAL ───────────────────────────────────────────────────────────
+    async function showTaskModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Task',
+        content: `
+          <form id="taskForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Title</label>
+              <input type="text" id="taskTitle" class="jarvis-input" placeholder="Task description" required autofocus />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Priority</label>
+                <select id="taskPriority" class="jarvis-input">
+                  <option value="1">P1 - High</option>
+                  <option value="2" selected>P2 - Medium</option>
+                  <option value="3">P3 - Low</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Category</label>
+                <select id="taskCategory" class="jarvis-input">
+                  <option value="psnm">PSNM</option>
+                  <option value="forge">Forge</option>
+                  <option value="rbtr">RBTR</option>
+                  <option value="personal">Personal</option>
+                  <option value="general" selected>General</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Due Date</label>
+              <input type="date" id="taskDueDate" class="jarvis-input" value="${new Date().toISOString().split('T')[0]}" />
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Create Task',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const title = document.getElementById('taskTitle').value.trim();
+              if (!title) {
+                JARVIS.Toast({ message: 'Title is required', duration: 2000 });
+                return;
+              }
+
+              const taskData = {
+                title,
+                description: title, // Same as title for now
+                priority: parseInt(document.getElementById('taskPriority').value),
+                category: document.getElementById('taskCategory').value,
+                due_date: document.getElementById('taskDueDate').value,
+                status: 'open',
+                source: 'jarvis-cockpit'
+              };
+
+              const result = await API.createTask(taskData);
+              if (result) {
+                JARVIS.Toast({ message: `Task created: ${title}`, duration: 3000 });
+                closeModal();
+                // Refresh cockpit if visible
+                if (currentModule === 'cockpit') {
+                  loadCockpitData();
+                }
+              } else {
+                JARVIS.Toast({ message: 'Failed to create task', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── QUOTE MODAL ──────────────────────────────────────────────────────────
+    async function showQuoteModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Quote',
+        content: `
+          <form id="quoteForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Company Name</label>
+              <input type="text" id="quoteCompany" class="jarvis-input" placeholder="Customer company name" required autofocus />
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Contact Email</label>
+              <input type="email" id="quoteEmail" class="jarvis-input" placeholder="contact@company.com" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Pallet Count</label>
+                <input type="number" id="quotePallets" class="jarvis-input" placeholder="0" min="1" required />
+              </div>
+              <div>
+                <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Monthly Rate (£)</label>
+                <input type="number" id="quoteRate" class="jarvis-input" placeholder="0.00" step="0.01" min="0" required />
+              </div>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Notes</label>
+              <textarea id="quoteNotes" class="jarvis-input" rows="3" placeholder="Additional notes..."></textarea>
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Create Quote',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const company = document.getElementById('quoteCompany').value.trim();
+              const email = document.getElementById('quoteEmail').value.trim();
+              const pallets = parseInt(document.getElementById('quotePallets').value);
+              const rate = parseFloat(document.getElementById('quoteRate').value);
+
+              if (!company || !email || !pallets || !rate) {
+                JARVIS.Toast({ message: 'All fields required', duration: 2000 });
+                return;
+              }
+
+              const quoteData = {
+                company_name: company,
+                contact_email: email,
+                pallet_count: pallets,
+                monthly_rate: rate,
+                notes: document.getElementById('quoteNotes').value.trim(),
+                status: 'draft',
+                created_by: 'ben'
+              };
+
+              const result = await API.createQuote(quoteData);
+              if (result) {
+                JARVIS.Toast({ message: `Quote created for ${company}`, duration: 3000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to create quote', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── NOTE MODAL ───────────────────────────────────────────────────────────
+    async function showNoteModal() {
+      const modal = JARVIS.Modal({
+        title: '+ New Note',
+        content: `
+          <form id="noteForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Category</label>
+              <select id="noteCategory" class="jarvis-input">
+                <option value="general" selected>General</option>
+                <option value="psnm">PSNM</option>
+                <option value="forge">Forge</option>
+                <option value="rbtr">RBTR</option>
+                <option value="personal">Personal</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Note</label>
+              <textarea id="noteContent" class="jarvis-input" rows="6" placeholder="Write your note here..." required autofocus></textarea>
+            </div>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Save Note',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const content = document.getElementById('noteContent').value.trim();
+              if (!content) {
+                JARVIS.Toast({ message: 'Note content is required', duration: 2000 });
+                return;
+              }
+
+              const noteData = {
+                content,
+                category: document.getElementById('noteCategory').value,
+                created_by: 'ben'
+              };
+
+              const result = await API.createNote(noteData);
+              if (result) {
+                JARVIS.Toast({ message: 'Note saved', duration: 2000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to save note', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── BUILD LOG MODAL ──────────────────────────────────────────────────────
+    async function showBuildLogModal() {
+      const modal = JARVIS.Modal({
+        title: '+ Build Log Entry',
+        content: `
+          <form id="buildLogForm" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label class="text-small text-secondary" style="display: block; margin-bottom: 4px;">Build Log Entry</label>
+              <textarea id="buildLogContent" class="jarvis-input" rows="8" placeholder="What progress was made on the truck build today?" required autofocus></textarea>
+            </div>
+            <p class="text-tiny text-tertiary">Build logs are saved with category 'build_log' and automatically tagged for RBTR tracking.</p>
+          </form>
+        `,
+        actions: [
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: (closeModal) => closeModal()
+          },
+          {
+            label: 'Save Log',
+            variant: 'primary',
+            onClick: async (closeModal) => {
+              const content = document.getElementById('buildLogContent').value.trim();
+              if (!content) {
+                JARVIS.Toast({ message: 'Log content is required', duration: 2000 });
+                return;
+              }
+
+              const result = await API.createBuildLog(content);
+              if (result) {
+                JARVIS.Toast({ message: 'Build log saved', duration: 2000 });
+                closeModal();
+              } else {
+                JARVIS.Toast({ message: 'Failed to save build log', duration: 2000 });
+              }
+            }
+          }
+        ]
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    // ── LIVE UPDATES ─────────────────────────────────────────────────────────
+    function startLiveUpdates() {
+      // Poll for updates every 30 seconds
+      setInterval(() => {
+        // TODO: Check for new alerts, tasks, etc
+      }, 30000);
+    }
+
+    // ── RIGHT RAIL COLLAPSE ──────────────────────────────────────────────────
+    function initRightRailCollapse() {
+      let isCollapsed = false;
+      const layout = document.querySelector('.jarvis-layout');
+      const rightrail = document.querySelector('.jarvis-rightrail');
+
+      // Add collapse button to top of right rail
+      const collapseBtn = document.createElement('button');
+      collapseBtn.innerHTML = '→';
+      collapseBtn.className = 'jarvis-btn jarvis-btn--ghost jarvis-btn--sm';
+      collapseBtn.style.cssText = 'position: absolute; top: 12px; right: 12px; z-index: 100; width: 32px; height: 32px; padding: 0;';
+      collapseBtn.title = 'Collapse right rail';
+
+      rightrail.style.position = 'relative';
+      rightrail.insertBefore(collapseBtn, rightrail.firstChild);
+
+      collapseBtn.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+          layout.style.gridTemplateColumns = 'var(--left-rail-collapsed) 1fr 0';
+          rightrail.style.display = 'none';
+          collapseBtn.innerHTML = '←';
+          collapseBtn.title = 'Expand right rail';
+          collapseBtn.style.right = '-48px';
+        } else {
+          layout.style.gridTemplateColumns = 'var(--left-rail-collapsed) 1fr var(--right-rail-width)';
+          rightrail.style.display = 'flex';
+          collapseBtn.innerHTML = '→';
+          collapseBtn.title = 'Collapse right rail';
+          collapseBtn.style.right = '12px';
+        }
+      });
+    }
+
+    // ── CLICKABLE BOTTOM BAR ──────────────────────────────────────────────────
+    function initClickableBottomBar() {
+      // Make status indicators clickable
+      const statusIndicators = document.querySelectorAll('.jarvis-status-indicator');
+      statusIndicators.forEach((indicator, index) => {
+        indicator.style.cursor = 'pointer';
+        indicator.addEventListener('click', () => {
+          const labels = ['crons', 'api-quota', 'vercel', 'git', 'rocko'];
+          if (labels[index] === 'crons') {
+            loadModule('system', 'crons');
+          } else if (labels[index] === 'api-quota') {
+            loadModule('system', 'api');
+          } else if (labels[index] === 'vercel') {
+            loadModule('system', 'deployments');
+          } else if (labels[index] === 'git') {
+            loadModule('system', 'git');
+          } else if (labels[index] === 'rocko') {
+            loadModule('system', 'rocko');
+          }
+        });
+      });
+    }
+
+    // ── ALERTS & USER MENU ───────────────────────────────────────────────────
+    function toggleAlerts() {
+      JARVIS.Toast({ message: 'Alerts panel coming soon', duration: 2000 });
+    }
+
+    function toggleUserMenu() {
+      JARVIS.Toast({ message: 'User menu coming soon', duration: 2000 });
+    }
+
+    // ── PSNM MODULES ──────────────────────────────────────────────────────────
+    const PSNM_MODULES = {
+      renderCustomers: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">PSNM Customers</h1>
+            <div class="jarvis-module-actions">
+              <input type="search" placeholder="Search customers..."
+                     id="customerSearch"
+                     class="jarvis-input"
+                     style="width: 300px;">
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <div id="customersList">Loading customers...</div>
+            </div>
+          </div>
+        `;
+
+        // Fetch customers from Supabase
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'psnm_customers',
+              query: 'order=created_at.desc&select=*'
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch customers');
+          const customers = await response.json();
+
+          const listEl = document.getElementById('customersList');
+          if (customers.length === 0) {
+            listEl.innerHTML = '<p class="text-secondary">No customers found</p>';
+            return;
+          }
+
+          listEl.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${customers.map(c => `
+                  <tr>
+                    <td>
+                      <strong style="cursor: pointer; color: var(--copper);"
+                              onclick="PSNM_MODULES.openCustomerPanel('${c.id}')">
+                        ${c.company_name || 'Unknown'}
+                      </strong>
+                    </td>
+                    <td>${c.contact_name || '—'}</td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${c.status === 'live' ? 'success' : c.status === 'churned' ? 'danger' : 'default'}">
+                        ${c.status || 'enquiry'}
+                      </span>
+                    </td>
+                    <td class="font-mono text-small">${new Date(c.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost"
+                              onclick="PSNM_MODULES.openCustomerPanel('${c.id}')">
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+          // Search functionality
+          document.getElementById('customerSearch').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const rows = listEl.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+              const text = row.textContent.toLowerCase();
+              row.style.display = text.includes(term) ? '' : 'none';
+            });
+          });
+
+        } catch (error) {
+          document.getElementById('customersList').innerHTML =
+            `<p class="text-danger">Error loading customers: ${error.message}</p>`;
+        }
+      },
+
+      openCustomerPanel: async function(customerId) {
+        // Create overlay
+        let overlay = document.getElementById('slidePanelOverlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'slidePanelOverlay';
+          overlay.className = 'slide-panel__overlay';
+          overlay.addEventListener('click', () => this.closeCustomerPanel());
+          document.body.appendChild(overlay);
+        }
+
+        // Create panel
+        let panel = document.getElementById('slidePanel');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = 'slidePanel';
+          panel.className = 'slide-panel';
+          document.body.appendChild(panel);
+        }
+
+        // Show overlay
+        setTimeout(() => overlay.classList.add('slide-panel__overlay--visible'), 10);
+
+        // Fetch customer data
+        panel.innerHTML = '<div style="padding: 24px;">Loading...</div>';
+
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'psnm_customers',
+              query: `id=eq.${customerId}&select=*`
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch customer');
+          const customers = await response.json();
+          const customer = customers[0];
+
+          if (!customer) throw new Error('Customer not found');
+
+          // Render panel
+          panel.innerHTML = `
+            <div class="slide-panel__header">
+              <h2 class="slide-panel__title">${customer.company_name || 'Customer'}</h2>
+              <button class="slide-panel__close" onclick="PSNM_MODULES.closeCustomerPanel()">✕</button>
+            </div>
+
+            <div class="slide-panel__tabs">
+              <div class="jarvis-tabs">
+                <button class="jarvis-tab jarvis-tab--active" data-tab="overview">Overview</button>
+                <button class="jarvis-tab" data-tab="quotes">Quotes</button>
+                <button class="jarvis-tab" data-tab="agreements">Agreements</button>
+                <button class="jarvis-tab" data-tab="insurance">Insurance</button>
+                <button class="jarvis-tab" data-tab="bookings">Bookings</button>
+                <button class="jarvis-tab" data-tab="comms">Comms</button>
+              </div>
+            </div>
+
+            <div class="slide-panel__content" id="panelContent">
+              ${this.renderOverviewTab(customer)}
+            </div>
+
+            <div class="slide-panel__actions">
+              <button class="jarvis-btn jarvis-btn--sm" onclick="PSNM_MODULES.sendQuote('${customerId}')">
+                Send Quote
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                      onclick="PSNM_MODULES.sendAgreement('${customerId}')">
+                Send Agreement
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                      onclick="PSNM_MODULES.markInsuranceVerified('${customerId}')">
+                Mark Insurance Verified
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--success"
+                      onclick="PSNM_MODULES.markCustomerLive('${customerId}')">
+                Mark Customer Live
+              </button>
+            </div>
+          `;
+
+          // Tab switching
+          panel.querySelectorAll('.jarvis-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+              panel.querySelectorAll('.jarvis-tab').forEach(t => t.classList.remove('jarvis-tab--active'));
+              e.target.classList.add('jarvis-tab--active');
+              this.loadTab(e.target.dataset.tab, customerId);
+            });
+          });
+
+          // Open panel
+          setTimeout(() => panel.classList.add('slide-panel--open'), 10);
+
+        } catch (error) {
+          panel.innerHTML = `<div style="padding: 24px;"><p class="text-danger">Error: ${error.message}</p></div>`;
+        }
+      },
+
+      closeCustomerPanel: function() {
+        const panel = document.getElementById('slidePanel');
+        const overlay = document.getElementById('slidePanelOverlay');
+        if (panel) panel.classList.remove('slide-panel--open');
+        if (overlay) overlay.classList.remove('slide-panel__overlay--visible');
+      },
+
+      renderOverviewTab: function(customer) {
+        return `
+          <div>
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">Customer Details</h2>
+            <div style="display: grid; gap: 12px;">
+              <div><strong>Company:</strong> ${customer.company_name || '—'}</div>
+              <div><strong>Contact:</strong> ${customer.contact_name || '—'}</div>
+              <div><strong>Email:</strong> ${customer.email || '—'}</div>
+              <div><strong>Phone:</strong> ${customer.phone || '—'}</div>
+              <div><strong>Status:</strong>
+                <span class="jarvis-badge jarvis-badge--${customer.status === 'live' ? 'success' : 'default'}">
+                  ${customer.status || 'enquiry'}
+                </span>
+              </div>
+              <div><strong>Created:</strong> ${new Date(customer.created_at).toLocaleString()}</div>
+              ${customer.address ? `<div><strong>Address:</strong> ${customer.address}</div>` : ''}
+            </div>
+          </div>
+        `;
+      },
+
+      loadTab: async function(tabName, customerId) {
+        const content = document.getElementById('panelContent');
+        content.innerHTML = '<div style="padding: 24px;">Loading...</div>';
+
+        try {
+          if (tabName === 'overview') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_customers',
+                query: `id=eq.${customerId}&select=*`
+              })
+            });
+            const customers = await response.json();
+            content.innerHTML = this.renderOverviewTab(customers[0]);
+
+          } else if (tabName === 'quotes') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_quotes',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const quotes = await response.json();
+            content.innerHTML = this.renderQuotesTab(quotes);
+
+          } else if (tabName === 'agreements') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_agreements',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const agreements = await response.json();
+            content.innerHTML = this.renderAgreementsTab(agreements);
+
+          } else if (tabName === 'insurance') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_insurance_checks',
+                query: `customer_id=eq.${customerId}&order=checked_at.desc&select=*`
+              })
+            });
+            const checks = await response.json();
+            content.innerHTML = this.renderInsuranceTab(checks);
+
+          } else if (tabName === 'bookings') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_bookings',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const bookings = await response.json();
+            content.innerHTML = this.renderBookingsTab(bookings);
+
+          } else if (tabName === 'comms') {
+            const [emailsRes, smsRes] = await Promise.all([
+              fetch('/api/atlas3', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+                },
+                body: JSON.stringify({
+                  action: 'supabase_query',
+                  table: 'psnm_emails',
+                  query: `customer_id=eq.${customerId}&order=sent_at.desc&select=*&limit=20`
+                })
+              }),
+              fetch('/api/atlas3', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+                },
+                body: JSON.stringify({
+                  action: 'supabase_query',
+                  table: 'psnm_sms',
+                  query: `customer_id=eq.${customerId}&order=sent_at.desc&select=*&limit=20`
+                })
+              })
+            ]);
+            const emails = await emailsRes.json();
+            const sms = await smsRes.json();
+            content.innerHTML = this.renderCommsTab(emails, sms);
+          }
+
+        } catch (error) {
+          content.innerHTML = `<p class="text-danger">Error loading tab: ${error.message}</p>`;
+        }
+      },
+
+      renderQuotesTab: function(quotes) {
+        if (quotes.length === 0) {
+          return '<p class="text-secondary">No quotes found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Quote ID</th>
+                <th>Monthly Rate</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${quotes.map(q => `
+                <tr>
+                  <td class="font-mono">#${q.id.slice(0, 8)}</td>
+                  <td>£${parseFloat(q.monthly_rate || 0).toFixed(2)}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${q.status === 'accepted' ? 'success' : 'default'}">
+                      ${q.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${new Date(q.created_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderAgreementsTab: function(agreements) {
+        if (agreements.length === 0) {
+          return '<p class="text-secondary">No agreements found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Agreement ID</th>
+                <th>Status</th>
+                <th>Signed At</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${agreements.map(a => `
+                <tr>
+                  <td class="font-mono">#${a.id.slice(0, 8)}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${a.status === 'signed' ? 'success' : 'default'}">
+                      ${a.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${a.signed_at ? new Date(a.signed_at).toLocaleDateString() : '—'}</td>
+                  <td class="font-mono text-small">${new Date(a.created_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderInsuranceTab: function(checks) {
+        if (checks.length === 0) {
+          return '<p class="text-secondary">No insurance checks found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Policy Number</th>
+                <th>Provider</th>
+                <th>Status</th>
+                <th>Checked At</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${checks.map(c => `
+                <tr>
+                  <td class="font-mono">${c.policy_number || '—'}</td>
+                  <td>${c.provider || '—'}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${c.status === 'verified' ? 'success' : 'warning'}">
+                      ${c.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${new Date(c.checked_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderBookingsTab: function(bookings) {
+        if (bookings.length === 0) {
+          return '<p class="text-secondary">No bookings found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `
+                <tr>
+                  <td class="font-mono">#${b.id.slice(0, 8)}</td>
+                  <td class="font-mono text-small">${new Date(b.booking_date).toLocaleDateString()}</td>
+                  <td>${b.booking_type || '—'}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${b.status === 'confirmed' ? 'success' : 'default'}">
+                      ${b.status || 'pending'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderCommsTab: function(emails, sms) {
+        return `
+          <div>
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">Emails (${emails.length})</h2>
+            ${emails.length === 0 ? '<p class="text-secondary">No emails</p>' : `
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+                ${emails.slice(0, 10).map(e => `
+                  <div style="padding: 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                      <strong>${e.subject || 'No subject'}</strong>
+                      <span class="font-mono text-small text-secondary">${new Date(e.sent_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="text-small text-secondary">${(e.body_preview || '').slice(0, 100)}...</div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">SMS (${sms.length})</h2>
+            ${sms.length === 0 ? '<p class="text-secondary">No SMS messages</p>' : `
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                ${sms.slice(0, 10).map(s => `
+                  <div style="padding: 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                      <span class="font-mono text-small">${s.phone_number || '—'}</span>
+                      <span class="font-mono text-small text-secondary">${new Date(s.sent_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="text-small">${s.message || ''}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      },
+
+      sendQuote: async function(customerId) {
+        JARVIS.Toast({ message: 'Quote generation coming soon', duration: 2000 });
+      },
+
+      sendAgreement: async function(customerId) {
+        JARVIS.Toast({ message: 'Agreement generation coming soon', duration: 2000 });
+      },
+
+      markInsuranceVerified: async function(customerId) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_insert',
+              table: 'psnm_insurance_checks',
+              data: {
+                customer_id: customerId,
+                status: 'verified',
+                checked_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Insurance marked as verified', duration: 2000 });
+            this.loadTab('insurance', customerId);
+          } else {
+            throw new Error('Failed to update insurance');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      markCustomerLive: async function(customerId) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_update',
+              table: 'psnm_customers',
+              query: `id=eq.${customerId}`,
+              data: {
+                status: 'live',
+                went_live_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Customer marked as live!', duration: 2000 });
+            this.loadTab('overview', customerId);
+          } else {
+            throw new Error('Failed to update customer');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderAtlasV3: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Atlas v3 module coming soon</p></div></div>';
+      },
+
+      renderWMSProspects: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>WMS Prospects module coming soon</p></div></div>';
+      },
+
+      renderWWEnquiries: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>WW Enquiries module coming soon</p></div></div>';
+      },
+
+      renderQuotesAgreements: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Quotes & Agreements module coming soon</p></div></div>';
+      },
+
+      renderInsurance: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Insurance module coming soon</p></div></div>';
+      },
+
+      renderIntelPipeline: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Intel Pipeline module coming soon</p></div></div>';
+      },
+
+      renderRevenueDashboard: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Revenue Dashboard module coming soon</p></div></div>';
+      },
+    };
+
+    // ── RBTR MODULES ──────────────────────────────────────────────────────────
+    const RBTR_MODULES = {
+      renderLanding: function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">RBTR</h1>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'sponsors')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">🤝 Sponsors</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Sponsor outreach, partnerships, tracking</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'build')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">🔧 Build Progress</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Truck conversion stages, timeline</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('rbtr', 'route')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">🗺️ Route Planning</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">UK to Singapore, waypoints, logistics</p>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      renderSponsors: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">RBTR Sponsors</h1>
+            <div class="jarvis-module-actions">
+              <button class="jarvis-btn jarvis-btn--sm" onclick="RBTR_MODULES.openAddSponsorModal()">
+                + Add Sponsor
+              </button>
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <div id="sponsorsList">Loading sponsors...</div>
+            </div>
+          </div>
+        `;
+
+        // Fetch sponsors from rbtr_atlas_prospects table
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'rbtr_atlas_prospects',
+              query: 'order=tier.asc,value_estimate_gbp.desc&select=*'
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch sponsors');
+          const sponsors = await response.json();
+
+          const listEl = document.getElementById('sponsorsList');
+          if (sponsors.length === 0) {
+            listEl.innerHTML = '<p class="text-secondary">No sponsors found</p>';
+            return;
+          }
+
+          listEl.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Tier</th>
+                  <th>Status</th>
+                  <th>Value Est.</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sponsors.map(s => `
+                  <tr>
+                    <td>
+                      <strong style="cursor: pointer; color: var(--copper);"
+                              onclick="RBTR_MODULES.openSponsorModal('${s.id}')">
+                        ${s.company_name || 'Unknown'}
+                      </strong>
+                      ${s.website_url ? `<br><span class="text-small text-secondary">${s.website_url}</span>` : ''}
+                    </td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${s.tier === 1 ? 'success' : s.tier === 2 ? 'default' : 'secondary'}">
+                        Tier ${s.tier || 3}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${s.status === 'signed' ? 'success' : s.status === 'replied' ? 'warning' : 'default'}">
+                        ${s.status || 'target'}
+                      </span>
+                    </td>
+                    <td class="font-mono">£${(s.value_estimate_gbp || 0).toLocaleString()}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost"
+                              onclick="RBTR_MODULES.openSponsorModal('${s.id}')">
+                        Draft Email
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+        } catch (error) {
+          document.getElementById('sponsorsList').innerHTML =
+            `<p class="text-danger">Error loading sponsors: ${error.message}</p>`;
+        }
+      },
+
+      openSponsorModal: async function(sponsorId) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('sponsorModal');
+        if (!modal) {
+          modal = document.createElement('div');
+          modal.id = 'sponsorModal';
+          modal.className = 'modal';
+          document.body.appendChild(modal);
+        }
+
+        // Show loading state
+        modal.innerHTML = `
+          <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+          <div class="modal__content">
+            <div class="modal__body" style="padding: 48px; text-align: center;">
+              <p>Loading sponsor and generating email draft...</p>
+            </div>
+          </div>
+        `;
+        modal.classList.add('modal--open');
+
+        try {
+          // Fetch sponsor data
+          const sponsorRes = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'rbtr_atlas_prospects',
+              query: `id=eq.${sponsorId}&select=*`
+            })
+          });
+
+          if (!sponsorRes.ok) throw new Error('Failed to fetch sponsor');
+          const sponsors = await sponsorRes.json();
+          const sponsor = sponsors[0];
+
+          if (!sponsor) throw new Error('Sponsor not found');
+
+          // Generate email draft
+          const draftRes = await fetch('/api/rocko/draft-sponsor-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sponsor_id: sponsor.id,
+              sponsor_name: sponsor.company_name,
+              sponsor_tier: sponsor.tier,
+              sponsor_url: sponsor.website_url,
+            })
+          });
+
+          if (!draftRes.ok) throw new Error('Failed to generate draft');
+          const draftData = await draftRes.json();
+
+          // Render modal with draft
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">${sponsor.company_name}</h2>
+                <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+              </div>
+
+              <div class="modal__body">
+                <div style="margin-bottom: 24px;">
+                  <div style="display: grid; gap: 8px; margin-bottom: 16px;">
+                    <div><strong>Tier:</strong> ${sponsor.tier || 3}</div>
+                    <div><strong>Status:</strong>
+                      <span class="jarvis-badge jarvis-badge--${sponsor.status === 'signed' ? 'success' : 'default'}">
+                        ${sponsor.status || 'target'}
+                      </span>
+                    </div>
+                    <div><strong>Value Est.:</strong> £${(sponsor.value_estimate_gbp || 0).toLocaleString()}</div>
+                    ${sponsor.website_url ? `<div><strong>Website:</strong> <a href="${sponsor.website_url}" target="_blank" style="color: var(--copper);">${sponsor.website_url}</a></div>` : ''}
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <h3 class="font-display text-h3" style="margin-bottom: 8px;">Email Draft</h2>
+                  <div style="margin-bottom: 8px;">
+                    <strong>Subject:</strong> ${draftData.subject || 'Partnership Opportunity: RBTR Overland Expedition 2027'}
+                  </div>
+                  <textarea id="emailDraft"
+                            style="width: 100%; min-height: 300px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text-primary); font-family: var(--font-body); font-size: 14px; resize: vertical;"
+                  >${draftData.draft}</textarea>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+                  <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                          onclick="RBTR_MODULES.copyEmailToClipboard()">
+                    📋 Copy to Clipboard
+                  </button>
+                  <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                          onclick="RBTR_MODULES.regenerateDraft('${sponsor.id}')">
+                    🔄 Regenerate
+                  </button>
+                </div>
+
+                <div style="border-top: 1px solid var(--border); padding-top: 16px;">
+                  <h4 class="font-display text-small" style="margin-bottom: 12px;">Update Status</h4>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'contacted' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'contacted')">
+                      Mark Contacted
+                    </button>
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'replied' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'replied')">
+                      Mark Replied
+                    </button>
+                    <button class="jarvis-btn jarvis-btn--sm ${sponsor.status === 'signed' ? 'jarvis-btn--success' : ''}"
+                            onclick="RBTR_MODULES.updateSponsorStatus('${sponsor.id}', 'signed')">
+                      Mark Signed
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                  Close
+                </button>
+              </div>
+            </div>
+          `;
+
+        } catch (error) {
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">Error</h2>
+                <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+              </div>
+              <div class="modal__body">
+                <p class="text-danger">${error.message}</p>
+              </div>
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                  Close
+                </button>
+              </div>
+            </div>
+          `;
+        }
+      },
+
+      openAddSponsorModal: function() {
+        let modal = document.getElementById('sponsorModal');
+        if (!modal) {
+          modal = document.createElement('div');
+          modal.id = 'sponsorModal';
+          modal.className = 'modal';
+          document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+          <div class="modal__overlay" onclick="RBTR_MODULES.closeSponsorModal()"></div>
+          <div class="modal__content">
+            <div class="modal__header">
+              <h2 class="modal__title">Add New Sponsor</h2>
+              <button class="modal__close" onclick="RBTR_MODULES.closeSponsorModal()">✕</button>
+            </div>
+
+            <div class="modal__body">
+              <form id="addSponsorForm" style="display: grid; gap: 16px;">
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Company Name *</label>
+                  <input type="text" name="company_name" required
+                         class="jarvis-input" style="width: 100%;" placeholder="e.g. Alu-Cab">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Website URL</label>
+                  <input type="url" name="website_url"
+                         class="jarvis-input" style="width: 100%;" placeholder="https://...">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Tier</label>
+                  <select name="tier" class="jarvis-input" style="width: 100%;">
+                    <option value="1">Tier 1 (Premium)</option>
+                    <option value="2" selected>Tier 2 (Mid-tier)</option>
+                    <option value="3">Tier 3 (Local/Small)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Value Estimate (£)</label>
+                  <input type="number" name="value_estimate_gbp"
+                         class="jarvis-input" style="width: 100%;" placeholder="5000" min="0">
+                </div>
+
+                <div>
+                  <label class="text-small" style="display: block; margin-bottom: 4px;">Notes</label>
+                  <textarea name="notes" rows="3"
+                            class="jarvis-input" style="width: 100%; resize: vertical;"
+                            placeholder="Why this sponsor? Product fit? Contact info?"></textarea>
+                </div>
+              </form>
+            </div>
+
+            <div class="modal__footer">
+              <button class="jarvis-btn jarvis-btn--secondary" onclick="RBTR_MODULES.closeSponsorModal()">
+                Cancel
+              </button>
+              <button class="jarvis-btn" onclick="RBTR_MODULES.submitNewSponsor()">
+                Add Sponsor
+              </button>
+            </div>
+          </div>
+        `;
+
+        modal.classList.add('modal--open');
+      },
+
+      submitNewSponsor: async function() {
+        const form = document.getElementById('addSponsorForm');
+        const formData = new FormData(form);
+        const data = {
+          company_name: formData.get('company_name'),
+          website_url: formData.get('website_url') || null,
+          tier: parseInt(formData.get('tier')),
+          value_estimate_gbp: parseFloat(formData.get('value_estimate_gbp')) || 0,
+          notes: formData.get('notes') || null,
+          status: 'target',
+        };
+
+        if (!data.company_name) {
+          JARVIS.Toast({ message: 'Company name is required', duration: 2000 });
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_insert',
+              table: 'rbtr_atlas_prospects',
+              data: data
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to add sponsor');
+
+          JARVIS.Toast({ message: 'Sponsor added successfully', duration: 2000 });
+          this.closeSponsorModal();
+          this.renderSponsors(); // Refresh list
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      closeSponsorModal: function() {
+        const modal = document.getElementById('sponsorModal');
+        if (modal) {
+          modal.classList.remove('modal--open');
+          setTimeout(() => modal.remove(), 300);
+        }
+      },
+
+      copyEmailToClipboard: async function() {
+        const draftText = document.getElementById('emailDraft');
+        if (!draftText) return;
+
+        try {
+          await navigator.clipboard.writeText(draftText.value);
+          JARVIS.Toast({ message: 'Email copied to clipboard!', duration: 2000 });
+        } catch (error) {
+          JARVIS.Toast({ message: 'Failed to copy', duration: 2000 });
+        }
+      },
+
+      regenerateDraft: function(sponsorId) {
+        this.closeSponsorModal();
+        setTimeout(() => this.openSponsorModal(sponsorId), 100);
+      },
+
+      updateSponsorStatus: async function(sponsorId, newStatus) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_update',
+              table: 'rbtr_atlas_prospects',
+              query: `id=eq.${sponsorId}`,
+              data: {
+                status: newStatus,
+                updated_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to update status');
+
+          JARVIS.Toast({ message: `Status updated to ${newStatus}`, duration: 2000 });
+
+          // Refresh modal
+          this.closeSponsorModal();
+          setTimeout(() => this.openSponsorModal(sponsorId), 100);
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderBuild: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Build Progress module coming soon</p></div></div>';
+      },
+
+      renderRoute: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Route Planning module coming soon</p></div></div>';
+      },
+    };
+
+    // ── FORGE MODULES (STR) ───────────────────────────────────────────────────
+    const FORGE_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Forge (STR) modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── PERSONAL MODULES ──────────────────────────────────────────────────────
+    const PERSONAL_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Personal modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── SARAH MODULES ─────────────────────────────────────────────────────────
+    const SARAH_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Sarah\'s modules coming soon</p></div></div>';
+      },
+    };
+
+    // ── SYSTEM MODULES ────────────────────────────────────────────────────────
+    const SYSTEM_MODULES = {
+      renderLanding: function() {
+        document.getElementById('mainStage').innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">System</h1>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('system', 'voice')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">🎙️ Voice Cloning</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Custom Rocko voices for Ben + Sarah</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('system', 'conversations')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">💬 Conversations</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Rocko conversation history + search</p>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      renderVoice: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">Voice Cloning</h1>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+            <!-- Ben's Voice -->
+            <div class="jarvis-card">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">Ben's Voice</h2>
+              </div>
+              <div class="jarvis-card__body" id="benVoiceContent">
+                Loading...
+              </div>
+            </div>
+
+            <!-- Sarah's Voice -->
+            <div class="jarvis-card">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">Sarah's Voice</h2>
+              </div>
+              <div class="jarvis-card__body" id="sarahVoiceContent">
+                Loading...
+              </div>
+            </div>
+          </div>
+        `;
+
+        this.loadVoiceUI('ben');
+        this.loadVoiceUI('sarah');
+      },
+
+      loadVoiceUI: async function(userId) {
+        const container = document.getElementById(`${userId}VoiceContent`);
+
+        try {
+          // Fetch existing voices for this user
+          const response = await fetch(`/api/voice/list?user_id=${userId}`, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+          const voices = await response.json();
+
+          const activeVoice = voices.find(v => v.is_active);
+
+          container.innerHTML = `
+            <div style="margin-bottom: 16px;">
+              ${activeVoice ? `
+                <div style="padding: 12px; background: var(--copper-faint); border: 1px solid var(--copper-dim); border-radius: var(--radius-md); margin-bottom: 16px;">
+                  <strong>Active Voice:</strong> ${activeVoice.voice_name}<br>
+                  <span class="text-small text-secondary">Voice ID: ${activeVoice.voice_id}</span>
+                </div>
+              ` : '<p class="text-secondary">No active voice set</p>'}
+            </div>
+
+            <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+              <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">Record New Voice Sample</h4>
+
+              <div style="margin-bottom: 12px;">
+                <button class="jarvis-btn jarvis-btn--sm" id="${userId}StartRecordBtn" onclick="SYSTEM_MODULES.startRecording('${userId}')">
+                  🎙️ Start Recording
+                </button>
+                <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary" id="${userId}StopRecordBtn" disabled onclick="SYSTEM_MODULES.stopRecording('${userId}')">
+                  ⏹️ Stop & Upload
+                </button>
+              </div>
+
+              <div id="${userId}RecordStatus" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;"></div>
+
+              <audio id="${userId}AudioPlayback" controls style="width: 100%; display: none; margin-bottom: 12px;"></audio>
+            </div>
+
+            ${voices.length > 0 ? `
+              <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+                <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">Your Voices</h4>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  ${voices.map(v => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--bg); border-radius: var(--radius-sm);">
+                      <div>
+                        <strong>${v.voice_name}</strong>
+                        ${v.is_active ? '<span class="jarvis-badge jarvis-badge--success" style="margin-left: 8px;">Active</span>' : ''}
+                      </div>
+                      <div style="display: flex; gap: 8px;">
+                        <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.testVoice('${v.voice_id}')">Test</button>
+                        ${!v.is_active ? `<button class="jarvis-btn jarvis-btn--sm" onclick="SYSTEM_MODULES.setActiveVoice('${userId}', '${v.id}')">Set Active</button>` : ''}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `;
+        } catch (error) {
+          container.innerHTML = `<p class="text-danger">Error loading voices: ${error.message}</p>`;
+        }
+      },
+
+      mediaRecorder: {},
+      audioChunks: {},
+
+      startRecording: async function(userId) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.mediaRecorder[userId] = new MediaRecorder(stream);
+          this.audioChunks[userId] = [];
+
+          this.mediaRecorder[userId].ondataavailable = (event) => {
+            this.audioChunks[userId].push(event.data);
+          };
+
+          this.mediaRecorder[userId].onstop = () => {
+            const audioBlob = new Blob(this.audioChunks[userId], { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            const playback = document.getElementById(`${userId}AudioPlayback`);
+            playback.src = audioUrl;
+            playback.style.display = 'block';
+
+            // Store blob for upload
+            this[`${userId}RecordedBlob`] = audioBlob;
+
+            stream.getTracks().forEach(track => track.stop());
+          };
+
+          this.mediaRecorder[userId].start();
+
+          document.getElementById(`${userId}StartRecordBtn`).disabled = true;
+          document.getElementById(`${userId}StopRecordBtn`).disabled = false;
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Recording... (speak for 30s-2min)';
+          document.getElementById(`${userId}RecordStatus`).style.color = 'var(--copper)';
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Microphone access denied', duration: 3000 });
+        }
+      },
+
+      stopRecording: async function(userId) {
+        this.mediaRecorder[userId].stop();
+
+        document.getElementById(`${userId}StartRecordBtn`).disabled = false;
+        document.getElementById(`${userId}StopRecordBtn`).disabled = true;
+        document.getElementById(`${userId}RecordStatus`).textContent = 'Processing...';
+
+        // Wait a moment for onstop to finish
+        await new Promise(r => setTimeout(r, 500));
+
+        // Upload to ElevenLabs
+        const voiceName = prompt(`Name this voice (e.g., "${userId}'s Rocko Voice")`);
+        if (!voiceName) {
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Cancelled';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', this[`${userId}RecordedBlob`], 'sample.webm');
+        formData.append('user_id', userId);
+        formData.append('voice_name', voiceName);
+
+        try {
+          const response = await fetch('/api/voice/clone-create', {
+            method: 'POST',
+            headers: {
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Voice cloned successfully!', duration: 2000 });
+            this.loadVoiceUI(userId); // Reload UI
+          } else {
+            throw new Error(data.error || 'Clone failed');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Upload failed';
+        }
+      },
+
+      testVoice: async function(voiceId) {
+        try {
+          const response = await fetch('/api/voice/test', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({
+              voice_id: voiceId,
+              text: 'Hello, this is a test of your custom voice. How does it sound?',
+            }),
+          });
+
+          if (!response.ok) throw new Error('Test playback failed');
+
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          audio.play();
+
+          JARVIS.Toast({ message: 'Playing test audio...', duration: 2000 });
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      setActiveVoice: async function(userId, voiceRecordId) {
+        try {
+          const response = await fetch('/api/voice/set-active', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              voice_id: voiceRecordId,
+            }),
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Voice activated!', duration: 2000 });
+            this.loadVoiceUI(userId); // Reload UI
+          } else {
+            throw new Error('Failed to activate voice');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderConversations: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">Rocko Conversations</h1>
+            <div class="jarvis-module-actions">
+              <input type="search" id="convSearch" placeholder="Search conversations..." class="jarvis-input" style="width: 300px; margin-right: 12px;">
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary" onclick="SYSTEM_MODULES.clearAllConversations()">Clear All</button>
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body" id="conversationsContent">
+              Loading...
+            </div>
+          </div>
+        `;
+
+        this.loadConversations();
+      },
+
+      loadConversations: async function(searchTerm = '') {
+        try {
+          let url = '/api/rocko/conversations/list';
+          if (searchTerm) {
+            url += `?q=${encodeURIComponent(searchTerm)}`;
+          }
+
+          const response = await fetch(url, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (!response.ok) throw new Error('Failed to load conversations');
+
+          const sessions = await response.json();
+
+          const content = document.getElementById('conversationsContent');
+          if (sessions.length === 0) {
+            content.innerHTML = '<div style="text-align: center; padding: 48px; color: var(--text-tertiary);">No conversations yet</div>';
+            return;
+          }
+
+          content.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Messages</th>
+                  <th>Preview</th>
+                  <th>Tools Used</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sessions.map(s => `
+                  <tr>
+                    <td class="font-mono">${new Date(s.created_at).toLocaleString()}</td>
+                    <td>${s.message_count || 0}</td>
+                    <td>${(s.first_message || '').substring(0, 60)}...</td>
+                    <td>${s.tools_used || 0}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.viewConversation('${s.session_id}')">View</button>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.exportConversation('${s.session_id}')">Export</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+          // Search functionality
+          document.getElementById('convSearch').addEventListener('input', (e) => {
+            this.loadConversations(e.target.value);
+          });
+
+        } catch (error) {
+          document.getElementById('conversationsContent').innerHTML = '<div style="text-align: center; padding: 48px; color: var(--text-danger);">Failed to load conversations</div>';
+        }
+      },
+
+      viewConversation: async function(sessionId) {
+        try {
+          const response = await fetch(`/api/rocko/conversations/get?session_id=${sessionId}`, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (!response.ok) throw new Error('Failed to load conversation');
+
+          const messages = await response.json();
+
+          // Create modal
+          let modal = document.getElementById('conversationModal');
+          if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'conversationModal';
+            modal.className = 'modal';
+            document.body.appendChild(modal);
+          }
+
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="SYSTEM_MODULES.closeConversationModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">Conversation ${new Date(messages[0].created_at).toLocaleDateString()}</h2>
+                <button class="modal__close" onclick="SYSTEM_MODULES.closeConversationModal()">✕</button>
+              </div>
+              <div class="modal__body" style="max-height: 60vh; overflow-y: auto;">
+                ${messages.map(m => `
+                  <div style="margin-bottom: 24px; padding: 16px; background: var(--bg); border-radius: var(--radius-md); border-left: 3px solid ${m.user_input ? 'var(--copper)' : 'var(--border)'};">
+                    ${m.user_input ? `
+                      <div style="margin-bottom: 8px;">
+                        <strong>You:</strong>
+                        <p style="margin-top: 4px;">${m.user_input}</p>
+                      </div>
+                    ` : ''}
+                    ${m.rocko_response ? `
+                      <div>
+                        <strong>Rocko:</strong>
+                        <p style="margin-top: 4px;">${m.rocko_response}</p>
+                        ${m.tools_called && m.tools_called.length > 0 ? `
+                          <div style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">
+                            Tools: ${m.tools_called.join(', ')}
+                          </div>
+                        ` : ''}
+                      </div>
+                    ` : ''}
+                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                      ${new Date(m.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="SYSTEM_MODULES.closeConversationModal()">Close</button>
+                <button class="jarvis-btn" onclick="SYSTEM_MODULES.exportConversation('${sessionId}')">Export to Obsidian</button>
+              </div>
+            </div>
+          `;
+
+          modal.classList.add('modal--open');
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      closeConversationModal: function() {
+        const modal = document.getElementById('conversationModal');
+        if (modal) {
+          modal.classList.remove('modal--open');
+          setTimeout(() => modal.remove(), 300);
+        }
+      },
+
+      exportConversation: async function(sessionId) {
+        try {
+          const response = await fetch('/api/rocko/export-conversation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            JARVIS.Toast({ message: `Exported to ${data.filename}`, duration: 2000 });
+          } else {
+            throw new Error(data.error || 'Export failed');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      clearAllConversations: async function() {
+        if (!confirm('Delete all conversation history? This cannot be undone.')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/rocko/conversations/clear', {
+            method: 'POST',
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'All conversations cleared', duration: 2000 });
+            this.loadConversations(); // Reload empty list
+          } else {
+            throw new Error('Failed to clear conversations');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+    };
+  </script>
+</body>
+</html>
