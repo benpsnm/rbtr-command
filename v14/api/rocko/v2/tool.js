@@ -288,11 +288,32 @@ async function calendar_suggest_time(args) {
 }
 
 async function claude_code_fire(args) {
+  const { prompt_name, custom_prompt } = args || {};
+
+  if (!prompt_name && !custom_prompt) {
+    return {
+      error: 'Either prompt_name or custom_prompt required',
+      available_prompts: [
+        'morning-brief',
+        'git-status',
+        'deploy-check',
+        'task-sync',
+        'cron-check',
+        'build-progress',
+        'sponsor-pipeline',
+        'forge-status',
+        'money-check'
+      ]
+    };
+  }
+
+  // Return immediately — watcher script handles actual firing
   return {
-    status: 'not_implemented_yet',
-    phase: 'Phase 4',
-    message: 'Claude Code fire integration pending',
-    prompt_name: args?.prompt_name
+    status: 'queued',
+    prompt_name,
+    custom_prompt: custom_prompt?.substring(0, 100),
+    message: 'Fire command queued. Watcher will open Terminal and execute prompt.',
+    note: 'If Terminal does not open, ensure rocko-claude-code-fire.mjs watcher is running'
   };
 }
 
