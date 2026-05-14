@@ -26,7 +26,7 @@ const sbHeaders = {
 
 // ── Prompt library ───────────────────────────────────────────────────────────
 const PROMPT_LIBRARY = {
-  'morning-brief': 'Read ~/Documents/RBTR-Brain/00-Inbox/ for unread reports + check today's tasks',
+  'morning-brief': "Read ~/Documents/RBTR-Brain/00-Inbox/ for unread reports + check today's tasks",
   'git-status': 'Run git status and summarize current branch state',
   'deploy-check': 'Verify latest Vercel deployment status',
   'task-sync': 'Sync rbtr_tasks with current priorities',
