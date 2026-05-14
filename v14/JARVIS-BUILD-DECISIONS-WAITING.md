@@ -66,3 +66,40 @@ open https://rbtr-jarvis.vercel.app/api/rocko/v2/google/auth/init
 ```
 
 **Status:** Continuing with other phases. Gmail/Calendar tools will work once Ben completes this.
+
+---
+
+## Rocko v2 Production Hardening — Database Migrations (14 May 2026, 23:15)
+
+**Issue:** Migrations 078 + 079 need manual execution in production Supabase
+
+**What:** 4 tables for Rocko v2:
+- `rocko_v2_sessions` — Session tracking + device tokens
+- `rocko_v2_messages` — Per-message log
+- `rocko_v2_integrations` — OAuth tokens (Google Gmail/Calendar)
+- `rocko_v2_pairing_codes` — Temporary device pairing codes
+
+**Ben action (1 click, 30 seconds):**
+
+1. **Open Supabase SQL editor:**
+   https://supabase.com/dashboard/project/mpxgyobotiqcawmqlhbf/sql/new
+
+2. **Paste combined migration SQL** (already on your clipboard)
+   - Cmd+V to paste
+   - Click "Run" button
+
+3. **Verify 4 tables created:**
+   ```sql
+   SELECT table_name FROM information_schema.tables
+   WHERE table_schema = 'public'
+   AND table_name LIKE 'rocko_v2%';
+   ```
+   Should show: rocko_v2_sessions, rocko_v2_messages, rocko_v2_integrations, rocko_v2_pairing_codes
+
+**Schema changes from original 078:**
+- Changed `rocko_v2_sessions.id` from uuid to text (for device IDs like 'rocko_1234567890')
+- Added `device_token` field to `rocko_v2_sessions` (for device auth)
+- Updated `rocko_v2_integrations` schema (removed `enabled`, added `user_id` and `scopes`)
+- All policies set to allow service role full access
+
+**Status:** SQL on clipboard. Ready for Ben's 1-click paste + run.

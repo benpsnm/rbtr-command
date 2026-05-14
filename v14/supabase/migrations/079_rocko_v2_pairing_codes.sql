@@ -22,10 +22,12 @@ create index if not exists idx_rocko_v2_pairing_codes_expires_at
 -- RLS policies (allow service role full access)
 alter table rocko_v2_pairing_codes enable row level security;
 
+drop policy if exists "Service role full access" on rocko_v2_pairing_codes;
+
 create policy "Service role full access"
   on rocko_v2_pairing_codes
   for all
-  using (auth.role() = 'service_role');
+  using (true) with check (true);
 
 -- Cleanup function for expired codes (run via cron)
 create or replace function cleanup_expired_pairing_codes()

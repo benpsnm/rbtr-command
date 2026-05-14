@@ -7,9 +7,10 @@
 
 -- Track all ElevenLabs Conversational AI sessions
 create table if not exists rocko_v2_sessions (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key, -- Changed from uuid to text for device IDs like 'rocko_1234567890'
   user_id text not null default 'ben',
   device text not null default 'unknown', -- 'desktop' | 'mobile-pwa' | 'workshop-earbuds'
+  device_token text unique, -- Device authentication token (never expires)
   started_at timestamptz not null default now(),
   ended_at timestamptz,
   expires_at timestamptz not null default (now() + interval '24 hours'),
@@ -23,7 +24,7 @@ create table if not exists rocko_v2_sessions (
 -- Per-message log (more granular than rocko_conversations)
 create table if not exists rocko_v2_messages (
   id uuid primary key default gen_random_uuid(),
-  session_id uuid not null references rocko_v2_sessions(id) on delete cascade,
+  session_id text not null references rocko_v2_sessions(id) on delete cascade,
   role text not null check (role in ('user', 'assistant', 'tool', 'system')),
   content text,
   tool_calls jsonb,
@@ -35,15 +36,16 @@ create table if not exists rocko_v2_messages (
   created_at timestamptz not null default now()
 );
 
--- Store ElevenLabs config + auth tokens for MCP services
+-- Store OAuth tokens for Gmail/Calendar/Stripe/Claude Code
 create table if not exists rocko_v2_integrations (
   id uuid primary key default gen_random_uuid(),
-  service text not null unique, -- 'elevenlabs' | 'google' | 'stripe' | 'claude-code'
+  user_id text not null default 'ben',
+  service text not null, -- 'google' | 'stripe' | 'claude-code'
   access_token text,
   refresh_token text,
   expires_at timestamptz,
-  config jsonb default '{}'::jsonb,
-  enabled bool not null default true,
+  scopes text[] default '{}',
+  metadata jsonb default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -52,9 +54,10 @@ create table if not exists rocko_v2_integrations (
 create index if not exists rocko_v2_sessions_user_id_idx on rocko_v2_sessions(user_id);
 create index if not exists rocko_v2_sessions_started_at_idx on rocko_v2_sessions(started_at desc);
 create index if not exists rocko_v2_sessions_expires_at_idx on rocko_v2_sessions(expires_at);
+create index if not exists rocko_v2_sessions_device_token_idx on rocko_v2_sessions(device_token) where device_token is not null;
 create index if not exists rocko_v2_messages_session_id_idx on rocko_v2_messages(session_id);
 create index if not exists rocko_v2_messages_created_at_idx on rocko_v2_messages(created_at desc);
-create index if not exists rocko_v2_integrations_service_idx on rocko_v2_integrations(service);
+create index if not exists rocko_v2_integrations_user_service_idx on rocko_v2_integrations(user_id, service);
 
 -- RLS policies (service role bypass)
 alter table rocko_v2_sessions enable row level security;
