@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>ROCKO</title>
+  <link rel="manifest" href="/m/manifest.json">
+  <link rel="apple-touch-icon" href="/m/icon-512.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-surface: rgba(255,255,255,0.02);
+      --bg-elevated: rgba(255,255,255,0.06);
+      --text-primary: #ffffff;
+      --text-secondary: #888888;
+      --text-tertiary: #666666;
+      --text-muted: #5a5a5a;
+      --text-disabled: #444444;
+      --accent-orb: #60a5fa;
+      --accent-orb-bright: #bfdbfe;
+      --accent-orb-deep: #1e3a8a;
+      --accent-copper: #c87a3a;
+      --accent-success: #22c55e;
+      --border-default: rgba(255,255,255,0.12);
+      --border-emphasis: rgba(255,255,255,0.2);
+      --border-divider: rgba(255,255,255,0.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Top Bar ──────────────────────────────────────────────────────────── */
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border-divider);
+      z-index: 100;
+    }
+
+    .rocko-title {
+      font-family: 'Rye', serif;
+      font-size: 18px;
+      letter-spacing: 4px;
+      color: var(--text-primary);
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg-elevated);
+      border-radius: 12px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'SF Mono', 'Geist Mono', monospace;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .timestamp {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* ── Orb Zone ─────────────────────────────────────────────────────────── */
+    .orb-container {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      margin-top: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .orb-core {
+      position: absolute;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-orb-bright), var(--accent-orb));
+      box-shadow: 0 0 40px var(--accent-orb), 0 0 80px var(--accent-orb-deep);
+      animation: breathe-core 2.8s ease-in-out infinite;
+      z-index: 10;
+    }
+
+    @keyframes breathe-core {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.09); opacity: 1; }
+    }
+
+    .orb-inner-core {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffffff, var(--accent-orb-bright));
+      animation: breathe-inner 2.0s ease-in-out infinite;
+      z-index: 11;
+    }
+
+    @keyframes breathe-inner {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.17); }
+    }
+
+    /* Ripple waves */
+    .ripple {
+      position: absolute;
+      border: 1px solid var(--accent-orb);
+      border-radius: 50%;
+      opacity: 0;
+      animation: ripple-expand 3.0s ease-out infinite;
+    }
+
+    .ripple:nth-child(1) { animation-delay: 0s; }
+    .ripple:nth-child(2) { animation-delay: 1.0s; }
+    .ripple:nth-child(3) { animation-delay: 2.0s; }
+
+    @keyframes ripple-expand {
+      0% {
+        width: 80px;
+        height: 80px;
+        opacity: 0.6;
+      }
+      100% {
+        width: 180px;
+        height: 180px;
+        opacity: 0;
+      }
+    }
+
+    /* Outer radar ring */
+    .radar-ring {
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      border: 0.5px solid var(--border-default);
+      border-radius: 50%;
+      animation: rotate-radar 60s linear infinite;
+    }
+
+    .radar-tick {
+      position: absolute;
+      width: 2px;
+      height: 8px;
+      background: var(--text-tertiary);
+      top: -4px;
+      left: 50%;
+      transform-origin: center 84px;
+    }
+
+    .radar-tick:nth-child(1) { transform: rotate(0deg) translateX(-50%); }
+    .radar-tick:nth-child(2) { transform: rotate(30deg) translateX(-50%); }
+    .radar-tick:nth-child(3) { transform: rotate(60deg) translateX(-50%); }
+    .radar-tick:nth-child(4) { transform: rotate(90deg) translateX(-50%); }
+    .radar-tick:nth-child(5) { transform: rotate(120deg) translateX(-50%); }
+    .radar-tick:nth-child(6) { transform: rotate(150deg) translateX(-50%); }
+    .radar-tick:nth-child(7) { transform: rotate(180deg) translateX(-50%); }
+    .radar-tick:nth-child(8) { transform: rotate(210deg) translateX(-50%); }
+    .radar-tick:nth-child(9) { transform: rotate(240deg) translateX(-50%); }
+    .radar-tick:nth-child(10) { transform: rotate(270deg) translateX(-50%); }
+    .radar-tick:nth-child(11) { transform: rotate(300deg) translateX(-50%); }
+    .radar-tick:nth-child(12) { transform: rotate(330deg) translateX(-50%); }
+
+    @keyframes rotate-radar {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Inner solid ring */
+    .inner-ring {
+      position: absolute;
+      width: 92px;
+      height: 92px;
+      border: 1px solid var(--border-emphasis);
+      border-radius: 50%;
+      animation: rotate-inner 25s linear infinite;
+    }
+
+    .ring-marker {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: var(--accent-orb);
+      border-radius: 50%;
+      top: -1.5px;
+      left: 50%;
+      transform-origin: center 48px;
+    }
+
+    .ring-marker:nth-child(1) { transform: rotate(0deg) translateX(-50%); }
+    .ring-marker:nth-child(2) { transform: rotate(120deg) translateX(-50%); }
+    .ring-marker:nth-child(3) { transform: rotate(240deg) translateX(-50%); }
+
+    @keyframes rotate-inner {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Dendrites */
+    .dendrite {
+      position: absolute;
+      width: 1px;
+      height: 60px;
+      background: linear-gradient(to bottom, var(--accent-orb), transparent);
+      opacity: 0.3;
+      transform-origin: center bottom;
+    }
+
+    .dendrite-particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: var(--accent-orb-bright);
+      border-radius: 50%;
+      bottom: 0;
+      left: 50%;
+      animation: particle-travel 3s ease-in infinite;
+    }
+
+    @keyframes particle-travel {
+      0% { bottom: 0; opacity: 1; }
+      100% { bottom: 100%; opacity: 0; }
+    }
+
+    /* Synapse nodes */
+    .synapse {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: var(--accent-orb);
+      border-radius: 50%;
+      animation: synapse-pulse 2.5s ease-in-out infinite;
+    }
+
+    @keyframes synapse-pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.5); }
+    }
+
+    /* Thought snippets */
+    .thought-snippet {
+      position: absolute;
+      font-family: 'SF Mono', monospace;
+      font-size: 9px;
+      color: var(--text-muted);
+      opacity: 0;
+      animation: thought-fade 6s ease-in-out infinite;
+    }
+
+    @keyframes thought-fade {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ── Hold to Speak Button ─────────────────────────────────────────────── */
+    .speak-button-container {
+      position: fixed;
+      bottom: 320px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .speak-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 22px;
+      background: var(--bg-elevated);
+      border: 0.5px solid var(--border-default);
+      border-radius: 20px;
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .speak-button:active {
+      background: var(--accent-orb-deep);
+      border-color: var(--accent-orb);
+      color: var(--text-primary);
+      transform: scale(0.96);
+    }
+
+    .speak-status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-success);
+      border-radius: 50%;
+    }
+
+    /* ── Brand Doors ──────────────────────────────────────────────────────── */
+    .doors-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border-divider);
+      z-index: 40;
+    }
+
+    .door {
+      flex: 1;
+      background: var(--bg-surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .door:active {
+      background: var(--bg-elevated);
+    }
+
+    .door-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .door-icon {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .door-label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .door-label.rye {
+      font-family: 'Rye', serif;
+      font-weight: 400;
+      letter-spacing: 2px;
+    }
+
+    .door-label.playfair {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .door-hero {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', monospace;
+    }
+
+    .door-hero.urgent {
+      color: var(--accent-copper);
+    }
+
+    /* ── Modal ────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fade-in 0.25s ease-out;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      width: 90%;
+      max-width: 560px;
+      max-height: 80vh;
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border-emphasis);
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      animation: scale-in 0.25s ease-out;
+    }
+
+    @keyframes scale-in {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .modal-icon {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-elevated);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--text-secondary);
+    }
+
+    .modal-content {
+      padding: 20px;
+      overflow-y: auto;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Utilities ────────────────────────────────────────────────────────── */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="rocko-title">R·O·C·K·O</div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      <span>LIVE</span>
+    </div>
+    <div class="timestamp" id="timestamp">--:--</div>
+  </div>
+
+  <!-- Orb Zone -->
+  <div class="orb-container">
+    <!-- Ripple waves -->
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+
+    <!-- Outer radar ring -->
+    <div class="radar-ring">
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+      <div class="radar-tick"></div>
+    </div>
+
+    <!-- Inner solid ring -->
+    <div class="inner-ring">
+      <div class="ring-marker"></div>
+      <div class="ring-marker"></div>
+      <div class="ring-marker"></div>
+    </div>
+
+    <!-- Dendrites (generated by JS) -->
+    <div id="dendrites"></div>
+
+    <!-- Synapses (generated by JS) -->
+    <div id="synapses"></div>
+
+    <!-- Thought snippets (generated by JS) -->
+    <div id="thoughts"></div>
+
+    <!-- Core orb -->
+    <div class="orb-core">
+      <div class="orb-inner-core"></div>
+    </div>
+  </div>
+
+  <!-- Hold to Speak Button -->
+  <div class="speak-button-container">
+    <button class="speak-button" id="speakBtn">
+      <div class="speak-status-dot"></div>
+      <span>HOLD TO SPEAK</span>
+    </button>
+  </div>
+
+  <!-- Brand Doors -->
+  <div class="doors-container">
+    <div class="door" data-module="psnm">
+      <div class="door-brand">
+        <img src="/brand/psnm-logo-sm.png" alt="PSNM" class="door-icon">
+        <span class="door-label">PSNM</span>
+      </div>
+      <div class="door-hero urgent">BREAK-EVEN 412/827</div>
+    </div>
+
+    <div class="door" data-module="forge">
+      <div class="door-brand">
+        <img src="/brand/forge-logo-sm.png" alt="Forge" class="door-icon">
+        <span class="door-label playfair">forge</span>
+      </div>
+      <div class="door-hero">LAUNCH IN 32d</div>
+    </div>
+
+    <div class="door" data-module="rbtr">
+      <div class="door-brand">
+        <img src="/brand/rbtr-logo-sm.png" alt="RBTR" class="door-icon">
+        <span class="door-label rye">RBTR</span>
+      </div>
+      <div class="door-hero">DEPARTS IN 778d</div>
+    </div>
+
+    <div class="door" data-module="ben">
+      <div class="door-brand">
+        <div class="door-icon" style="background: var(--accent-orb); border-radius: 50%;"></div>
+        <span class="door-label">Ben</span>
+      </div>
+      <div class="door-hero">TODAY 3/7 done</div>
+    </div>
+
+    <div class="door" data-module="sarah">
+      <div class="door-brand">
+        <div class="door-icon" style="background: var(--accent-copper); border-radius: 50%;"></div>
+        <span class="door-label playfair">Sarah</span>
+      </div>
+      <div class="door-hero">EQUITY £105k</div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-brand">
+          <img id="modalIcon" src="" alt="" class="modal-icon">
+          <span id="modalTitle" class="modal-title"></span>
+        </div>
+        <div class="modal-close" id="modalClose">&times;</div>
+      </div>
+      <div class="modal-content" id="modalContent">
+        Loading...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Initialize ───────────────────────────────────────────────────────────
+    const timestamp = document.getElementById('timestamp');
+    const speakBtn = document.getElementById('speakBtn');
+    const doors = document.querySelectorAll('.door');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalClose = document.getElementById('modalClose');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalIcon = document.getElementById('modalIcon');
+    const modalContent = document.getElementById('modalContent');
+
+    // Update timestamp every second
+    function updateTimestamp() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      timestamp.textContent = `${hours}:${mins}`;
+    }
+    updateTimestamp();
+    setInterval(updateTimestamp, 1000);
+
+    // ── Generate dendrites, synapses, thoughts ───────────────────────────────
+    const dendritesContainer = document.getElementById('dendrites');
+    const synapsesContainer = document.getElementById('synapses');
+    const thoughtsContainer = document.getElementById('thoughts');
+
+    const thoughtSnippets = [
+      'fetch_money_position',
+      'calendar_check',
+      'sponsor_pipeline',
+      'git_status',
+      'morning_brief',
+      'forge_bookings',
+      'rbtr_progress'
+    ];
+
+    // Generate 20 dendrites
+    for (let i = 0; i < 20; i++) {
+      const dendrite = document.createElement('div');
+      dendrite.className = 'dendrite';
+      const angle = (360 / 20) * i;
+      const distance = 50 + Math.random() * 50;
+      dendrite.style.transform = `rotate(${angle}deg) translateY(-${distance}px)`;
+      dendrite.style.height = `${40 + Math.random() * 40}px`;
+
+      const particle = document.createElement('div');
+      particle.className = 'dendrite-particle';
+      particle.style.animationDelay = `${Math.random() * 2}s`;
+      particle.style.animationDuration = `${2.1 + Math.random() * 1.5}s`;
+      dendrite.appendChild(particle);
+
+      dendritesContainer.appendChild(dendrite);
+    }
+
+    // Generate 20 synapse nodes
+    for (let i = 0; i < 20; i++) {
+      const synapse = document.createElement('div');
+      synapse.className = 'synapse';
+      const angle = (360 / 20) * i + Math.random() * 10;
+      const distance = 90 + Math.random() * 60;
+      const x = Math.cos(angle * Math.PI / 180) * distance;
+      const y = Math.sin(angle * Math.PI / 180) * distance;
+      synapse.style.left = `calc(50% + ${x}px)`;
+      synapse.style.top = `calc(50% + ${y}px)`;
+      synapse.style.animationDelay = `${Math.random() * 2}s`;
+      synapse.style.animationDuration = `${2.1 + Math.random() * 1.5}s`;
+      synapsesContainer.appendChild(synapse);
+    }
+
+    // Generate 5 thought snippets
+    for (let i = 0; i < 5; i++) {
+      const thought = document.createElement('div');
+      thought.className = 'thought-snippet';
+      thought.textContent = thoughtSnippets[Math.floor(Math.random() * thoughtSnippets.length)];
+      const angle = Math.random() * 360;
+      const distance = 120 + Math.random() * 60;
+      const x = Math.cos(angle * Math.PI / 180) * distance;
+      const y = Math.sin(angle * Math.PI / 180) * distance;
+      thought.style.left = `calc(50% + ${x}px)`;
+      thought.style.top = `calc(50% + ${y}px)`;
+      thought.style.animationDelay = `${Math.random() * 6}s`;
+      thoughtsContainer.appendChild(thought);
+    }
+
+    // ── Voice interaction ────────────────────────────────────────────────────
+    let isRecording = false;
+    let recognition = null;
+
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Voice input:', transcript);
+        handleVoiceCommand(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+      };
+    }
+
+    speakBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (recognition && !isRecording) {
+        isRecording = true;
+        recognition.start();
+        speakBtn.style.background = 'var(--accent-orb-deep)';
+        speakBtn.style.borderColor = 'var(--accent-orb)';
+      }
+    });
+
+    speakBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (recognition && isRecording) {
+        isRecording = false;
+        recognition.stop();
+        speakBtn.style.background = 'var(--bg-elevated)';
+        speakBtn.style.borderColor = 'var(--border-default)';
+      }
+    });
+
+    function handleVoiceCommand(text) {
+      // TODO: Send to ElevenLabs Conversational AI
+      console.log('Processing command:', text);
+    }
+
+    // ── Door interactions ────────────────────────────────────────────────────
+    doors.forEach(door => {
+      door.addEventListener('click', () => {
+        const module = door.dataset.module;
+        openModal(module);
+      });
+    });
+
+    function openModal(module) {
+      const moduleData = {
+        psnm: {
+          title: 'PSNM',
+          icon: '/brand/psnm-logo-sm.png',
+          content: 'PSNM warehouse operations — BREAK-EVEN tracking 412/827 pallets.'
+        },
+        forge: {
+          title: 'Forge on the Mews',
+          icon: '/brand/forge-logo-sm.png',
+          content: 'Overland truck builder subscription platform — launching in 32 days.'
+        },
+        rbtr: {
+          title: 'Rock Bottom to Roaming',
+          icon: '/brand/rbtr-logo-sm.png',
+          content: 'Expedition truck build project — departure in 778 days.'
+        },
+        ben: {
+          title: 'Ben',
+          icon: '',
+          content: 'Personal task dashboard — today 3/7 tasks complete.'
+        },
+        sarah: {
+          title: 'Sarah',
+          icon: '',
+          content: 'Sarah's STR business — current equity £105k.'
+        }
+      };
+
+      const data = moduleData[module];
+      if (!data) return;
+
+      modalTitle.textContent = data.title;
+      if (data.icon) {
+        modalIcon.src = data.icon;
+        modalIcon.style.display = 'block';
+      } else {
+        modalIcon.style.display = 'none';
+      }
+      modalContent.textContent = data.content;
+
+      modalOverlay.classList.add('active');
+    }
+
+    modalClose.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+
+    function closeModal() {
+      modalOverlay.classList.remove('active');
+    }
+
+    // ESC key to close modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
+        closeModal();
+      }
+    });
+
+    // ── Service Worker registration ──────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/m/sw.js');
+    }
+  </script>
+
+</body>
+</html>
