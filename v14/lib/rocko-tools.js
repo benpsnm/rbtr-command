@@ -4,7 +4,7 @@
 // Each tool: name, description, input_schema, execute function
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SUPA_URL = process.env.SUPABASE_URL;
+const SUPA_URL = process.env.SUPABASE_URL || 'https://mpxgyobotiqcawmqlhbf.supabase.co';
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // ── Supabase helper ────────────────────────────────────────────────────────
@@ -49,10 +49,11 @@ export const ROCKO_TOOLS = [
     description: 'Get current PSNM Atlas outreach funnel status: prospect count, dispatched today, replies, hot prospects, draft queue.',
     input_schema: { type: 'object', properties: {} },
     execute: async () => {
+      const today = new Date().toISOString().split('T')[0];
       const [targets, drafts, touches] = await Promise.all([
         sbQuery('psnm_outreach_targets', 'select=id,status,hot_flag'),
         sbQuery('psnm_atlas_drafts', 'status=eq.pending_approval&select=id'),
-        sbQuery('psnm_outreach_touches', `sent_date=eq.${new Date().toISOString().split('T')[0]}&select=id,outcome`),
+        sbQuery('psnm_outreach_touches', `touched_at=gte.${today}T00:00:00&touched_at=lte.${today}T23:59:59&select=id,outcome`),
       ]);
       const hot = targets.filter(t => t.hot_flag).length;
       const dispatched = touches.length;
@@ -549,7 +550,7 @@ export const ROCKO_TOOLS = [
       const [tasks, drafts, touches] = await Promise.all([
         sbQuery('rbtr_tasks', `due_date=eq.${today}&status=in.(open,in_progress)&select=title,priority`).catch(() => []),
         sbQuery('psnm_atlas_drafts', 'status=eq.pending_approval&select=id').catch(() => []),
-        sbQuery('psnm_outreach_touches', `sent_date=eq.${today}&outcome=eq.reply&select=id`).catch(() => []),
+        sbQuery('psnm_outreach_touches', `touched_at=gte.${today}T00:00:00&touched_at=lte.${today}T23:59:59&outcome=eq.reply&select=id`).catch(() => []),
       ]);
 
       return {
