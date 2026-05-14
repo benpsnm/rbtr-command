@@ -1736,7 +1736,12 @@
         if (!submodule) {
           SYSTEM_MODULES.renderLanding();
         } else {
-          SYSTEM_MODULES[`render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`]?.();
+          const methodName = `render${submodule.charAt(0).toUpperCase() + submodule.slice(1)}`;
+          if (SYSTEM_MODULES[methodName]) {
+            SYSTEM_MODULES[methodName]();
+          } else {
+            document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Module coming soon</p></div></div>';
+          }
         }
       } else {
         // Other modules (coming in STAGE 4+)
@@ -3537,6 +3542,205 @@
             this.loadVoiceUI(userId); // Reload UI
           } else {
             throw new Error('Failed to activate voice');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderConversations: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">Rocko Conversations</h1>
+            <div class="jarvis-module-actions">
+              <input type="search" id="convSearch" placeholder="Search conversations..." class="jarvis-input" style="width: 300px; margin-right: 12px;">
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary" onclick="SYSTEM_MODULES.clearAllConversations()">Clear All</button>
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body" id="conversationsContent">
+              Loading...
+            </div>
+          </div>
+        `;
+
+        this.loadConversations();
+      },
+
+      loadConversations: async function(searchTerm = '') {
+        try {
+          let url = '/api/rocko/conversations/list';
+          if (searchTerm) {
+            url += `?q=${encodeURIComponent(searchTerm)}`;
+          }
+
+          const response = await fetch(url, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (!response.ok) throw new Error('Failed to load conversations');
+
+          const sessions = await response.json();
+
+          const content = document.getElementById('conversationsContent');
+          if (sessions.length === 0) {
+            content.innerHTML = '<div style="text-align: center; padding: 48px; color: var(--text-tertiary);">No conversations yet</div>';
+            return;
+          }
+
+          content.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Messages</th>
+                  <th>Preview</th>
+                  <th>Tools Used</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sessions.map(s => `
+                  <tr>
+                    <td class="font-mono">${new Date(s.created_at).toLocaleString()}</td>
+                    <td>${s.message_count || 0}</td>
+                    <td>${(s.first_message || '').substring(0, 60)}...</td>
+                    <td>${s.tools_used || 0}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.viewConversation('${s.session_id}')">View</button>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.exportConversation('${s.session_id}')">Export</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+          // Search functionality
+          document.getElementById('convSearch').addEventListener('input', (e) => {
+            this.loadConversations(e.target.value);
+          });
+
+        } catch (error) {
+          document.getElementById('conversationsContent').innerHTML = '<div style="text-align: center; padding: 48px; color: var(--text-danger);">Failed to load conversations</div>';
+        }
+      },
+
+      viewConversation: async function(sessionId) {
+        try {
+          const response = await fetch(`/api/rocko/conversations/get?session_id=${sessionId}`, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (!response.ok) throw new Error('Failed to load conversation');
+
+          const messages = await response.json();
+
+          // Create modal
+          let modal = document.getElementById('conversationModal');
+          if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'conversationModal';
+            modal.className = 'modal';
+            document.body.appendChild(modal);
+          }
+
+          modal.innerHTML = `
+            <div class="modal__overlay" onclick="SYSTEM_MODULES.closeConversationModal()"></div>
+            <div class="modal__content">
+              <div class="modal__header">
+                <h2 class="modal__title">Conversation ${new Date(messages[0].created_at).toLocaleDateString()}</h2>
+                <button class="modal__close" onclick="SYSTEM_MODULES.closeConversationModal()">✕</button>
+              </div>
+              <div class="modal__body" style="max-height: 60vh; overflow-y: auto;">
+                ${messages.map(m => `
+                  <div style="margin-bottom: 24px; padding: 16px; background: var(--bg); border-radius: var(--radius-md); border-left: 3px solid ${m.user_input ? 'var(--copper)' : 'var(--border)'};">
+                    ${m.user_input ? `
+                      <div style="margin-bottom: 8px;">
+                        <strong>You:</strong>
+                        <p style="margin-top: 4px;">${m.user_input}</p>
+                      </div>
+                    ` : ''}
+                    ${m.rocko_response ? `
+                      <div>
+                        <strong>Rocko:</strong>
+                        <p style="margin-top: 4px;">${m.rocko_response}</p>
+                        ${m.tools_called && m.tools_called.length > 0 ? `
+                          <div style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">
+                            Tools: ${m.tools_called.join(', ')}
+                          </div>
+                        ` : ''}
+                      </div>
+                    ` : ''}
+                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);">
+                      ${new Date(m.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="modal__footer">
+                <button class="jarvis-btn jarvis-btn--secondary" onclick="SYSTEM_MODULES.closeConversationModal()">Close</button>
+                <button class="jarvis-btn" onclick="SYSTEM_MODULES.exportConversation('${sessionId}')">Export to Obsidian</button>
+              </div>
+            </div>
+          `;
+
+          modal.classList.add('modal--open');
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      closeConversationModal: function() {
+        const modal = document.getElementById('conversationModal');
+        if (modal) {
+          modal.classList.remove('modal--open');
+          setTimeout(() => modal.remove(), 300);
+        }
+      },
+
+      exportConversation: async function(sessionId) {
+        try {
+          const response = await fetch('/api/rocko/export-conversation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            JARVIS.Toast({ message: `Exported to ${data.filename}`, duration: 2000 });
+          } else {
+            throw new Error(data.error || 'Export failed');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      clearAllConversations: async function() {
+        if (!confirm('Delete all conversation history? This cannot be undone.')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/rocko/conversations/clear', {
+            method: 'POST',
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'All conversations cleared', duration: 2000 });
+            this.loadConversations(); // Reload empty list
+          } else {
+            throw new Error('Failed to clear conversations');
           }
         } catch (error) {
           JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
