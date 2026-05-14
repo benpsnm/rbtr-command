@@ -662,6 +662,42 @@
       .cockpit-row--4col {
         grid-template-columns: 1fr;
       }
+
+      /* Slide-panel full-width on mobile */
+      .slide-panel {
+        width: 100vw;
+        max-width: 100vw;
+      }
+
+      /* Modal takes full width on mobile */
+      .modal__content {
+        max-width: 95vw;
+        max-height: 95vh;
+        margin: 0 8px;
+      }
+
+      /* Tables scroll horizontally on mobile */
+      .jarvis-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      /* Module headers stack on mobile */
+      .jarvis-module-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .jarvis-module-actions {
+        width: 100%;
+      }
+
+      /* Search inputs full width on mobile */
+      .jarvis-input[type="search"] {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
     }
 
     /* ── ANIMATIONS ────────────────────────────────────────────────────────── */
