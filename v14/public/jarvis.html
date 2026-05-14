@@ -681,6 +681,95 @@
         transform: scale(1) translateY(0);
       }
     }
+
+    /* ── SLIDE-IN PANEL ────────────────────────────────────────────────────── */
+    .slide-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 600px;
+      height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform var(--duration-slow) var(--ease-out);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .slide-panel--open {
+      transform: translateX(0);
+    }
+
+    .slide-panel__overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--duration-slow) var(--ease-out);
+      z-index: 999;
+    }
+
+    .slide-panel__overlay--visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .slide-panel__header {
+      padding: var(--space-6);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slide-panel__title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--text-primary);
+    }
+
+    .slide-panel__close {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .slide-panel__close:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    .slide-panel__tabs {
+      padding: var(--space-4) var(--space-6) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .slide-panel__content {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-6);
+    }
+
+    .slide-panel__actions {
+      padding: var(--space-6);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -1958,6 +2047,622 @@
     function toggleUserMenu() {
       JARVIS.Toast({ message: 'User menu coming soon', duration: 2000 });
     }
+
+    // ── PSNM MODULES ──────────────────────────────────────────────────────────
+    const PSNM_MODULES = {
+      renderCustomers: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">PSNM Customers</h1>
+            <div class="jarvis-module-actions">
+              <input type="search" placeholder="Search customers..."
+                     id="customerSearch"
+                     class="jarvis-input"
+                     style="width: 300px;">
+            </div>
+          </div>
+
+          <div class="jarvis-card">
+            <div class="jarvis-card__body">
+              <div id="customersList">Loading customers...</div>
+            </div>
+          </div>
+        `;
+
+        // Fetch customers from Supabase
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'psnm_customers',
+              query: 'order=created_at.desc&select=*'
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch customers');
+          const customers = await response.json();
+
+          const listEl = document.getElementById('customersList');
+          if (customers.length === 0) {
+            listEl.innerHTML = '<p class="text-secondary">No customers found</p>';
+            return;
+          }
+
+          listEl.innerHTML = `
+            <table class="jarvis-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${customers.map(c => `
+                  <tr>
+                    <td>
+                      <strong style="cursor: pointer; color: var(--copper);"
+                              onclick="PSNM_MODULES.openCustomerPanel('${c.id}')">
+                        ${c.company_name || 'Unknown'}
+                      </strong>
+                    </td>
+                    <td>${c.contact_name || '—'}</td>
+                    <td>
+                      <span class="jarvis-badge jarvis-badge--${c.status === 'live' ? 'success' : c.status === 'churned' ? 'danger' : 'default'}">
+                        ${c.status || 'enquiry'}
+                      </span>
+                    </td>
+                    <td class="font-mono text-small">${new Date(c.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost"
+                              onclick="PSNM_MODULES.openCustomerPanel('${c.id}')">
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+
+          // Search functionality
+          document.getElementById('customerSearch').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const rows = listEl.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+              const text = row.textContent.toLowerCase();
+              row.style.display = text.includes(term) ? '' : 'none';
+            });
+          });
+
+        } catch (error) {
+          document.getElementById('customersList').innerHTML =
+            `<p class="text-danger">Error loading customers: ${error.message}</p>`;
+        }
+      },
+
+      openCustomerPanel: async function(customerId) {
+        // Create overlay
+        let overlay = document.getElementById('slidePanelOverlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'slidePanelOverlay';
+          overlay.className = 'slide-panel__overlay';
+          overlay.addEventListener('click', () => this.closeCustomerPanel());
+          document.body.appendChild(overlay);
+        }
+
+        // Create panel
+        let panel = document.getElementById('slidePanel');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.id = 'slidePanel';
+          panel.className = 'slide-panel';
+          document.body.appendChild(panel);
+        }
+
+        // Show overlay
+        setTimeout(() => overlay.classList.add('slide-panel__overlay--visible'), 10);
+
+        // Fetch customer data
+        panel.innerHTML = '<div style="padding: 24px;">Loading...</div>';
+
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_query',
+              table: 'psnm_customers',
+              query: `id=eq.${customerId}&select=*`
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to fetch customer');
+          const customers = await response.json();
+          const customer = customers[0];
+
+          if (!customer) throw new Error('Customer not found');
+
+          // Render panel
+          panel.innerHTML = `
+            <div class="slide-panel__header">
+              <h2 class="slide-panel__title">${customer.company_name || 'Customer'}</h2>
+              <button class="slide-panel__close" onclick="PSNM_MODULES.closeCustomerPanel()">✕</button>
+            </div>
+
+            <div class="slide-panel__tabs">
+              <div class="jarvis-tabs">
+                <button class="jarvis-tab jarvis-tab--active" data-tab="overview">Overview</button>
+                <button class="jarvis-tab" data-tab="quotes">Quotes</button>
+                <button class="jarvis-tab" data-tab="agreements">Agreements</button>
+                <button class="jarvis-tab" data-tab="insurance">Insurance</button>
+                <button class="jarvis-tab" data-tab="bookings">Bookings</button>
+                <button class="jarvis-tab" data-tab="comms">Comms</button>
+              </div>
+            </div>
+
+            <div class="slide-panel__content" id="panelContent">
+              ${this.renderOverviewTab(customer)}
+            </div>
+
+            <div class="slide-panel__actions">
+              <button class="jarvis-btn jarvis-btn--sm" onclick="PSNM_MODULES.sendQuote('${customerId}')">
+                Send Quote
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                      onclick="PSNM_MODULES.sendAgreement('${customerId}')">
+                Send Agreement
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary"
+                      onclick="PSNM_MODULES.markInsuranceVerified('${customerId}')">
+                Mark Insurance Verified
+              </button>
+              <button class="jarvis-btn jarvis-btn--sm jarvis-btn--success"
+                      onclick="PSNM_MODULES.markCustomerLive('${customerId}')">
+                Mark Customer Live
+              </button>
+            </div>
+          `;
+
+          // Tab switching
+          panel.querySelectorAll('.jarvis-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+              panel.querySelectorAll('.jarvis-tab').forEach(t => t.classList.remove('jarvis-tab--active'));
+              e.target.classList.add('jarvis-tab--active');
+              this.loadTab(e.target.dataset.tab, customerId);
+            });
+          });
+
+          // Open panel
+          setTimeout(() => panel.classList.add('slide-panel--open'), 10);
+
+        } catch (error) {
+          panel.innerHTML = `<div style="padding: 24px;"><p class="text-danger">Error: ${error.message}</p></div>`;
+        }
+      },
+
+      closeCustomerPanel: function() {
+        const panel = document.getElementById('slidePanel');
+        const overlay = document.getElementById('slidePanelOverlay');
+        if (panel) panel.classList.remove('slide-panel--open');
+        if (overlay) overlay.classList.remove('slide-panel__overlay--visible');
+      },
+
+      renderOverviewTab: function(customer) {
+        return `
+          <div>
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">Customer Details</h3>
+            <div style="display: grid; gap: 12px;">
+              <div><strong>Company:</strong> ${customer.company_name || '—'}</div>
+              <div><strong>Contact:</strong> ${customer.contact_name || '—'}</div>
+              <div><strong>Email:</strong> ${customer.email || '—'}</div>
+              <div><strong>Phone:</strong> ${customer.phone || '—'}</div>
+              <div><strong>Status:</strong>
+                <span class="jarvis-badge jarvis-badge--${customer.status === 'live' ? 'success' : 'default'}">
+                  ${customer.status || 'enquiry'}
+                </span>
+              </div>
+              <div><strong>Created:</strong> ${new Date(customer.created_at).toLocaleString()}</div>
+              ${customer.address ? `<div><strong>Address:</strong> ${customer.address}</div>` : ''}
+            </div>
+          </div>
+        `;
+      },
+
+      loadTab: async function(tabName, customerId) {
+        const content = document.getElementById('panelContent');
+        content.innerHTML = '<div style="padding: 24px;">Loading...</div>';
+
+        try {
+          if (tabName === 'overview') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_customers',
+                query: `id=eq.${customerId}&select=*`
+              })
+            });
+            const customers = await response.json();
+            content.innerHTML = this.renderOverviewTab(customers[0]);
+
+          } else if (tabName === 'quotes') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_quotes',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const quotes = await response.json();
+            content.innerHTML = this.renderQuotesTab(quotes);
+
+          } else if (tabName === 'agreements') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_agreements',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const agreements = await response.json();
+            content.innerHTML = this.renderAgreementsTab(agreements);
+
+          } else if (tabName === 'insurance') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_insurance_checks',
+                query: `customer_id=eq.${customerId}&order=checked_at.desc&select=*`
+              })
+            });
+            const checks = await response.json();
+            content.innerHTML = this.renderInsuranceTab(checks);
+
+          } else if (tabName === 'bookings') {
+            const response = await fetch('/api/atlas3', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+              },
+              body: JSON.stringify({
+                action: 'supabase_query',
+                table: 'psnm_bookings',
+                query: `customer_id=eq.${customerId}&order=created_at.desc&select=*`
+              })
+            });
+            const bookings = await response.json();
+            content.innerHTML = this.renderBookingsTab(bookings);
+
+          } else if (tabName === 'comms') {
+            const [emailsRes, smsRes] = await Promise.all([
+              fetch('/api/atlas3', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+                },
+                body: JSON.stringify({
+                  action: 'supabase_query',
+                  table: 'psnm_emails',
+                  query: `customer_id=eq.${customerId}&order=sent_at.desc&select=*&limit=20`
+                })
+              }),
+              fetch('/api/atlas3', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+                },
+                body: JSON.stringify({
+                  action: 'supabase_query',
+                  table: 'psnm_sms',
+                  query: `customer_id=eq.${customerId}&order=sent_at.desc&select=*&limit=20`
+                })
+              })
+            ]);
+            const emails = await emailsRes.json();
+            const sms = await smsRes.json();
+            content.innerHTML = this.renderCommsTab(emails, sms);
+          }
+
+        } catch (error) {
+          content.innerHTML = `<p class="text-danger">Error loading tab: ${error.message}</p>`;
+        }
+      },
+
+      renderQuotesTab: function(quotes) {
+        if (quotes.length === 0) {
+          return '<p class="text-secondary">No quotes found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Quote ID</th>
+                <th>Monthly Rate</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${quotes.map(q => `
+                <tr>
+                  <td class="font-mono">#${q.id.slice(0, 8)}</td>
+                  <td>£${parseFloat(q.monthly_rate || 0).toFixed(2)}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${q.status === 'accepted' ? 'success' : 'default'}">
+                      ${q.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${new Date(q.created_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderAgreementsTab: function(agreements) {
+        if (agreements.length === 0) {
+          return '<p class="text-secondary">No agreements found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Agreement ID</th>
+                <th>Status</th>
+                <th>Signed At</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${agreements.map(a => `
+                <tr>
+                  <td class="font-mono">#${a.id.slice(0, 8)}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${a.status === 'signed' ? 'success' : 'default'}">
+                      ${a.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${a.signed_at ? new Date(a.signed_at).toLocaleDateString() : '—'}</td>
+                  <td class="font-mono text-small">${new Date(a.created_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderInsuranceTab: function(checks) {
+        if (checks.length === 0) {
+          return '<p class="text-secondary">No insurance checks found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Policy Number</th>
+                <th>Provider</th>
+                <th>Status</th>
+                <th>Checked At</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${checks.map(c => `
+                <tr>
+                  <td class="font-mono">${c.policy_number || '—'}</td>
+                  <td>${c.provider || '—'}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${c.status === 'verified' ? 'success' : 'warning'}">
+                      ${c.status || 'pending'}
+                    </span>
+                  </td>
+                  <td class="font-mono text-small">${new Date(c.checked_at).toLocaleDateString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderBookingsTab: function(bookings) {
+        if (bookings.length === 0) {
+          return '<p class="text-secondary">No bookings found</p>';
+        }
+        return `
+          <table class="jarvis-table">
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `
+                <tr>
+                  <td class="font-mono">#${b.id.slice(0, 8)}</td>
+                  <td class="font-mono text-small">${new Date(b.booking_date).toLocaleDateString()}</td>
+                  <td>${b.booking_type || '—'}</td>
+                  <td>
+                    <span class="jarvis-badge jarvis-badge--${b.status === 'confirmed' ? 'success' : 'default'}">
+                      ${b.status || 'pending'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      renderCommsTab: function(emails, sms) {
+        return `
+          <div>
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">Emails (${emails.length})</h3>
+            ${emails.length === 0 ? '<p class="text-secondary">No emails</p>' : `
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+                ${emails.slice(0, 10).map(e => `
+                  <div style="padding: 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                      <strong>${e.subject || 'No subject'}</strong>
+                      <span class="font-mono text-small text-secondary">${new Date(e.sent_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="text-small text-secondary">${(e.body_preview || '').slice(0, 100)}...</div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+
+            <h3 class="font-display text-h3" style="margin-bottom: 16px;">SMS (${sms.length})</h3>
+            ${sms.length === 0 ? '<p class="text-secondary">No SMS messages</p>' : `
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                ${sms.slice(0, 10).map(s => `
+                  <div style="padding: 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                      <span class="font-mono text-small">${s.phone_number || '—'}</span>
+                      <span class="font-mono text-small text-secondary">${new Date(s.sent_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="text-small">${s.message || ''}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      },
+
+      sendQuote: async function(customerId) {
+        JARVIS.Toast({ message: 'Quote generation coming soon', duration: 2000 });
+      },
+
+      sendAgreement: async function(customerId) {
+        JARVIS.Toast({ message: 'Agreement generation coming soon', duration: 2000 });
+      },
+
+      markInsuranceVerified: async function(customerId) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_insert',
+              table: 'psnm_insurance_checks',
+              data: {
+                customer_id: customerId,
+                status: 'verified',
+                checked_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Insurance marked as verified', duration: 2000 });
+            this.loadTab('insurance', customerId);
+          } else {
+            throw new Error('Failed to update insurance');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      markCustomerLive: async function(customerId) {
+        try {
+          const response = await fetch('/api/atlas3', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || ''
+            },
+            body: JSON.stringify({
+              action: 'supabase_update',
+              table: 'psnm_customers',
+              query: `id=eq.${customerId}`,
+              data: {
+                status: 'live',
+                went_live_at: new Date().toISOString(),
+              }
+            })
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Customer marked as live!', duration: 2000 });
+            this.loadTab('overview', customerId);
+          } else {
+            throw new Error('Failed to update customer');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      renderAtlasV3: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Atlas v3 module coming soon</p></div></div>';
+      },
+
+      renderWMSProspects: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>WMS Prospects module coming soon</p></div></div>';
+      },
+
+      renderWWEnquiries: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>WW Enquiries module coming soon</p></div></div>';
+      },
+
+      renderQuotesAgreements: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Quotes & Agreements module coming soon</p></div></div>';
+      },
+
+      renderInsurance: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Insurance module coming soon</p></div></div>';
+      },
+
+      renderIntelPipeline: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Intel Pipeline module coming soon</p></div></div>';
+      },
+
+      renderRevenueDashboard: function() {
+        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>Revenue Dashboard module coming soon</p></div></div>';
+      },
+    };
   </script>
 </body>
 </html>
