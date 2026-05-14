@@ -4,13 +4,38 @@
 // Proxies text-to-speech requests to ElevenLabs API server-side
 // ═══════════════════════════════════════════════════════════════════════════
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+async function getActiveVoiceId(userId) {
+  if (!userId || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/user_voices?user_id=eq.${userId}&is_active=eq.true&select=voice_id`;
+    const response = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+
+    if (!response.ok) return null;
+
+    const voices = await response.json();
+    return voices.length > 0 ? voices[0].voice_id : null;
+  } catch (error) {
+    console.error('[TTS] Failed to fetch custom voice:', error);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-  const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'M7ya1YbaeFaPXljg9BpK';
+  const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'M7ya1YbaeFaPXljg9BpK';
 
   if (!ELEVENLABS_API_KEY) {
     return res.status(500).json({
@@ -20,15 +45,19 @@ export default async function handler(req, res) {
     });
   }
 
-  const { text } = req.body;
+  const { text, user_id } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: 'text required' });
   }
 
   try {
+    // Check for custom voice, fall back to default
+    const customVoiceId = await getActiveVoiceId(user_id);
+    const voiceId = customVoiceId || DEFAULT_VOICE_ID;
+
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
         method: 'POST',
         headers: {

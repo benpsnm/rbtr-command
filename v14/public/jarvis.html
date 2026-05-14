@@ -3284,7 +3284,263 @@
     // ── SYSTEM MODULES ────────────────────────────────────────────────────────
     const SYSTEM_MODULES = {
       renderLanding: function() {
-        document.getElementById('mainStage').innerHTML = '<div class="jarvis-card"><div class="jarvis-card__body"><p>System modules coming soon</p></div></div>';
+        document.getElementById('mainStage').innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">System</h1>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('system', 'voice')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">🎙️ Voice Cloning</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Custom Rocko voices for Ben + Sarah</p>
+              </div>
+            </div>
+            <div class="jarvis-card" style="cursor: pointer;" onclick="loadModule('system', 'conversations')">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">💬 Conversations</h2>
+              </div>
+              <div class="jarvis-card__body">
+                <p class="text-small text-secondary">Rocko conversation history + search</p>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      renderVoice: async function() {
+        const mainStage = document.getElementById('mainStage');
+        mainStage.innerHTML = `
+          <div class="jarvis-module-header">
+            <h1 class="jarvis-module-title">Voice Cloning</h1>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+            <!-- Ben's Voice -->
+            <div class="jarvis-card">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">Ben's Voice</h2>
+              </div>
+              <div class="jarvis-card__body" id="benVoiceContent">
+                Loading...
+              </div>
+            </div>
+
+            <!-- Sarah's Voice -->
+            <div class="jarvis-card">
+              <div class="jarvis-card__header">
+                <h2 class="font-display text-h2">Sarah's Voice</h2>
+              </div>
+              <div class="jarvis-card__body" id="sarahVoiceContent">
+                Loading...
+              </div>
+            </div>
+          </div>
+        `;
+
+        this.loadVoiceUI('ben');
+        this.loadVoiceUI('sarah');
+      },
+
+      loadVoiceUI: async function(userId) {
+        const container = document.getElementById(`${userId}VoiceContent`);
+
+        try {
+          // Fetch existing voices for this user
+          const response = await fetch(`/api/voice/list?user_id=${userId}`, {
+            headers: { 'x-rbtr-auth': localStorage.getItem('rbtr_token') || '' }
+          });
+          const voices = await response.json();
+
+          const activeVoice = voices.find(v => v.is_active);
+
+          container.innerHTML = `
+            <div style="margin-bottom: 16px;">
+              ${activeVoice ? `
+                <div style="padding: 12px; background: var(--copper-faint); border: 1px solid var(--copper-dim); border-radius: var(--radius-md); margin-bottom: 16px;">
+                  <strong>Active Voice:</strong> ${activeVoice.voice_name}<br>
+                  <span class="text-small text-secondary">Voice ID: ${activeVoice.voice_id}</span>
+                </div>
+              ` : '<p class="text-secondary">No active voice set</p>'}
+            </div>
+
+            <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+              <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">Record New Voice Sample</h4>
+
+              <div style="margin-bottom: 12px;">
+                <button class="jarvis-btn jarvis-btn--sm" id="${userId}StartRecordBtn" onclick="SYSTEM_MODULES.startRecording('${userId}')">
+                  🎙️ Start Recording
+                </button>
+                <button class="jarvis-btn jarvis-btn--sm jarvis-btn--secondary" id="${userId}StopRecordBtn" disabled onclick="SYSTEM_MODULES.stopRecording('${userId}')">
+                  ⏹️ Stop & Upload
+                </button>
+              </div>
+
+              <div id="${userId}RecordStatus" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;"></div>
+
+              <audio id="${userId}AudioPlayback" controls style="width: 100%; display: none; margin-bottom: 12px;"></audio>
+            </div>
+
+            ${voices.length > 0 ? `
+              <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+                <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">Your Voices</h4>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  ${voices.map(v => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: var(--bg); border-radius: var(--radius-sm);">
+                      <div>
+                        <strong>${v.voice_name}</strong>
+                        ${v.is_active ? '<span class="jarvis-badge jarvis-badge--success" style="margin-left: 8px;">Active</span>' : ''}
+                      </div>
+                      <div style="display: flex; gap: 8px;">
+                        <button class="jarvis-btn jarvis-btn--sm jarvis-btn--ghost" onclick="SYSTEM_MODULES.testVoice('${v.voice_id}')">Test</button>
+                        ${!v.is_active ? `<button class="jarvis-btn jarvis-btn--sm" onclick="SYSTEM_MODULES.setActiveVoice('${userId}', '${v.id}')">Set Active</button>` : ''}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `;
+        } catch (error) {
+          container.innerHTML = `<p class="text-danger">Error loading voices: ${error.message}</p>`;
+        }
+      },
+
+      mediaRecorder: {},
+      audioChunks: {},
+
+      startRecording: async function(userId) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.mediaRecorder[userId] = new MediaRecorder(stream);
+          this.audioChunks[userId] = [];
+
+          this.mediaRecorder[userId].ondataavailable = (event) => {
+            this.audioChunks[userId].push(event.data);
+          };
+
+          this.mediaRecorder[userId].onstop = () => {
+            const audioBlob = new Blob(this.audioChunks[userId], { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            const playback = document.getElementById(`${userId}AudioPlayback`);
+            playback.src = audioUrl;
+            playback.style.display = 'block';
+
+            // Store blob for upload
+            this[`${userId}RecordedBlob`] = audioBlob;
+
+            stream.getTracks().forEach(track => track.stop());
+          };
+
+          this.mediaRecorder[userId].start();
+
+          document.getElementById(`${userId}StartRecordBtn`).disabled = true;
+          document.getElementById(`${userId}StopRecordBtn`).disabled = false;
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Recording... (speak for 30s-2min)';
+          document.getElementById(`${userId}RecordStatus`).style.color = 'var(--copper)';
+
+        } catch (error) {
+          JARVIS.Toast({ message: 'Microphone access denied', duration: 3000 });
+        }
+      },
+
+      stopRecording: async function(userId) {
+        this.mediaRecorder[userId].stop();
+
+        document.getElementById(`${userId}StartRecordBtn`).disabled = false;
+        document.getElementById(`${userId}StopRecordBtn`).disabled = true;
+        document.getElementById(`${userId}RecordStatus`).textContent = 'Processing...';
+
+        // Wait a moment for onstop to finish
+        await new Promise(r => setTimeout(r, 500));
+
+        // Upload to ElevenLabs
+        const voiceName = prompt(`Name this voice (e.g., "${userId}'s Rocko Voice")`);
+        if (!voiceName) {
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Cancelled';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', this[`${userId}RecordedBlob`], 'sample.webm');
+        formData.append('user_id', userId);
+        formData.append('voice_name', voiceName);
+
+        try {
+          const response = await fetch('/api/voice/clone-create', {
+            method: 'POST',
+            headers: {
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Voice cloned successfully!', duration: 2000 });
+            this.loadVoiceUI(userId); // Reload UI
+          } else {
+            throw new Error(data.error || 'Clone failed');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+          document.getElementById(`${userId}RecordStatus`).textContent = 'Upload failed';
+        }
+      },
+
+      testVoice: async function(voiceId) {
+        try {
+          const response = await fetch('/api/voice/test', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({
+              voice_id: voiceId,
+              text: 'Hello, this is a test of your custom voice. How does it sound?',
+            }),
+          });
+
+          if (!response.ok) throw new Error('Test playback failed');
+
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          audio.play();
+
+          JARVIS.Toast({ message: 'Playing test audio...', duration: 2000 });
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
+      },
+
+      setActiveVoice: async function(userId, voiceRecordId) {
+        try {
+          const response = await fetch('/api/voice/set-active', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-rbtr-auth': localStorage.getItem('rbtr_token') || '',
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              voice_id: voiceRecordId,
+            }),
+          });
+
+          if (response.ok) {
+            JARVIS.Toast({ message: 'Voice activated!', duration: 2000 });
+            this.loadVoiceUI(userId); // Reload UI
+          } else {
+            throw new Error('Failed to activate voice');
+          }
+        } catch (error) {
+          JARVIS.Toast({ message: 'Error: ' + error.message, duration: 3000 });
+        }
       },
     };
   </script>
