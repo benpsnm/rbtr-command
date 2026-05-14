@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Booking Proof - Automated cleaning verification for short-term rentals. Photo evidence before every guest.">
+  <title>Booking Proof — Automated Cleaning Verification</title>
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+  <style>
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      line-height: 1.6;
+    }
+
+    .bp-hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--space-8);
+      background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+    }
+
+    .bp-logo {
+      font-family: var(--font-display);
+      font-size: 48px;
+      color: var(--copper);
+      margin-bottom: var(--space-4);
+    }
+
+    .bp-tagline {
+      font-size: 24px;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-12);
+      max-width: 600px;
+    }
+
+    .bp-cta {
+      display: flex;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .bp-btn {
+      padding: var(--space-4) var(--space-8);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .bp-btn--primary {
+      background: var(--copper);
+      color: #0a0a0a;
+      border: none;
+    }
+
+    .bp-btn--primary:hover {
+      background: var(--copper-glow);
+      box-shadow: var(--shadow-copper);
+    }
+
+    .bp-btn--secondary {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .bp-btn--secondary:hover {
+      border-color: var(--copper);
+      color: var(--copper);
+    }
+
+    .bp-features {
+      max-width: 1200px;
+      margin: var(--space-16) auto;
+      padding: var(--space-8);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: var(--space-8);
+    }
+
+    .bp-feature {
+      background: var(--surface);
+      padding: var(--space-6);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+    }
+
+    .bp-feature h3 {
+      font-family: var(--font-display);
+      color: var(--copper);
+      margin-bottom: var(--space-3);
+    }
+
+    .bp-feature p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .bp-logo {
+        font-size: 36px;
+      }
+
+      .bp-tagline {
+        font-size: 18px;
+      }
+
+      .bp-cta {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .bp-btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bp-hero">
+    <h1 class="bp-logo">Booking Proof</h1>
+    <p class="bp-tagline">
+      Automated cleaning verification for STR hosts.<br>
+      Photo evidence before every guest arrives.
+    </p>
+    <div class="bp-cta">
+      <a href="/booking-proof/signup.html" class="bp-btn bp-btn--primary">Get Started</a>
+      <a href="/booking-proof/login.html" class="bp-btn bp-btn--secondary">Sign In</a>
+    </div>
+  </div>
+
+  <div class="bp-features">
+    <div class="bp-feature">
+      <h3>Before Every Booking</h3>
+      <p>
+        Cleaners upload timestamped photos after each turnover. Automatic verification
+        that your property is guest-ready before check-in.
+      </p>
+    </div>
+
+    <div class="bp-feature">
+      <h3>Baseline Protection</h3>
+      <p>
+        Document your property's condition with baseline photos. Compare against
+        post-cleaning images to catch damage or missed cleaning tasks.
+      </p>
+    </div>
+
+    <div class="bp-feature">
+      <h3>Damage Claims</h3>
+      <p>
+        Submit damage claims with before/after photo evidence. Timestamped proof
+        simplifies insurance claims and guest dispute resolution.
+      </p>
+    </div>
+
+    <div class="bp-feature">
+      <h3>Cleaner Accountability</h3>
+      <p>
+        Track which cleaner worked each turnover. Performance metrics and photo
+        history create accountability and quality standards.
+      </p>
+    </div>
+
+    <div class="bp-feature">
+      <h3>Guest Communication</h3>
+      <p>
+        Share pre-arrival photos with guests. Transparency builds trust and sets
+        expectations before they walk through the door.
+      </p>
+    </div>
+
+    <div class="bp-feature">
+      <h3>Multi-Property Dashboard</h3>
+      <p>
+        Manage all your properties from one dashboard. Check cleaning status,
+        review photos, and monitor turnover schedules at a glance.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
