@@ -287,7 +287,44 @@ async function gatherAllData() {
     sbSelect('rbtr_daily_log', `log_date=eq.${yesterday()}&order=created_at.asc`).catch(() => null),
   ]);
 
+  // Tech scan status from second brain
+  let techScanData = { last_scan: null, days_since: null, status: 'unknown' };
+  try {
+    const fs = require('fs');
+    const techScanPath = '/Users/bengreenwood/Documents/RBTR-Brain/00-Inbox/LAST-TECH-SCAN.md';
+    if (fs.existsSync(techScanPath)) {
+      const content = fs.readFileSync(techScanPath, 'utf8');
+      const dateMatch = content.match(/\*\*Last scan date:\*\* (\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        const lastScan = new Date(dateMatch[1]);
+        const daysSinceNum = Math.floor((Date.now() - lastScan) / 86400000);
+        const nextScan = new Date(lastScan);
+        nextScan.setDate(nextScan.getDate() + 3);
+        techScanData = {
+          last_scan: dateMatch[1],
+          last_scan_spoken: lastScan.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+          days_since: daysSinceNum,
+          next_due: nextScan.toISOString().slice(0, 10),
+          status: daysSinceNum > 3 ? 'DUE' : 'on track',
+        };
+      }
+    }
+  } catch (_) { /* silently skip */ }
+
+  // TIME ANCHOR data
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const time_anchor = {
+    date_full: now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    time_generated: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Europe/London' }),
+    day_name: now.toLocaleDateString('en-GB', { weekday: 'long' }),
+    day_of_year: dayOfYear,
+    days_to_departure_spoken: daysUntil(DEPARTURE_DATE),
+  };
+
   return {
+    time_anchor,
+    tech_scan: techScanData,
     date: today(),
     day_name: new Date().toLocaleDateString('en-GB', { weekday: 'long' }),
     date_spoken: new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
@@ -362,6 +399,8 @@ DATA PROVIDED
 
 You will receive a JSON object \`data\` containing all relevant figures. The keys are documented in /api/briefing-data. Key fields:
 
+- data.time_anchor: { date_full, time_generated, day_name, day_of_year, days_to_departure_spoken } — use for opening TIME ANCHOR section
+- data.tech_scan: { last_scan, last_scan_spoken, days_since, next_due, status } — if status='DUE', flag it in opening. If 'on track', silent or brief mention if days_since=0.
 - data.date (YYYY-MM-DD), data.weekday, data.days_to_departure, data.built_dad_day, data.weather
 - data.overnight: { wins, flags, reflection_from_last_night, priority_set_yesterday, priority_completed }
 - data.tasks_completed_yesterday: array of { description, priority, project } — tasks marked complete yesterday. PRIMARY source for "yesterday's wins" narrative.
@@ -394,7 +433,16 @@ Write as one continuous spoken brief. No headings, no bullets, no numbered lists
 
 Order of content (adapt naturally):
 
-1. Open. "Morning Ben. [Weekday] [date]. [N] days to departure."
+1. TIME ANCHOR — the temporal frame. Lead with time-of-day awareness.
+   Source: data.time_anchor
+   Format: "Morning Ben. It's [day_name], the [date_full]. [time_generated]. Day [day_of_year] of the year. [days_to_departure_spoken] days until the truck rolls out of Rotherham."
+   Voice style: Natural flow — "It's Wednesday morning, the 13th of May, 8:31 AM. Day 133 of the year. 414 days until the truck rolls."
+
+1b. TECH SCAN STATUS — if due, flag it now.
+   Source: data.tech_scan
+   If data.tech_scan.status === 'DUE': "Tech scan's due — last one was [last_scan_spoken]. Tap 'tech scan' with Claude today."
+   If data.tech_scan.status === 'on track': silent, or if recently completed (days_since === 0): "Tech scan's current — ran yesterday."
+   If status === 'unknown': silent.
 
 2. Yesterday's wins — LEAD with this, it's the daily continuity frame.
    Source: data.tasks_completed_yesterday PLUS data.yesterday_daily_log (if entries exist).

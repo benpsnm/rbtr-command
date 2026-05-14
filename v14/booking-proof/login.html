@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Booking Proof</title>
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+  <style>
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4);
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: var(--space-8);
+    }
+
+    .login-logo {
+      font-family: var(--font-display);
+      font-size: 32px;
+      color: var(--copper);
+      margin-bottom: var(--space-2);
+    }
+
+    .login-subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: var(--space-6);
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: var(--space-2);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: var(--space-3);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 14px;
+      transition: border-color var(--duration-fast) var(--ease-out);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--copper);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: var(--space-4);
+      background: var(--copper);
+      color: #0a0a0a;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .btn-submit:hover {
+      background: var(--copper-glow);
+    }
+
+    .btn-submit:disabled {
+      background: var(--surface-elevated);
+      color: var(--text-disabled);
+      cursor: not-allowed;
+    }
+
+    .login-footer {
+      text-align: center;
+      margin-top: var(--space-6);
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .login-footer a {
+      color: var(--copper);
+      text-decoration: none;
+    }
+
+    .login-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .message {
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      margin-bottom: var(--space-4);
+    }
+
+    .message--success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #22c55e;
+    }
+
+    .message--error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    .login-info {
+      background: var(--copper-faint);
+      border: 1px solid var(--copper-dim);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-6);
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <h1 class="login-logo">Booking Proof</h1>
+      <p class="login-subtitle">Sign in to your account</p>
+    </div>
+
+    <div class="login-info">
+      Enter your email to receive a magic link. No password required.
+    </div>
+
+    <div id="message"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address</label>
+        <input type="email" id="email" class="form-input" required placeholder="you@example.com">
+      </div>
+
+      <button type="submit" class="btn-submit" id="submitBtn">
+        Send Magic Link
+      </button>
+    </form>
+
+    <div class="login-footer">
+      Don't have an account? <a href="/booking-proof/signup.html">Sign up</a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const messageEl = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      messageEl.innerHTML = '';
+
+      try {
+        const response = await fetch('/api/bp/auth/request-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          messageEl.innerHTML = `
+            <div class="message message--success">
+              Magic link sent! Check your email (${email}) and click the link to sign in.
+            </div>
+          `;
+          form.reset();
+        } else {
+          throw new Error(data.error || 'Failed to send magic link');
+        }
+      } catch (error) {
+        messageEl.innerHTML = `
+          <div class="message message--error">
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Magic Link';
+      }
+    });
+  </script>
+</body>
+</html>

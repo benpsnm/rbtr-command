@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cleaners — Booking Proof</title>
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+  <style>
+    body { background: var(--bg); color: var(--text-primary); font-family: var(--font-body); margin: 0; }
+    .bp-nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: var(--space-4) var(--space-6); display: flex; align-items: center; justify-content: space-between; }
+    .bp-logo { font-family: var(--font-display); font-size: 20px; color: var(--copper); }
+    .bp-nav-links { display: flex; gap: var(--space-4); }
+    .bp-nav-link { color: var(--text-secondary); text-decoration: none; font-size: 14px; }
+    .bp-nav-link--active { color: var(--copper); }
+    .bp-main { max-width: 1200px; margin: 0 auto; padding: var(--space-8); }
+    .bp-title { font-family: var(--font-display); font-size: 32px; margin-bottom: var(--space-8); }
+    .bp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); }
+    .bp-table { width: 100%; border-collapse: collapse; }
+    .bp-table thead th { text-align: left; padding: var(--space-3); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+    .bp-table tbody td { padding: var(--space-3); border-bottom: 1px solid var(--border); font-size: 14px; }
+    .bp-empty { text-align: center; padding: var(--space-12); color: var(--text-tertiary); }
+  </style>
+</head>
+<body>
+  <nav class="bp-nav">
+    <div class="bp-logo">Booking Proof</div>
+    <div class="bp-nav-links">
+      <a href="/booking-proof/dashboard" class="bp-nav-link">Dashboard</a>
+      <a href="/booking-proof/properties" class="bp-nav-link">Properties</a>
+      <a href="/booking-proof/cleaners" class="bp-nav-link bp-nav-link--active">Cleaners</a>
+      <a href="/booking-proof/claims" class="bp-nav-link">Claims</a>
+      <a href="/booking-proof/billing" class="bp-nav-link">Billing</a>
+    </div>
+  </nav>
+  <main class="bp-main">
+    <h1 class="bp-title">Cleaners</h1>
+    <div class="bp-card" id="cleanersContent">Loading...</div>
+  </main>
+  <script>
+    async function loadCleaners() {
+      try {
+        const response = await fetch('/api/bp/cleaners');
+        if (!response.ok) throw new Error('Failed to load cleaners');
+        const cleaners = await response.json();
+
+        const content = document.getElementById('cleanersContent');
+        if (cleaners.length === 0) {
+          content.innerHTML = '<div class="bp-empty">No cleaners yet</div>';
+        } else {
+          content.innerHTML = `
+            <table class="bp-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Completed</th></tr></thead>
+              <tbody>
+                ${cleaners.map(c => `
+                  <tr>
+                    <td><strong>${c.name || 'Unnamed'}</strong></td>
+                    <td>${c.email || '—'}</td>
+                    <td>${c.phone || '—'}</td>
+                    <td>${c.completed_count || 0} turnovers</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('cleanersContent').innerHTML = '<div class="bp-empty">Failed to load cleaners</div>';
+      }
+    }
+    loadCleaners();
+  </script>
+</body>
+</html>
