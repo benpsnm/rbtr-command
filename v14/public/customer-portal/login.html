@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Login - PSNM</title>
+  <link rel="stylesheet" href="/customer-portal/assets/customer-portal.css">
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-logo">
+        <div>PSNM</div>
+        <div style="font-size: 14px; font-weight: 400; color: #666; margin-top: 8px;">
+          Pallet Storage Near Me
+        </div>
+      </div>
+
+      <div id="messageBox"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email" class="form-label">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            class="form-input"
+            placeholder="you@company.com"
+            required
+            autofocus
+          >
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          Send Magic Link
+        </button>
+      </form>
+
+      <div style="margin-top: 24px; text-align: center; font-size: 14px; color: #666;">
+        <p>We'll send you a secure login link to your email.</p>
+        <p style="margin-top: 12px;">
+          Need help? Call us on <strong>01709 123 456</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/customer-portal/assets/customer-portal.js"></script>
+  <script>
+    const form = document.getElementById('loginForm');
+    const messageBox = document.getElementById('messageBox');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+      const submitBtn = form.querySelector('button[type="submit"]');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      messageBox.innerHTML = '';
+
+      try {
+        const response = await fetch('/api/customer/auth/request-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          messageBox.innerHTML = `
+            <div class="alert alert-success">
+              ✓ Magic link sent! Check your email inbox.
+            </div>
+          `;
+          form.reset();
+        } else {
+          throw new Error(data.error || 'Request failed');
+        }
+      } catch (error) {
+        messageBox.innerHTML = `
+          <div class="alert alert-error">
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Magic Link';
+      }
+    });
+  </script>
+</body>
+</html>

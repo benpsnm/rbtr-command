@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage - PSNM Customer Portal</title>
+  <link rel="stylesheet" href="/customer-portal/assets/customer-portal.css">
+</head>
+<body>
+  <div class="portal-container">
+    <header class="portal-header">
+      <a href="/customer-portal/dashboard.html" class="portal-logo">
+        <div>PSNM</div>
+      </a>
+      <div class="portal-user">
+        <span id="customerName">Loading...</span>
+        <a href="/api/customer/auth/logout" class="btn btn-secondary btn-small">Logout</a>
+      </div>
+    </header>
+
+    <nav class="portal-nav">
+      <ul class="portal-nav-list">
+        <li><a href="/customer-portal/dashboard.html">Dashboard</a></li>
+        <li><a href="/customer-portal/billing.html">Billing</a></li>
+        <li><a href="/customer-portal/storage.html">Storage</a></li>
+        <li><a href="/customer-portal/account.html">Account</a></li>
+      </ul>
+    </nav>
+
+    <main class="portal-main">
+      <h1>Storage Status</h1>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-header">
+            <h3>Current Pallets</h3>
+          </div>
+          <div class="card-stat" id="currentPallets">-</div>
+          <div class="card-label">In storage now</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Monthly Charge</h3>
+          </div>
+          <div class="card-stat" id="monthlyCharge">£0</div>
+          <div class="card-label">Current monthly rate</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Storage by Location</h3>
+        </div>
+        <div id="locationsTable">
+          <p>Loading locations...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Active Bookings</h3>
+        </div>
+        <div id="bookingsTable">
+          <p>Loading bookings...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Storage History (Last 12 Months)</h3>
+        </div>
+        <div id="historyChart">
+          <p>Loading history...</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="portal-footer">
+      <p>
+        <strong>PSNM — Pallet Storage Near Me</strong><br>
+        1,602-space warehouse, Hellaby, Rotherham S66 8HR<br>
+        <a href="https://palletstoragenearme.co.uk" style="color: inherit;">palletstoragenearme.co.uk</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="/customer-portal/assets/customer-portal.js"></script>
+  <script>
+    const { apiCall, formatCurrency, formatDate, checkAuth, setActiveNav } = window.PSNM;
+
+    async function loadStorage() {
+      setActiveNav('storage');
+
+      try {
+        const customer = await checkAuth();
+        if (customer) {
+          document.getElementById('customerName').textContent = customer.company || customer.contact_name;
+        }
+
+        const data = await apiCall('/api/customer/storage');
+
+        // Update summary cards
+        document.getElementById('currentPallets').textContent = data.current_pallets || 0;
+        document.getElementById('monthlyCharge').textContent = formatCurrency(data.monthly_charge || 0);
+
+        // Render locations
+        const locationsTable = document.getElementById('locationsTable');
+        if (data.locations.length === 0) {
+          locationsTable.innerHTML = '<p>No active storage locations</p>';
+        } else {
+          locationsTable.innerHTML = `
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Pallets</th>
+                  <th>Monthly Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.locations.map(loc => `
+                  <tr>
+                    <td>${loc.location}</td>
+                    <td>${loc.pallet_count}</td>
+                    <td>${formatCurrency(loc.monthly_rate)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        // Render bookings
+        const bookingsTable = document.getElementById('bookingsTable');
+        if (data.active_bookings.length === 0) {
+          bookingsTable.innerHTML = '<p>No active bookings</p>';
+        } else {
+          bookingsTable.innerHTML = `
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Pallets</th>
+                  <th>Location</th>
+                  <th>Start Date</th>
+                  <th>Monthly Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.active_bookings.map(b => `
+                  <tr>
+                    <td>${b.pallet_count}</td>
+                    <td>${b.location}</td>
+                    <td>${formatDate(b.start_date)}</td>
+                    <td>${formatCurrency(b.monthly_rate)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        // Render simple history chart (ASCII bar chart)
+        const historyChart = document.getElementById('historyChart');
+        const maxPallets = Math.max(...data.history.map(h => h.pallet_count));
+
+        historyChart.innerHTML = `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Pallets</th>
+                <th>Visual</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.history.map(h => {
+                const barWidth = maxPallets > 0 ? (h.pallet_count / maxPallets) * 100 : 0;
+                return `
+                  <tr>
+                    <td>${h.month}</td>
+                    <td>${h.pallet_count}</td>
+                    <td>
+                      <div style="background: #1a1a1a; height: 24px; width: ${barWidth}%; min-width: 2px; border-radius: 4px;"></div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+
+      } catch (error) {
+        console.error('Storage load error:', error);
+        alert('Failed to load storage data: ' + error.message);
+      }
+    }
+
+    loadStorage();
+  </script>
+</body>
+</html>
