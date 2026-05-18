@@ -1,8 +1,8 @@
 /**
- * JARVIS Design System Tokens
- * Created: 2026-05-13
- * Spec: Black & white western aesthetic + copper accent
- * Fonts: Rye (display), Geist Mono (data/numbers), Inter (body)
+ * ROCKO Design System Tokens
+ * Updated: 2026-05-18 (v3.3 consolidation)
+ * Spec: Emerald/bone/black western aesthetic (80% bone text, 20% emerald accent)
+ * Fonts: Major Mono Display (headers), Geist Mono / Space Mono (body), JetBrains Mono (fallback)
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Rye&display=swap');
@@ -24,28 +24,43 @@
 }
 
 :root {
-  /* ── COLORS (strict B&W + copper) ────────────────────────────────────────── */
-  --bg: #0a0a0a;
+  /* ── v3.3 CORE PALETTE (emerald + bone + black) ────────────────────────── */
+  --ink-black: #000000;
+  --ink-deep: #0A0A0A;
+  --bone: #F4F1EA;          /* PRIMARY TEXT — 80% dominance */
+  --bone-dim: #C8C5BE;
+  --grey-mid: #9B9B93;
+  --grey-dark: #2A2A28;
+  --emerald: #00C896;       /* ACCENT — 20% max */
+  --emerald-deep: #054D3B;
+  --emerald-glow: rgba(0,200,150,0.08);
+  --emerald-line: rgba(0,200,150,0.18);
+  --critical: #FF8A4C;
+  --info: #6FA8DC;
+  --warn: #E6B800;
+
+  /* ── SEMANTIC MAPPINGS ──────────────────────────────────────────────────── */
+  --bg: var(--ink-deep);
   --surface: #141414;
   --surface-elevated: #1c1c1c;
-  --surface-deep: #060606;
-  --border: #2a2a2a;
+  --surface-deep: var(--ink-black);
+  --border: var(--grey-dark);
   --border-strong: #3a3a3a;
-  --border-focus: #b87333;
-  --text-primary: #ededed;
-  --text-secondary: #9a9a9a;
-  --text-tertiary: #6a6a6a;
+  --border-focus: var(--emerald);
+  --text-primary: var(--bone);
+  --text-secondary: var(--bone-dim);
+  --text-tertiary: var(--grey-mid);
   --text-disabled: #4a4a4a;
-  --copper: #b87333;
-  --copper-glow: #d4884a;
-  --copper-dim: #5c3919;
-  --copper-faint: rgba(184, 115, 51, 0.08);
+  --accent: var(--emerald);
+  --accent-glow: var(--emerald-glow);
+  --accent-dim: var(--emerald-deep);
+  --accent-faint: var(--emerald-glow);
 
   /* ── SHADOWS ─────────────────────────────────────────────────────────────── */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.7);
-  --shadow-copper: 0 0 0 1px var(--copper), 0 0 24px rgba(184, 115, 51, 0.15);
+  --shadow-emerald: 0 0 0 1px var(--emerald), 0 0 24px var(--emerald-glow);
 
   /* ── SPACING (4px grid) ──────────────────────────────────────────────────── */
   --space-0: 0;
@@ -62,9 +77,12 @@
   --space-20: 80px;
 
   /* ── TYPOGRAPHY ──────────────────────────────────────────────────────────── */
-  --font-display: 'Rye', serif;
-  --font-mono: 'Geist Mono', monospace;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono-body: 'Geist Mono', 'JetBrains Mono', monospace;
+  --font-mono-display: 'Space Mono', 'JetBrains Mono', monospace;
+  --font-sans-header: 'Major Mono Display', 'Space Mono', monospace;
+  --font-display: var(--font-sans-header);
+  --font-mono: var(--font-mono-body);
+  --font-body: var(--font-mono-body);
 
   /* ── MOTION ──────────────────────────────────────────────────────────────── */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
