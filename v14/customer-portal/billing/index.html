@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing - PSNM Customer Portal</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --surface: #1a1a1a;
+      --copper: #b87333;
+      --text: #ffffff;
+      --text-dim: #999999;
+      --border: #333333;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #f87171;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: 'Rye', serif;
+      font-size: 24px;
+      color: var(--copper);
+      letter-spacing: 2px;
+    }
+
+    .user-info {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .nav a {
+      padding: 12px 16px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+    }
+
+    .nav a.active {
+      color: var(--copper);
+      border-bottom-color: var(--copper);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .summary-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: 500;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--copper);
+    }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 16px 12px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .badge.paid {
+      background: rgba(74, 222, 128, 0.1);
+      color: var(--success);
+    }
+
+    .badge.pending {
+      background: rgba(251, 191, 36, 0.1);
+      color: var(--warning);
+    }
+
+    .badge.overdue {
+      background: rgba(248, 113, 113, 0.1);
+      color: var(--error);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    .btn-link {
+      color: var(--copper);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .btn-link:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 20px 16px;
+      }
+
+      .summary-cards {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .section {
+        padding: 16px;
+      }
+
+      table {
+        font-size: 13px;
+      }
+
+      th, td {
+        padding: 10px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">PSNM</div>
+    <div class="user-info" id="userInfo">Loading...</div>
+  </div>
+
+  <nav class="nav">
+    <a href="/customer-portal/dashboard">Dashboard</a>
+    <a href="/customer-portal/storage">Storage</a>
+    <a href="/customer-portal/billing" class="active">Billing</a>
+    <a href="/customer-portal/account">Account</a>
+  </nav>
+
+  <div class="container">
+    <h1>Billing</h1>
+    <p class="subtitle">View your invoices and payment history</p>
+
+    <div class="summary-cards">
+      <div class="summary-card">
+        <div class="summary-label">Outstanding Balance</div>
+        <div class="summary-value" id="outstandingBalance">£0.00</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-label">Total Paid</div>
+        <div class="summary-value" id="totalPaid">£0.00</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-label">Total Invoices</div>
+        <div class="summary-value" id="totalInvoices">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h2 class="section-title">Invoice History</h2>
+      </div>
+      <div id="invoicesContent" class="loading">Loading invoices...</div>
+    </div>
+  </div>
+
+  <script>
+    let currentCustomer = null;
+
+    async function init() {
+      try {
+        // Get current customer
+        const meResponse = await fetch('/api/customer/auth/me');
+        if (!meResponse.ok) {
+          window.location.href = '/customer-portal/login';
+          return;
+        }
+
+        currentCustomer = await meResponse.json();
+        document.getElementById('userInfo').textContent = currentCustomer.company_name || currentCustomer.email;
+
+        // Load invoices
+        await loadInvoices();
+      } catch (error) {
+        console.error('Init error:', error);
+      }
+    }
+
+    async function loadInvoices() {
+      const container = document.getElementById('invoicesContent');
+      try {
+        const response = await fetch('/api/customer/data/invoices', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const invoices = await response.json();
+
+          if (invoices.length === 0) {
+            container.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">💳</div>
+                <p>No invoices found</p>
+              </div>
+            `;
+            return;
+          }
+
+          // Calculate summary stats
+          let outstandingBalance = 0;
+          let totalPaid = 0;
+
+          invoices.forEach(inv => {
+            if (inv.status === 'pending' || inv.status === 'overdue') {
+              outstandingBalance += inv.amount_due || 0;
+            }
+            if (inv.status === 'paid') {
+              totalPaid += inv.amount_due || 0;
+            }
+          });
+
+          document.getElementById('outstandingBalance').textContent = `£${outstandingBalance.toFixed(2)}`;
+          document.getElementById('totalPaid').textContent = `£${totalPaid.toFixed(2)}`;
+          document.getElementById('totalInvoices').textContent = invoices.length;
+
+          // Build table
+          const tableHtml = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th>Due Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${invoices.map(inv => {
+                  const status = inv.status || 'pending';
+                  const badgeClass = status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'pending';
+
+                  return `
+                    <tr>
+                      <td>${inv.invoice_number || inv.id.substring(0, 8)}</td>
+                      <td>${new Date(inv.created_at).toLocaleDateString()}</td>
+                      <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td>
+                      <td>£${(inv.amount_due || 0).toFixed(2)}</td>
+                      <td><span class="badge ${badgeClass}">${status}</span></td>
+                      <td>
+                        ${status === 'pending' || status === 'overdue'
+                          ? '<a href="mailto:info@palletstoragenearme.co.uk?subject=Payment%20Query" class="btn-link">Pay Now</a>'
+                          : '<span style="color: var(--text-dim); font-size: 13px;">Paid</span>'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          `;
+
+          container.innerHTML = tableHtml;
+        }
+      } catch (error) {
+        console.error('Load invoices error:', error);
+        container.innerHTML = '<p class="empty-state">Failed to load invoices</p>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

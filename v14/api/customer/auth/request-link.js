@@ -1,185 +1,149 @@
-'use strict';
-// PSNM Customer Portal — Magic Link Request
+// ═══════════════════════════════════════════════════════════════════════════
+// Customer Portal - Request Magic Link
 // POST /api/customer/auth/request-link
-// Sends magic link email to customer
+// Generates magic link token and sends email via SendGrid
+// ═══════════════════════════════════════════════════════════════════════════
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const SENDGRID_FROM = process.env.SENDGRID_FROM || 'hello@palletstoragenearme.co.uk';
 
-function validateEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-async function sbQuery(table, filter) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${filter}`;
-  const r = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
-  });
-  if (!r.ok) return null;
-  return r.json();
-}
-
-async function sbInsert(table, data) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    },
-    body: JSON.stringify(data),
-  });
-  if (!r.ok) {
-    const err = await r.text().catch(() => 'unknown');
-    throw new Error(`sbInsert ${r.status}: ${err.slice(0, 200)}`);
-  }
-  return r.json();
-}
-
-async function sendMagicLink(email, token, customerName) {
-  const magicLink = `https://rbtr-jarvis.vercel.app/customer-portal/dashboard.html?token=${token}`;
-
-  const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; }
-    .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-    .header { text-align: center; margin-bottom: 40px; }
-    .logo { font-size: 24px; font-weight: 700; color: #1a1a1a; }
-    .content { background: #f9f9f9; padding: 30px; border-radius: 8px; }
-    .button { display: inline-block; background: #1a1a1a; color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
-    .footer { text-align: center; margin-top: 40px; font-size: 14px; color: #666; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">PSNM</div>
-      <div style="font-size: 14px; color: #666;">Pallet Storage Near Me</div>
-    </div>
-
-    <div class="content">
-      <h2 style="margin-top: 0;">Access Your Customer Portal</h2>
-      <p>Hi${customerName ? ' ' + customerName : ''},</p>
-      <p>Click the button below to access your PSNM customer portal. This link is valid for 30 minutes.</p>
-      <p style="text-align: center;">
-        <a href="${magicLink}" class="button">Access Portal</a>
-      </p>
-      <p style="font-size: 14px; color: #666;">Or copy this link into your browser:<br>
-        <span style="word-break: break-all;">${magicLink}</span>
-      </p>
-    </div>
-
-    <div class="footer">
-      <p>PSNM — Pallet Storage Near Me<br>
-      1,602-space warehouse, Hellaby, Rotherham S66 8HR<br>
-      <a href="https://palletstoragenearme.co.uk" style="color: #1a1a1a;">palletstoragenearme.co.uk</a></p>
-      <p style="font-size: 12px;">If you didn't request this link, you can safely ignore this email.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-
-  const sgPayload = {
-    personalizations: [{ to: [{ email }] }],
-    from: { email: SENDGRID_FROM, name: 'PSNM Customer Portal' },
-    subject: 'Your PSNM Customer Portal Access Link',
-    content: [
-      { type: 'text/plain', value: `Access your PSNM customer portal: ${magicLink}\n\nThis link is valid for 30 minutes.` },
-      { type: 'text/html', value: emailHtml },
-    ],
+async function sbQuery(table, query = '', method = 'GET', body = null) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': method === 'POST' ? 'return=representation' : '',
   };
 
-  const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(sgPayload),
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
   });
 
-  if (!r.ok) {
-    const err = await r.text().catch(() => 'unknown');
-    throw new Error(`SendGrid ${r.status}: ${err.slice(0, 200)}`);
-  }
-
-  return true;
+  if (!response.ok) return method === 'GET' ? [] : null;
+  return method === 'POST' || method === 'GET' ? await response.json() : null;
 }
 
-module.exports = async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    return res.status(204).end();
-  }
+async function sendEmail(to, subject, html) {
+  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: 'noreply@palletstoragenearme.co.uk', name: 'PSNM Customer Portal' },
+      subject,
+      content: [{ type: 'text/html', value: html }],
+    }),
+  });
 
+  return response.ok;
+}
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let body = {};
-  try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  } catch {
-    return res.status(400).json({ ok: false, error: 'Invalid JSON' });
-  }
+  const { email } = req.body;
 
-  const { email } = body;
-
-  if (!email || !validateEmail(email)) {
-    return res.status(400).json({ ok: false, error: 'Valid email required' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Valid email required' });
   }
 
   try {
     // Look up customer by email
-    const customers = await sbQuery('psnm_customers', `email=eq.${encodeURIComponent(email)}&limit=1`);
+    const customers = await sbQuery('psnm_customers', `email=eq.${encodeURIComponent(email)}`);
 
-    // Always return success to avoid leaking customer existence
-    if (!customers || customers.length === 0) {
-      console.log('[request-link] Email not found (no error returned to client):', email);
-      return res.status(200).json({ ok: true, message: 'If that email is registered, a magic link has been sent.' });
+    if (customers.length === 0) {
+      return res.status(404).json({ error: 'No customer account found with this email address' });
     }
 
     const customer = customers[0];
 
-    // Generate cryptographic token
+    // Generate secure token (32 bytes = 64 hex chars)
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+    const tokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-    // Insert session
-    await sbInsert('psnm_customer_sessions', {
+    // Store session token
+    await sbQuery('psnm_customer_sessions', '', 'POST', {
       customer_id: customer.id,
       token,
-      token_expires: expiresAt,
-      ip_address: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
-      user_agent: req.headers['user-agent'] || null,
+      token_expires: tokenExpires.toISOString(),
     });
 
-    // Send magic link email
-    await sendMagicLink(email, token, customer.company || customer.contact_name);
+    // Build magic link
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+    const magicLink = `${baseUrl}/api/customer/auth/verify?token=${token}`;
+
+    // Send email
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <div style="background: #000000; padding: 32px; text-align: center;">
+            <h1 style="margin: 0; color: #b87333; font-family: 'Rye', serif; font-size: 36px; letter-spacing: 2px;">PSNM</h1>
+            <p style="margin: 8px 0 0 0; color: #999999; font-size: 14px;">Pallet Storage Near Me</p>
+          </div>
+
+          <div style="padding: 40px 32px;">
+            <h2 style="margin: 0 0 16px 0; font-size: 24px; color: #1a1a1a;">Your Login Link</h2>
+            <p style="margin: 0 0 24px 0; font-size: 15px; color: #555555; line-height: 1.6;">
+              Click the button below to access your PSNM customer portal. This link will expire in 1 hour.
+            </p>
+
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${magicLink}"
+                 style="display: inline-block; padding: 14px 32px; background: #b87333; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 15px;">
+                Access Customer Portal
+              </a>
+            </div>
+
+            <p style="margin: 32px 0 0 0; font-size: 13px; color: #999999; line-height: 1.6;">
+              If you didn't request this login link, you can safely ignore this email.
+            </p>
+          </div>
+
+          <div style="background: #f5f5f5; padding: 24px 32px; border-top: 1px solid #e5e5e5;">
+            <p style="margin: 0; font-size: 12px; color: #999999; text-align: center;">
+              © ${new Date().getFullYear()} PSNM. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const emailSent = await sendEmail(email, 'Your PSNM Customer Portal Login Link', emailHtml);
+
+    if (!emailSent) {
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
 
     return res.status(200).json({
-      ok: true,
-      message: 'If that email is registered, a magic link has been sent.',
+      success: true,
+      message: 'Login link sent to your email',
     });
 
-  } catch (e) {
-    console.error('[request-link] Error:', e.message);
-    return res.status(500).json({ ok: false, error: 'Failed to send magic link' });
+  } catch (error) {
+    console.error('[Customer Request Link Error]', error);
+    return res.status(500).json({
+      error: 'Failed to generate login link',
+      message: error.message,
+    });
   }
-};
+}

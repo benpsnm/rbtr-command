@@ -1,98 +1,139 @@
-'use strict';
-// PSNM Customer Portal — Verify Magic Link Token
+// ═══════════════════════════════════════════════════════════════════════════
+// Customer Portal - Verify Magic Link
 // GET /api/customer/auth/verify?token=xxx
-// Validates token, sets session cookie, redirects to dashboard
+// Validates token, creates session, redirects to dashboard
+// ═══════════════════════════════════════════════════════════════════════════
 
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
 
-async function sbQuery(table, filter) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${filter}`;
-  const r = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
+async function sbQuery(table, query = '', method = 'GET', body = null) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': method === 'PATCH' ? 'return=representation' : '',
+  };
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
   });
-  if (!r.ok) return null;
-  return r.json();
+
+  if (!response.ok) return method === 'GET' ? [] : null;
+  return method === 'GET' || method === 'PATCH' ? await response.json() : null;
 }
 
-async function sbUpdate(table, match, data) {
-  const qs = Object.entries(match).map(([k, v]) => `${k}=eq.${encodeURIComponent(v)}`).join('&');
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${qs}`;
-  const r = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  if (!r.ok) {
-    const err = await r.text().catch(() => 'unknown');
-    throw new Error(`sbUpdate ${r.status}: ${err.slice(0, 200)}`);
-  }
-  return r.json();
-}
-
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { token } = req.query;
 
   if (!token) {
-    return res.status(400).json({ ok: false, error: 'Token required' });
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Invalid Link</title></head>
+      <body style="font-family: sans-serif; text-align: center; padding: 60px;">
+        <h1>Invalid Login Link</h1>
+        <p>No token provided.</p>
+        <a href="/customer-portal/login">Request a new login link</a>
+      </body>
+      </html>
+    `);
   }
 
   try {
-    // Look up session
-    const sessions = await sbQuery('psnm_customer_sessions', `token=eq.${encodeURIComponent(token)}&limit=1`);
+    // Look up token
+    const sessions = await sbQuery('psnm_customer_sessions', `token=eq.${token}&select=*,psnm_customers(id,email,company_name)`);
 
-    if (!sessions || sessions.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Invalid or expired token' });
+    if (sessions.length === 0) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Invalid Link</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 60px;">
+          <h1>Invalid Login Link</h1>
+          <p>This link is not valid.</p>
+          <a href="/customer-portal/login">Request a new login link</a>
+        </body>
+        </html>
+      `);
     }
 
     const session = sessions[0];
 
     // Check if already used
     if (session.used) {
-      return res.status(410).json({ ok: false, error: 'Token already used' });
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Link Already Used</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 60px;">
+          <h1>Link Already Used</h1>
+          <p>This login link has already been used.</p>
+          <a href="/customer-portal/login">Request a new login link</a>
+        </body>
+        </html>
+      `);
     }
 
     // Check if expired
-    if (new Date(session.token_expires) < new Date()) {
-      return res.status(410).json({ ok: false, error: 'Token expired' });
+    const tokenExpires = new Date(session.token_expires);
+    if (tokenExpires < new Date()) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Link Expired</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 60px;">
+          <h1>Link Expired</h1>
+          <p>This login link has expired.</p>
+          <a href="/customer-portal/login">Request a new login link</a>
+        </body>
+        </html>
+      `);
     }
 
     // Mark token as used
-    await sbUpdate('psnm_customer_sessions', { id: session.id }, {
-      used: true,
-      used_at: new Date().toISOString(),
-    });
+    await sbQuery('psnm_customer_sessions', `id=eq.${session.id}`, 'PATCH', { used: true });
 
-    // Create JWT session cookie
+    // Create JWT session
+    const customer = session.psnm_customers;
     const jwtToken = jwt.sign(
-      { customer_id: session.customer_id },
+      {
+        customer_id: customer.id,
+        email: customer.email,
+        company_name: customer.company_name,
+        type: 'customer',
+      },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
-    // Set HttpOnly cookie
-    res.setHeader('Set-Cookie', `psnm_session=${jwtToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`);
+    // Set cookie and redirect
+    res.setHeader('Set-Cookie', `psnm_customer_session=${jwtToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${30 * 24 * 60 * 60}`);
+    res.setHeader('Location', '/customer-portal/dashboard');
+    return res.status(302).end();
 
-    // Redirect to dashboard
-    res.writeHead(302, { Location: '/customer-portal/dashboard.html' });
-    return res.end();
-
-  } catch (e) {
-    console.error('[verify] Error:', e.message);
-    return res.status(500).json({ ok: false, error: 'Verification failed' });
+  } catch (error) {
+    console.error('[Customer Verify Error]', error);
+    return res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Error</title></head>
+      <body style="font-family: sans-serif; text-align: center; padding: 60px;">
+        <h1>Something Went Wrong</h1>
+        <p>Unable to verify your login link.</p>
+        <a href="/customer-portal/login">Request a new login link</a>
+      </body>
+      </html>
+    `);
   }
-};
+}

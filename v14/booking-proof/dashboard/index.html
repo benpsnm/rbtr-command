@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Booking Proof</title>
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+  <style>
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      margin: 0;
+      min-height: 100vh;
+    }
+
+    .bp-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: var(--space-4) var(--space-6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bp-logo {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--copper);
+    }
+
+    .bp-nav-links {
+      display: flex;
+      gap: var(--space-4);
+      align-items: center;
+    }
+
+    .bp-nav-link {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color var(--duration-fast) var(--ease-out);
+    }
+
+    .bp-nav-link:hover,
+    .bp-nav-link--active {
+      color: var(--copper);
+    }
+
+    .bp-main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-8);
+    }
+
+    .bp-header {
+      margin-bottom: var(--space-8);
+    }
+
+    .bp-title {
+      font-family: var(--font-display);
+      font-size: 32px;
+      color: var(--text-primary);
+      margin-bottom: var(--space-2);
+    }
+
+    .bp-subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .bp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: var(--space-6);
+      margin-bottom: var(--space-8);
+    }
+
+    .bp-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+    }
+
+    .bp-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-4);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .bp-card-value {
+      font-size: 36px;
+      font-family: var(--font-mono);
+      color: var(--copper);
+      margin-bottom: var(--space-2);
+    }
+
+    .bp-card-label {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
+    .bp-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .bp-table thead th {
+      text-align: left;
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .bp-table tbody td {
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .bp-table tbody tr:hover {
+      background: var(--surface-elevated);
+    }
+
+    .bp-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .bp-badge--success {
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
+    }
+
+    .bp-badge--warning {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+    }
+
+    .bp-badge--error {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+
+    .bp-empty {
+      text-align: center;
+      padding: var(--space-12);
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 768px) {
+      .bp-nav-links {
+        display: none;
+      }
+
+      .bp-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .bp-table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="bp-nav">
+    <div class="bp-logo">Booking Proof</div>
+    <div class="bp-nav-links">
+      <a href="/booking-proof/dashboard" class="bp-nav-link bp-nav-link--active">Dashboard</a>
+      <a href="/booking-proof/properties" class="bp-nav-link">Properties</a>
+      <a href="/booking-proof/cleaners" class="bp-nav-link">Cleaners</a>
+      <a href="/booking-proof/claims" class="bp-nav-link">Claims</a>
+      <a href="/booking-proof/billing" class="bp-nav-link">Billing</a>
+    </div>
+  </nav>
+
+  <main class="bp-main">
+    <div class="bp-header">
+      <h1 class="bp-title">Dashboard</h1>
+      <p class="bp-subtitle" id="userEmail">Loading...</p>
+    </div>
+
+    <div class="bp-grid">
+      <div class="bp-card">
+        <div class="bp-card-title">Properties</div>
+        <div class="bp-card-value" id="propertyCount">—</div>
+        <div class="bp-card-label">Active properties</div>
+      </div>
+
+      <div class="bp-card">
+        <div class="bp-card-title">Cleanings This Month</div>
+        <div class="bp-card-value" id="cleaningCount">—</div>
+        <div class="bp-card-label">Verified turnovers</div>
+      </div>
+
+      <div class="bp-card">
+        <div class="bp-card-title">Open Claims</div>
+        <div class="bp-card-value" id="claimCount">—</div>
+        <div class="bp-card-label">Damage reports</div>
+      </div>
+    </div>
+
+    <div class="bp-card">
+      <div class="bp-card-title">Recent Activity</div>
+      <div id="recentActivity">Loading...</div>
+    </div>
+  </main>
+
+  <script>
+    // Check auth
+    async function checkAuth() {
+      try {
+        const response = await fetch('/api/bp/auth/me');
+        if (!response.ok) {
+          window.location.href = '/booking-proof/login.html';
+          return null;
+        }
+        return await response.json();
+      } catch (error) {
+        window.location.href = '/booking-proof/login.html';
+        return null;
+      }
+    }
+
+    async function loadDashboard() {
+      const user = await checkAuth();
+      if (!user) return;
+
+      document.getElementById('userEmail').textContent = user.email;
+
+      // Fetch dashboard data
+      try {
+        const [properties, cleanings, claims] = await Promise.all([
+          fetch('/api/bp/properties').then(r => r.json()),
+          fetch('/api/bp/cleanings?month=current').then(r => r.json()),
+          fetch('/api/bp/claims?status=open').then(r => r.json()),
+        ]);
+
+        document.getElementById('propertyCount').textContent = properties.length || 0;
+        document.getElementById('cleaningCount').textContent = cleanings.length || 0;
+        document.getElementById('claimCount').textContent = claims.length || 0;
+
+        // Recent activity
+        const activityEl = document.getElementById('recentActivity');
+        if (cleanings.length === 0) {
+          activityEl.innerHTML = '<div class="bp-empty">No recent activity</div>';
+        } else {
+          activityEl.innerHTML = `
+            <table class="bp-table">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Photos</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${cleanings.slice(0, 10).map(c => `
+                  <tr>
+                    <td>${c.property_name || 'Unknown'}</td>
+                    <td class="font-mono">${new Date(c.cleaned_at).toLocaleDateString()}</td>
+                    <td><span class="bp-badge bp-badge--${c.verified ? 'success' : 'warning'}">${c.verified ? 'Verified' : 'Pending'}</span></td>
+                    <td>${c.photo_count || 0} photos</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (error) {
+        console.error('Failed to load dashboard:', error);
+        document.getElementById('recentActivity').innerHTML = '<div class="bp-empty">Failed to load data</div>';
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account - PSNM Customer Portal</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --surface: #1a1a1a;
+      --copper: #b87333;
+      --text: #ffffff;
+      --text-dim: #999999;
+      --border: #333333;
+      --success: #4ade80;
+      --error: #f87171;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: 'Rye', serif;
+      font-size: 24px;
+      color: var(--copper);
+      letter-spacing: 2px;
+    }
+
+    .user-info {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .nav a {
+      padding: 12px 16px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+    }
+
+    .nav a.active {
+      color: var(--copper);
+      border-bottom-color: var(--copper);
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    textarea {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--copper);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--copper);
+      color: var(--bg);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .message.success {
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      color: var(--success);
+      display: block;
+    }
+
+    .message.error {
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      color: var(--error);
+      display: block;
+    }
+
+    .file-upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 32px;
+      text-align: center;
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+
+    .file-upload-area:hover {
+      border-color: var(--copper);
+    }
+
+    .file-upload-area.dragover {
+      border-color: var(--copper);
+      background: rgba(184, 115, 51, 0.05);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .upload-text {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .upload-subtext {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .file-list {
+      margin-top: 16px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .file-name {
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .file-size {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-left: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 20px 16px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">PSNM</div>
+    <div class="user-info" id="userInfo">Loading...</div>
+  </div>
+
+  <nav class="nav">
+    <a href="/customer-portal/dashboard">Dashboard</a>
+    <a href="/customer-portal/storage">Storage</a>
+    <a href="/customer-portal/billing">Billing</a>
+    <a href="/customer-portal/account" class="active">Account</a>
+  </nav>
+
+  <div class="container">
+    <h1>Account Settings</h1>
+    <p class="subtitle">Manage your account details and insurance documents</p>
+
+    <!-- Contact Information -->
+    <div class="section">
+      <h2 class="section-title">Contact Information</h2>
+
+      <form id="accountForm">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" disabled>
+        </div>
+
+        <div class="form-group">
+          <label for="companyName">Company Name</label>
+          <input type="text" id="companyName" placeholder="Your Company Ltd">
+        </div>
+
+        <div class="form-group">
+          <label for="contactName">Contact Name</label>
+          <input type="text" id="contactName" placeholder="John Smith">
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" placeholder="01234 567890">
+        </div>
+
+        <div class="form-group">
+          <label for="address">Address</label>
+          <textarea id="address" placeholder="123 Business Park&#10;Your Town&#10;AB12 3CD"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="saveBtn">
+          Save Changes
+        </button>
+
+        <div id="accountMessage" class="message"></div>
+      </form>
+    </div>
+
+    <!-- Insurance Documents -->
+    <div class="section">
+      <h2 class="section-title">Insurance Evidence</h2>
+      <p class="upload-text" style="margin-bottom: 20px;">
+        Upload proof of insurance for your stored goods. Accepted formats: PDF, JPG, PNG (max 10MB)
+      </p>
+
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display: none;" multiple>
+
+      <div class="file-upload-area" id="uploadArea">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Click to upload or drag and drop files here</div>
+        <div class="upload-subtext">PDF, JPG, PNG up to 10MB</div>
+      </div>
+
+      <div id="fileList" class="file-list"></div>
+      <div id="uploadMessage" class="message"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentCustomer = null;
+    let uploadedFiles = [];
+
+    async function init() {
+      try {
+        // Get current customer
+        const meResponse = await fetch('/api/customer/auth/me');
+        if (!meResponse.ok) {
+          window.location.href = '/customer-portal/login';
+          return;
+        }
+
+        currentCustomer = await meResponse.json();
+        document.getElementById('userInfo').textContent = currentCustomer.company_name || currentCustomer.email;
+
+        // Pre-fill form
+        document.getElementById('email').value = currentCustomer.email;
+
+        // Load customer details
+        await loadCustomerDetails();
+
+        // Setup file upload
+        setupFileUpload();
+      } catch (error) {
+        console.error('Init error:', error);
+      }
+    }
+
+    async function loadCustomerDetails() {
+      try {
+        const response = await fetch('/api/customer/data/account', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const customer = await response.json();
+          if (customer) {
+            document.getElementById('companyName').value = customer.company_name || '';
+            document.getElementById('contactName').value = customer.contact_name || '';
+            document.getElementById('phone').value = customer.phone || '';
+            document.getElementById('address').value = customer.address || '';
+          }
+        }
+      } catch (error) {
+        console.error('Load details error:', error);
+      }
+    }
+
+    // Handle account form submission
+    document.getElementById('accountForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const saveBtn = document.getElementById('saveBtn');
+      const messageDiv = document.getElementById('accountMessage');
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      messageDiv.className = 'message';
+
+      try {
+        const response = await fetch('/api/customer/data/account', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            company_name: document.getElementById('companyName').value,
+            contact_name: document.getElementById('contactName').value,
+            phone: document.getElementById('phone').value,
+            address: document.getElementById('address').value,
+          }),
+        });
+
+        if (response.ok) {
+          messageDiv.className = 'message success';
+          messageDiv.textContent = 'Account details updated successfully';
+        } else {
+          messageDiv.className = 'message error';
+          messageDiv.textContent = 'Failed to update account details';
+        }
+      } catch (error) {
+        messageDiv.className = 'message error';
+        messageDiv.textContent = 'Network error. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    // File upload handling
+    function setupFileUpload() {
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('fileInput');
+      const fileList = document.getElementById('fileList');
+      const uploadMessage = document.getElementById('uploadMessage');
+
+      uploadArea.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+      });
+
+      // Drag and drop
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+      });
+
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+
+      async function handleFiles(files) {
+        uploadMessage.className = 'message';
+
+        for (const file of files) {
+          // Validate file size (10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            uploadMessage.className = 'message error';
+            uploadMessage.textContent = `${file.name} is too large (max 10MB)`;
+            continue;
+          }
+
+          // Validate file type
+          const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+          if (!allowedTypes.includes(file.type)) {
+            uploadMessage.className = 'message error';
+            uploadMessage.textContent = `${file.name} is not a supported file type`;
+            continue;
+          }
+
+          // Upload file
+          await uploadFile(file);
+        }
+
+        fileInput.value = '';
+      }
+
+      async function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('customer_id', currentCustomer.customer_id);
+
+        try {
+          const response = await fetch('/api/customer/upload-insurance', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            uploadedFiles.push(data);
+
+            // Add to file list
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+              <div>
+                <span class="file-name">${file.name}</span>
+                <span class="file-size">(${(file.size / 1024).toFixed(1)} KB)</span>
+              </div>
+              <span style="color: var(--success);">✓ Uploaded</span>
+            `;
+            fileList.appendChild(fileItem);
+
+            uploadMessage.className = 'message success';
+            uploadMessage.textContent = 'File uploaded successfully';
+          } else {
+            uploadMessage.className = 'message error';
+            uploadMessage.textContent = `Failed to upload ${file.name}`;
+          }
+        } catch (error) {
+          uploadMessage.className = 'message error';
+          uploadMessage.textContent = `Network error uploading ${file.name}`;
+        }
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

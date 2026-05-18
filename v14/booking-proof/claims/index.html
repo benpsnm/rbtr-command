@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claims — Booking Proof</title>
+  <link rel="stylesheet" href="/css/jarvis-tokens.css">
+  <link rel="stylesheet" href="/css/jarvis-components.css">
+  <style>
+    body { background: var(--bg); color: var(--text-primary); font-family: var(--font-body); margin: 0; }
+    .bp-nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: var(--space-4) var(--space-6); display: flex; align-items: center; justify-content: space-between; }
+    .bp-logo { font-family: var(--font-display); font-size: 20px; color: var(--copper); }
+    .bp-nav-links { display: flex; gap: var(--space-4); }
+    .bp-nav-link { color: var(--text-secondary); text-decoration: none; font-size: 14px; }
+    .bp-nav-link--active { color: var(--copper); }
+    .bp-main { max-width: 1200px; margin: 0 auto; padding: var(--space-8); }
+    .bp-title { font-family: var(--font-display); font-size: 32px; margin-bottom: var(--space-8); }
+    .bp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); }
+    .bp-form { display: grid; gap: var(--space-4); margin-top: var(--space-6); }
+    .form-label { display: block; font-size: 14px; font-weight: 500; margin-bottom: var(--space-2); }
+    .form-input { width: 100%; padding: var(--space-3); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-family: var(--font-body); }
+    .btn-submit { padding: var(--space-3) var(--space-6); background: var(--copper); color: #0a0a0a; border: none; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; }
+    .bp-table { width: 100%; border-collapse: collapse; margin-top: var(--space-6); }
+    .bp-table thead th { text-align: left; padding: var(--space-3); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+    .bp-table tbody td { padding: var(--space-3); border-bottom: 1px solid var(--border); font-size: 14px; }
+    .bp-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .bp-badge--success { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+    .bp-badge--warning { background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
+    .bp-empty { text-align: center; padding: var(--space-12); color: var(--text-tertiary); }
+  </style>
+</head>
+<body>
+  <nav class="bp-nav">
+    <div class="bp-logo">Booking Proof</div>
+    <div class="bp-nav-links">
+      <a href="/booking-proof/dashboard" class="bp-nav-link">Dashboard</a>
+      <a href="/booking-proof/properties" class="bp-nav-link">Properties</a>
+      <a href="/booking-proof/cleaners" class="bp-nav-link">Cleaners</a>
+      <a href="/booking-proof/claims" class="bp-nav-link bp-nav-link--active">Claims</a>
+      <a href="/booking-proof/billing" class="bp-nav-link">Billing</a>
+    </div>
+  </nav>
+  <main class="bp-main">
+    <h1 class="bp-title">Damage Claims</h1>
+    <div class="bp-card">
+      <h3 style="margin-bottom: var(--space-4);">Submit New Claim</h3>
+      <form class="bp-form" id="claimForm">
+        <div>
+          <label class="form-label">Property</label>
+          <select class="form-input" id="propertyId" required><option value="">Select property...</option></select>
+        </div>
+        <div>
+          <label class="form-label">Description</label>
+          <textarea class="form-input" id="description" rows="3" required></textarea>
+        </div>
+        <div>
+          <label class="form-label">Estimated Cost (£)</label>
+          <input type="number" class="form-input" id="estimatedCost" step="0.01">
+        </div>
+        <button type="submit" class="btn-submit">Submit Claim</button>
+      </form>
+    </div>
+
+    <div class="bp-card" style="margin-top: var(--space-8);">
+      <h3 style="margin-bottom: var(--space-4);">Recent Claims</h3>
+      <div id="claimsContent">Loading...</div>
+    </div>
+  </main>
+  <script>
+    async function loadClaims() {
+      try {
+        const [claims, properties] = await Promise.all([
+          fetch('/api/bp/claims').then(r => r.json()),
+          fetch('/api/bp/properties').then(r => r.json()),
+        ]);
+
+        // Populate property dropdown
+        const select = document.getElementById('propertyId');
+        properties.forEach(p => {
+          const option = document.createElement('option');
+          option.value = p.id;
+          option.textContent = p.name || 'Unnamed';
+          select.appendChild(option);
+        });
+
+        // Display claims
+        const content = document.getElementById('claimsContent');
+        if (claims.length === 0) {
+          content.innerHTML = '<div class="bp-empty">No claims yet</div>';
+        } else {
+          content.innerHTML = `
+            <table class="bp-table">
+              <thead><tr><th>Property</th><th>Description</th><th>Cost</th><th>Status</th><th>Date</th></tr></thead>
+              <tbody>
+                ${claims.map(c => `
+                  <tr>
+                    <td><strong>${c.property_name || 'Unknown'}</strong></td>
+                    <td>${c.description?.substring(0, 60) || '—'}</td>
+                    <td>£${parseFloat(c.estimated_cost || 0).toFixed(2)}</td>
+                    <td><span class="bp-badge bp-badge--${c.status === 'resolved' ? 'success' : 'warning'}">${c.status || 'open'}</span></td>
+                    <td class="font-mono">${new Date(c.created_at).toLocaleDateString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('claimsContent').innerHTML = '<div class="bp-empty">Failed to load claims</div>';
+      }
+    }
+
+    document.getElementById('claimForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        property_id: document.getElementById('propertyId').value,
+        description: document.getElementById('description').value,
+        estimated_cost: parseFloat(document.getElementById('estimatedCost').value) || 0,
+      };
+
+      try {
+        const response = await fetch('/api/bp/claims', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (response.ok) {
+          alert('Claim submitted');
+          loadClaims();
+          e.target.reset();
+        }
+      } catch (error) {
+        alert('Failed to submit claim');
+      }
+    });
+
+    loadClaims();
+  </script>
+</body>
+</html>

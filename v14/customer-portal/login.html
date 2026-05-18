@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PSNM Customer Login</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --surface: #1a1a1a;
+      --copper: #b87333;
+      --text: #ffffff;
+      --text-dim: #999999;
+      --border: #333333;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 48px 32px;
+      text-align: center;
+    }
+
+    .logo {
+      font-family: 'Rye', serif;
+      font-size: 32px;
+      color: var(--copper);
+      margin-bottom: 12px;
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 40px;
+      font-weight: 400;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .instructions {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input[type="email"]:focus {
+      outline: none;
+      border-color: var(--copper);
+    }
+
+    input[type="email"]::placeholder {
+      color: #555555;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      background: var(--copper);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .message {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .message.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+      display: block;
+    }
+
+    .message.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      display: block;
+    }
+
+    .back-link {
+      margin-top: 32px;
+      font-size: 14px;
+    }
+
+    .back-link a {
+      color: var(--copper);
+      text-decoration: none;
+    }
+
+    .back-link a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      .login-container {
+        padding: 32px 24px;
+      }
+
+      .logo {
+        font-size: 28px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">PSNM</div>
+    <div class="subtitle">Pallet Storage Near Me</div>
+
+    <h1>Customer Portal</h1>
+    <p class="instructions">
+      Enter your email address to receive a secure login link. Check your inbox and click the link to access your account.
+    </p>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="your@email.com"
+          required
+          autocomplete="email"
+        >
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">
+        Send Login Link
+      </button>
+    </form>
+
+    <div id="message" class="message"></div>
+
+    <div class="back-link">
+      <a href="https://palletstoragenearme.co.uk">← Back to PSNM</a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const submitBtn = document.getElementById('submitBtn');
+    const messageDiv = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      messageDiv.className = 'message';
+      messageDiv.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/customer/auth/request-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          messageDiv.className = 'message success';
+          messageDiv.textContent = `Login link sent to ${email}. Check your inbox and click the link to continue.`;
+          emailInput.value = '';
+        } else {
+          messageDiv.className = 'message error';
+          messageDiv.textContent = data.error || 'Failed to send login link. Please try again.';
+        }
+      } catch (error) {
+        messageDiv.className = 'message error';
+        messageDiv.textContent = 'Network error. Please check your connection and try again.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Login Link';
+      }
+    });
+  </script>
+</body>
+</html>
