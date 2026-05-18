@@ -1,0 +1,382 @@
+{
+  "name": "Rocko Morning Brief Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 6 * * *"
+            }
+          ]
+        },
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 6,
+              "minute": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "06:30 Daily (Europe/London)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://rbtr-jarvis.vercel.app/api/morning-brief",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RBTR_AUTH_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-get-brief",
+      "name": "GET Morning Brief from v14 API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "brief_text",
+              "name": "brief_text",
+              "value": "={{ $json.brief_text || $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "brief_date",
+              "name": "brief_date",
+              "value": "={{ $now.format('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "brief_timestamp",
+              "name": "brief_timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-brief-data",
+      "name": "Extract Brief Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/{{ $env.ELEVENLABS_VOICE_ID }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $env.ELEVENLABS_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.brief_text }}"
+            },
+            {
+              "name": "model_id",
+              "value": "eleven_monolingual_v1"
+            },
+            {
+              "name": "voice_settings",
+              "value": "={\"stability\": 0.5, \"similarity_boost\": 0.75}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "elevenlabs-tts",
+      "name": "ElevenLabs: Text to Speech",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 300],
+      "notes": "IMPORTANT: Only activate this node once Ben confirms his ElevenLabs voice clone (ELEVENLABS_VOICE_ID) is set up and tested. Until then, disable this node and jump directly from Extract Brief Data → Telegram Text-Only Delivery."
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "rbtr-briefs",
+        "fileName": "=brief-{{ $('Extract Brief Data').item.json.brief_date }}.mp3",
+        "binaryData": true,
+        "options": {}
+      },
+      "id": "supabase-upload-audio",
+      "name": "Upload MP3 to Supabase Storage",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1130, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      },
+      "notes": "Requires rbtr-briefs bucket to exist in Supabase Storage. Create manually if missing."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "audio_url",
+              "name": "audio_url",
+              "value": "={{ $json.publicUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "audio_path",
+              "name": "audio_path",
+              "value": "={{ $json.path }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-audio-url",
+      "name": "Extract Audio URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=☀️ Morning Brief - {{ $('Extract Brief Data').item.json.brief_date }}\n\n{{ $('Extract Brief Data').item.json.brief_text }}\n\n🔊 Audio: {{ $json.audio_url }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "none"
+        }
+      },
+      "id": "telegram-send-brief",
+      "name": "Telegram: Send Brief with Audio",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1570, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "rbtr_daily_log",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_type": "daily_brief",
+            "event_date": "={{ $('Extract Brief Data').item.json.brief_date }}",
+            "event_timestamp": "={{ $('Extract Brief Data').item.json.brief_timestamp }}",
+            "event_data": "={{ {audio_url: $('Extract Audio URL').item.json.audio_url, text_preview: $('Extract Brief Data').item.json.brief_text.substring(0, 200)} }}",
+            "source": "n8n-workflow-03"
+          }
+        },
+        "options": {}
+      },
+      "id": "supabase-log-event",
+      "name": "Log to rbtr_daily_log",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1790, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=☀️ Morning Brief - {{ $('Extract Brief Data').item.json.brief_date }}\n\n{{ $('Extract Brief Data').item.json.brief_text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "none"
+        }
+      },
+      "id": "telegram-text-only",
+      "name": "Telegram: Send Brief (Text Only - Fallback)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [910, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "RBTR Telegram Bot"
+        }
+      },
+      "notes": "USE THIS PATH if ElevenLabs voice clone not ready yet. Connect Extract Brief Data → here → Log Event. Delete ElevenLabs/Supabase Storage/Audio URL nodes once text-only confirmed working."
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "rbtr_daily_log",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_type": "daily_brief",
+            "event_date": "={{ $('Extract Brief Data').item.json.brief_date }}",
+            "event_timestamp": "={{ $('Extract Brief Data').item.json.brief_timestamp }}",
+            "event_data": "={{ {text_only: true, text_preview: $('Extract Brief Data').item.json.brief_text.substring(0, 200)} }}",
+            "source": "n8n-workflow-03-text-only"
+          }
+        },
+        "options": {}
+      },
+      "id": "supabase-log-text-only",
+      "name": "Log to rbtr_daily_log (Text Only)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1.1,
+      "position": [1130, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-api",
+          "name": "Supabase API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "06:30 Daily (Europe/London)": {
+      "main": [
+        [
+          {
+            "node": "GET Morning Brief from v14 API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Morning Brief from v14 API": {
+      "main": [
+        [
+          {
+            "node": "Extract Brief Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Brief Data": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs: Text to Speech",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram: Send Brief (Text Only - Fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs: Text to Speech": {
+      "main": [
+        [
+          {
+            "node": "Upload MP3 to Supabase Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload MP3 to Supabase Storage": {
+      "main": [
+        [
+          {
+            "node": "Extract Audio URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Audio URL": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Send Brief with Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Send Brief with Audio": {
+      "main": [
+        [
+          {
+            "node": "Log to rbtr_daily_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Send Brief (Text Only - Fallback)": {
+      "main": [
+        [
+          {
+            "node": "Log to rbtr_daily_log (Text Only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/London"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-13T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,342 @@
+[
+  {
+    "name": "fetch_money_position",
+    "description": "Get current cash position across all accounts (PSNM, personal, RBTR)",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_truck_build_progress",
+    "description": "Get RBTR truck build status — current phase, blockers, next milestones",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_sponsor_pipeline",
+    "description": "Get RBTR sponsor outreach pipeline status — contacted, replied, committed",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "status_filter": {
+          "type": "string",
+          "enum": [
+            "all",
+            "contacted",
+            "replied",
+            "committed",
+            "declined"
+          ],
+          "description": "Filter sponsors by status"
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_booking_proof_status",
+    "description": "Get Booking Proof customer portal status — active customers, pending signups",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_forge_bookings",
+    "description": "Get Forge subscription bookings — current subscribers, revenue",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_ww_enquiries",
+    "description": "Get WarehouseWorld enquiries — new leads from PSNM site",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "days_back": {
+          "type": "number",
+          "description": "How many days of enquiries to fetch (default 7)"
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "search_supabase",
+    "description": "Search any Supabase table with filters — flexible query tool",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "table": {
+          "type": "string",
+          "description": "Table name (e.g. atlas_v3_prospects, rbtr_tasks)"
+        },
+        "filters": {
+          "type": "object",
+          "description": "PostgREST filters (e.g. {status: \"eq.active\"})"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results (default 20)"
+        }
+      },
+      "required": [
+        "table"
+      ]
+    }
+  },
+  {
+    "name": "fetch_recent_replies",
+    "description": "Get recent replies to Atlas v3 outreach emails — who responded, when, sentiment",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "days_back": {
+          "type": "number",
+          "description": "Days to look back (default 7)"
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "fetch_active_builds_running",
+    "description": "Check if any yolo builds are currently running in background",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "read_obsidian_doc",
+    "description": "Read a specific Obsidian note from RBTR-Brain",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "note_path": {
+          "type": "string",
+          "description": "Relative path from ~/Documents/RBTR-Brain/ (e.g. \"00-Inbox/SESSION-CLOSE-2026-05-14.md\")"
+        }
+      },
+      "required": [
+        "note_path"
+      ]
+    }
+  },
+  {
+    "name": "write_obsidian_note",
+    "description": "Write or append to an Obsidian note in RBTR-Brain",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "note_path": {
+          "type": "string",
+          "description": "Relative path from ~/Documents/RBTR-Brain/"
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown content to write"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "write",
+            "append"
+          ],
+          "description": "Write (overwrite) or append"
+        }
+      },
+      "required": [
+        "note_path",
+        "content"
+      ]
+    }
+  },
+  {
+    "name": "git_status",
+    "description": "Get git status for rbtr-command repo — current branch, uncommitted changes",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "run_build_progress",
+    "description": "Check progress of a running yolo build by ID",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "build_id": {
+          "type": "string",
+          "description": "Build ID from previous fire"
+        }
+      },
+      "required": [
+        "build_id"
+      ]
+    }
+  },
+  {
+    "name": "run_cron_check",
+    "description": "Check when cron jobs last ran (morning brief, backups, etc)",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "approve_atlas_draft",
+    "description": "Approve a drafted Atlas v3 email for sending",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "prospect_id": {
+          "type": "string",
+          "description": "UUID of prospect"
+        }
+      },
+      "required": [
+        "prospect_id"
+      ]
+    }
+  },
+  {
+    "name": "gmail_search",
+    "description": "Search Gmail inbox — find emails by query, sender, subject",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Gmail search query (e.g. \"from:supplier@example.com subject:quote\")"
+        },
+        "max_results": {
+          "type": "number",
+          "description": "Max results to return (default 10)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "gmail_read",
+    "description": "Read full email body + attachments by message ID",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "description": "Gmail message ID from gmail_search"
+        }
+      },
+      "required": [
+        "message_id"
+      ]
+    }
+  },
+  {
+    "name": "gmail_draft",
+    "description": "Draft a Gmail reply (does NOT send, only creates draft)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "Recipient email"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Email subject"
+        },
+        "body": {
+          "type": "string",
+          "description": "Email body (plain text or HTML)"
+        },
+        "in_reply_to": {
+          "type": "string",
+          "description": "Optional: message ID to reply to"
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "body"
+      ]
+    }
+  },
+  {
+    "name": "calendar_check",
+    "description": "Check Google Calendar for events in date range",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "start_date": {
+          "type": "string",
+          "description": "ISO date (YYYY-MM-DD)"
+        },
+        "end_date": {
+          "type": "string",
+          "description": "ISO date (YYYY-MM-DD)"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date"
+      ]
+    }
+  },
+  {
+    "name": "calendar_suggest_time",
+    "description": "Suggest available time slots based on calendar + preferences",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "duration_minutes": {
+          "type": "number",
+          "description": "Meeting duration in minutes"
+        },
+        "between": {
+          "type": "string",
+          "description": "Date range (e.g. \"next 7 days\")"
+        },
+        "preferences": {
+          "type": "string",
+          "description": "Time preferences (e.g. \"mornings only\", \"avoid Fridays\")"
+        }
+      },
+      "required": [
+        "duration_minutes"
+      ]
+    }
+  },
+  {
+    "name": "claude_code_fire",
+    "description": "Fire a yolo build from PROMPT-QUEUE.md — opens terminal, pastes prompt, executes",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "prompt_name": {
+          "type": "string",
+          "description": "Name of prompt in PROMPT-QUEUE.md (e.g. \"Atlas v3 dry-run\")"
+        }
+      },
+      "required": [
+        "prompt_name"
+      ]
+    }
+  }
+]
