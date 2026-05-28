@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Test ATLAS Repurpose</title>
+<style>body{font-family:monospace;padding:20px;background:#000;color:#fff;}pre{background:#111;padding:10px;overflow-x:auto;}</style>
+</head>
+<body>
+<h1>ATLAS Repurpose Test</h1>
+<button id="test">Test Repurpose Engine</button>
+<div id="output"></div>
+
+<script>
+document.getElementById('test').addEventListener('click', async () => {
+  const output = document.getElementById('output');
+  output.innerHTML = '<p>Testing...</p>';
+
+  const testPayload = {
+    content_type: 'build_update',
+    raw_input: 'Week 1 chassis strip complete. 300kg of unnecessary brackets and fittings removed. Hudson helped with the socket set. Benson drew the before and after sketches. Sarah took photos. The truck is already 300kg lighter — that is 300kg more payload for the expedition, or 300kg less fuel burned over 100,000km.',
+    context_notes: 'First major milestone, family involvement, engineering lesson',
+    platforms: ['instagram_post', 'linkedin_post', 'twitter'],
+    metadata: {}
+  };
+
+  try {
+    const response = await fetch('/api/atlas-repurpose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testPayload)
+    });
+
+    const data = await response.json();
+
+    output.innerHTML = `
+      <h2>Status: ${response.status}</h2>
+      <pre>${JSON.stringify(data, null, 2)}</pre>
+    `;
+  } catch (err) {
+    output.innerHTML = `<p style="color:red">ERROR: ${err.message}</p>`;
+  }
+});
+</script>
+</body>
+</html>
