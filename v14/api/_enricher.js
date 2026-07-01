@@ -14,7 +14,7 @@
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const CH_API_KEY   = process.env.COMPANIES_HOUSE_API_KEY;
+const CH_API_KEY   = process.env.COMPANIES_HOUSE_KEY || process.env.COMPANIES_HOUSE_API_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
 const TABLE_TARGETS    = 'psnm_outreach_targets';
